@@ -211,6 +211,8 @@ func (c *Connector) Close() error {
 }
 
 func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
+	const supportedDSNs = "supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, datafusion://, datafusion://?<options>, and datafusion://memory?<options>"
+
 	if dsn == "" || dsn == ":memory:" {
 		return "", nil
 	}
@@ -226,17 +228,17 @@ func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
 			return "", err
 		}
 		if parsed.Scheme != "datafusion" {
-			return "", fmt.Errorf("unsupported DataFusion DSN %q; supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, and datafusion://memory?<options>", dsn)
+			return "", fmt.Errorf("unsupported DataFusion DSN %q; %s", dsn, supportedDSNs)
 		}
 		if parsed.Host != "" && parsed.Host != "memory" {
-			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support the memory host", dsn)
+			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty host or the memory host", dsn)
 		}
 		if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/:memory:" {
 			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty, /, or /:memory: path", dsn)
 		}
 		return normalizeMemoryDSN(parsed.RawQuery, opts)
 	}
-	return "", fmt.Errorf("unsupported DataFusion DSN %q; supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, and datafusion://memory?<options>", dsn)
+	return "", fmt.Errorf("unsupported DataFusion DSN %q; %s", dsn, supportedDSNs)
 }
 
 func normalizeMemoryDSN(rawQuery string, opts *connectorOptions) (string, error) {

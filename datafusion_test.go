@@ -368,6 +368,8 @@ func TestDSNConfigOptions(t *testing.T) {
 	for _, dsn := range []string{
 		":memory:?datafusion.execution.batch_size=2",
 		"?datafusion.execution.batch_size=2",
+		"datafusion://",
+		"datafusion://?datafusion.execution.batch_size=2",
 		"datafusion://memory?datafusion.execution.batch_size=2",
 		":memory:?datafusion.go.shared_session=true&datafusion.execution.batch_size=2",
 	} {

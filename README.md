@@ -66,7 +66,7 @@ Runnable examples live under `examples/` for basic queries, typed parameters, an
 
 ## DSN Semantics
 
-Supported DSNs are empty string, `:memory:`, `?<options>`, `:memory:?<options>`, and `datafusion://memory?<options>`.
+Supported DSNs are empty string, `:memory:`, `?<options>`, `:memory:?<options>`, `datafusion://`, `datafusion://?<options>`, and `datafusion://memory?<options>`.
 
 Query parameters are passed to DataFusion as session configuration options:
 
