@@ -26,6 +26,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Check generated version files
+        run: make generate.check
+
       - name: Build bundled native library and test
         run: make test
 
@@ -84,6 +87,10 @@ jobs:
           install: >-
             make
             mingw-w64-x86_64-gcc
+
+      - name: Check generated version files
+        shell: msys2 {0}
+        run: make generate.check
 
       - name: Build bundled native library and test
         shell: msys2 {0}

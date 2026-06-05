@@ -14,7 +14,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var one int64
 	if err := db.QueryRowContext(context.Background(), "select 1").Scan(&one); err != nil {

@@ -119,7 +119,7 @@ func (conn *Conn) ResetSession(ctx context.Context) error {
 	replacement := newConn(nc, connector)
 	if connector.initFn != nil {
 		if err := connector.initFn(ctx, replacement); err != nil {
-			replacement.Close()
+			_ = replacement.Close()
 			return err
 		}
 	}
@@ -127,7 +127,7 @@ func (conn *Conn) ResetSession(ctx context.Context) error {
 	conn.mu.Lock()
 	if conn.closed || conn.conn == nil {
 		conn.mu.Unlock()
-		replacement.Close()
+		_ = replacement.Close()
 		return driver.ErrBadConn
 	}
 	old := conn.conn

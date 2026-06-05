@@ -35,6 +35,29 @@ Run linting:
 make lint
 ```
 
+## Version Bumps
+
+`versions.toml` is the human-maintained source of truth for release metadata:
+
+- `datafusion.version` pins the Rust `datafusion` and `datafusion-sql` crate versions.
+- `datafusion_go.major` and `datafusion_go.patch` produce the Go module tag `v<major>.<encoded-datafusion-version>.<patch>`.
+- `abi.version` is the native ABI expected by Rust, C, and Go.
+
+Do not hand-edit generated version constants in Go or Rust. To bump a release:
+
+```sh
+$EDITOR versions.toml
+make generate
+make generate.check
+```
+
+`make generate` updates `rust/Cargo.toml`, `rust/Cargo.lock`, `version.go`,
+`internal/native/version_generated.go`, and `rust/src/generated.rs`. Commit those
+mechanical outputs with the `versions.toml` change.
+
+Increment `abi.version` only when the C ABI in `rust/include/datafusion_go.h`
+changes incompatibly with the Go native wrapper.
+
 ## Native Libraries
 
 The Rust crate under `rust/` builds `libdatafusion_go.a`. The default Go build links the platform-specific archive from `internal/native/lib/<goos>-<goarch>/libdatafusion_go.a`.
@@ -43,4 +66,13 @@ Use `make bundle` only when you intend to copy the current host build into `inte
 
 ## Release Dry Run
 
-Before publishing, run the `Release` GitHub Actions workflow with `publish=false`. That builds the native matrix, downloads all archives into one checkout, verifies checksums, runs Go/Rust/no-cgo tests, and runs a clean consumer-module smoke test without committing, tagging, or creating a GitHub release.
+Before publishing, update `versions.toml`, run `make generate`, update
+`CHANGELOG.md`, and run the `Release` GitHub Actions workflow with
+`publish=false`. The workflow derives the tag from `versions.toml`, builds the
+native matrix, downloads all archives into one checkout, verifies checksums, runs
+Go/Rust/no-cgo tests, and runs a clean consumer-module smoke test without
+tagging or creating a GitHub release.
+
+When the dry run succeeds, rerun the same workflow with `publish=true`. It tags
+the checked-out commit with the derived release tag and uploads the generated
+native archives plus checksums.

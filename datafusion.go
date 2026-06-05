@@ -122,12 +122,12 @@ func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if c.initFn != nil {
 		if c.sharedSession {
 			if err := c.initializeShared(ctx, conn); err != nil {
-				conn.Close()
+				_ = conn.Close()
 				return nil, err
 			}
 		} else {
 			if err := c.initFn(ctx, conn); err != nil {
-				conn.Close()
+				_ = conn.Close()
 				return nil, err
 			}
 		}

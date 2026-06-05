@@ -22,9 +22,17 @@ ifeq ($(GOOS),darwin)
 RUST_BUILD_ENV := MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) CFLAGS="$(strip $(CFLAGS) -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET))"
 endif
 
-.PHONY: rust bundle checksums verify.checksums test test.bundled test.source test.static consumer.smoke lint verify.release verify.release.downloaded clean
+.PHONY: generate generate.check rust bundle checksums verify.checksums test test.bundled test.source test.static consumer.smoke lint verify.release verify.release.downloaded clean
 
-rust:
+generate:
+	go run ./internal/tools/genversions
+	cargo update --manifest-path rust/Cargo.toml -p datafusion-go -p datafusion -p datafusion-sql
+
+generate.check:
+	go run ./internal/tools/genversions -check
+	cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 >/dev/null
+
+rust: generate.check
 	$(RUST_BUILD_ENV) cargo build --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
 
 bundle: rust
@@ -76,7 +84,7 @@ consumer.smoke:
 		'}' > main.go; \
 	go run .
 
-lint:
+lint: generate.check
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
 	cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
 	cargo fmt --manifest-path rust/Cargo.toml -- --check

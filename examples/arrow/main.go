@@ -15,20 +15,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	reader, err := datafusion.QueryArrowContext(ctx, conn, "select 1 as value union all select 2")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	fmt.Println(reader.Schema())
 	for {

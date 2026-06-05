@@ -11,7 +11,7 @@ import (
 func TestCgoDisabledUnsupported(t *testing.T) {
 	db, err := sql.Open("datafusion", "")
 	if err == nil {
-		defer db.Close()
+		defer closeNoError(t, db)
 		err = db.Ping()
 	}
 	if err == nil {

@@ -1,0 +1,16 @@
+# Human-maintained source of truth for release and native ABI versions.
+# After editing this file, run `make generate`.
+
+[datafusion]
+# Exact Rust `datafusion` and `datafusion-sql` crate version.
+version = "53.1.0"
+
+[datafusion_go]
+# Release tags are v<major>.<encoded-datafusion-version>.<patch>.
+# DataFusion 53.1.0 with major 0 and patch 0 becomes v0.530100.0.
+major = 0
+patch = 0
+
+[abi]
+# Increment when the C ABI shared by Rust, C, and Go changes incompatibly.
+version = 1

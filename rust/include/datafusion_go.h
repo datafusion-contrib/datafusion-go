@@ -47,6 +47,18 @@ typedef struct dfgo_result_stream dfgo_result_stream;
 typedef struct dfgo_cancel_token dfgo_cancel_token;
 typedef struct dfgo_error dfgo_error;
 
+/*
+ * ABI ownership rules:
+ * - Handles returned through out parameters are Rust-owned and must be returned
+ *   exactly once through the matching dfgo_*_close function.
+ * - Error handles returned through dfgo_error **err are Rust-owned and must be
+ *   released with dfgo_error_free after reading kind/message pointers.
+ * - Input strings must be valid UTF-8 where documented by the Go wrapper and
+ *   remain live for the duration of the call.
+ * - dfgo_connection_register_arrow_stream consumes a non-null ArrowArrayStream
+ *   even when later validation or registration fails.
+ */
+
 int32_t dfgo_abi_version(void);
 const char *dfgo_datafusion_version(void);
 

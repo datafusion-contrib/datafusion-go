@@ -1,8 +1,9 @@
 # datafusion-go
 DataFusion binding for the Go language
 
-This repository currently pins the Rust `datafusion` crate at `53.1.0`.
-Release tags encode that DataFusion version as `v0.530100.<driver-patch>`.
+Release metadata is maintained in `versions.toml`. Release tags are derived as
+`v<major>.<encoded-datafusion-version>.<patch>`, where DataFusion `53.1.0`
+encodes as `530100`.
 
 ## Requirements
 
@@ -14,6 +15,13 @@ Release tags encode that DataFusion version as `v0.530100.<driver-patch>`.
 `CGO_ENABLED=0` is not supported; the package returns a clear `datafusion-go requires cgo` error in that mode.
 
 ## Development
+
+After changing `versions.toml`, regenerate derived Go/Rust version files and the
+Rust lockfile:
+
+```sh
+make generate
+```
 
 Build and bundle the Rust shim before running Go tests:
 

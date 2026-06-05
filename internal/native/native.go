@@ -75,8 +75,6 @@ import (
 )
 
 const stateOK = 0
-const abiVersion = 1
-const dataFusionVersion = "53.1.0"
 
 type Error struct {
 	Kind    string
@@ -581,7 +579,7 @@ func newResultReader(ctx context.Context, result *C.dfgo_result_stream, token *c
 func (r *resultReader) Read() (arrow.RecordBatch, error) {
 	if err := r.ctx.Err(); err != nil {
 		r.Cancel()
-		r.Close()
+		_ = r.Close()
 		return nil, err
 	}
 

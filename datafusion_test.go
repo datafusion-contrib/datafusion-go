@@ -110,7 +110,7 @@ func TestQueryRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	var got int64
 	if err := db.QueryRowContext(context.Background(), "select 1").Scan(&got); err != nil {
@@ -126,7 +126,7 @@ func TestScalarScans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	row := db.QueryRowContext(
 		context.Background(),
@@ -153,13 +153,13 @@ func TestQueryArrowContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	reader, err := QueryArrowContext(context.Background(), conn, "select 1 as one")
 	if err != nil {
@@ -190,13 +190,13 @@ func TestRegisterArrowReaderNestedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	rec := nestedArrowRecord(t, memory.DefaultAllocator)
 	defer rec.Release()
@@ -218,13 +218,13 @@ func TestRegisterArrowReaderZeroCopyNestedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	alloc := mallocator.NewMallocator()
 	rec := nestedArrowRecord(t, alloc)
@@ -282,7 +282,7 @@ func assertRegisteredNestedRecord(t *testing.T, conn *sql.Conn, tableName string
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer closeNoError(t, reader)
 
 	got, err := reader.Read()
 	if err != nil {
@@ -305,13 +305,13 @@ func TestZeroRowQueryColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	rows, err := db.QueryContext(context.Background(), "select cast(1 as bigint) as one, 'x' as two where false")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	cols, err := rows.Columns()
 	if err != nil {
@@ -333,13 +333,13 @@ func TestQueryArrowContextParametersAndClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	reader, err := QueryArrowContext(context.Background(), conn, "select $1 + 1 as value", int64(41))
 	if err != nil {
@@ -376,13 +376,13 @@ func TestDSNConfigOptions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer db.Close()
+			defer closeNoError(t, db)
 
 			rows, err := db.QueryContext(context.Background(), "select 1 union all select 2 union all select 3")
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer rows.Close()
+			defer closeNoError(t, rows)
 
 			var count int
 			for rows.Next() {
@@ -403,7 +403,7 @@ func TestInvalidDSNConfigOption(t *testing.T) {
 	if err != nil {
 		return
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	err = db.PingContext(context.Background())
 	if err == nil {
@@ -441,14 +441,14 @@ func TestPreparedStatementSerializationMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn, err := connector.Connect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn := driverConn.(*Conn)
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	tests := []struct {
 		query string
@@ -486,7 +486,7 @@ func TestConnectionSharedSessionDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 	db.SetMaxOpenConns(2)
 
 	ctx := context.Background()
@@ -494,13 +494,13 @@ func TestConnectionSharedSessionDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn1.Close()
+	defer closeNoError(t, conn1)
 
 	conn2, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn2.Close()
+	defer closeNoError(t, conn2)
 
 	if _, err := conn1.ExecContext(ctx, "create view local_view as select 42 as value"); err != nil {
 		t.Fatal(err)
@@ -527,7 +527,7 @@ func TestExecStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx := context.Background()
 	err = ExecStatements(ctx, db, []string{
@@ -553,7 +553,7 @@ func TestConnectionIsolationOptOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 	db.SetMaxOpenConns(2)
 
 	ctx := context.Background()
@@ -561,13 +561,13 @@ func TestConnectionIsolationOptOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn1.Close()
+	defer closeNoError(t, conn1)
 
 	conn2, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn2.Close()
+	defer closeNoError(t, conn2)
 
 	if _, err := conn1.ExecContext(ctx, "create view isolated_view as select 42 as value"); err != nil {
 		t.Fatal(err)
@@ -597,21 +597,21 @@ func TestConnectionLifecycleHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn, err := connector.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn := driverConn.(*Conn)
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	readValue := func(query string) (int64, error) {
 		rows, err := conn.QueryContext(ctx, query, nil)
 		if err != nil {
 			return 0, err
 		}
-		defer rows.Close()
+		defer closeNoError(t, rows)
 
 		values := []driver.Value{nil}
 		if err := rows.Next(values); err != nil {
@@ -684,20 +684,20 @@ func TestSharedSessionInitRunsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn1, err := connector.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer driverConn1.Close()
+	defer closeNoError(t, driverConn1)
 	conn1 := driverConn1.(*Conn)
 
 	driverConn2, err := connector.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer driverConn2.Close()
+	defer closeNoError(t, driverConn2)
 	conn2 := driverConn2.(*Conn)
 
 	if initCount != 1 {
@@ -709,7 +709,7 @@ func TestSharedSessionInitRunsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 	values := []driver.Value{nil}
 	if err := rows.Next(values); err != nil {
 		t.Fatal(err)
@@ -744,20 +744,20 @@ func TestContextInitFn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn, err := connector.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn := driverConn.(*Conn)
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	rows, err := conn.QueryContext(ctx, "select value from context_init_view", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	values := []driver.Value{nil}
 	if err := rows.Next(values); err != nil {
@@ -775,7 +775,7 @@ func TestContextInitFn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cancelConnector.Close()
+	defer closeNoError(t, cancelConnector)
 
 	if _, err := cancelConnector.Connect(cancelled); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Connect canceled got %v, want context.Canceled", err)
@@ -787,7 +787,7 @@ func TestConcurrentQueries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 	db.SetMaxOpenConns(4)
 
 	var wg sync.WaitGroup
@@ -819,7 +819,7 @@ func TestInvalidPrepare(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	if _, err := db.PrepareContext(context.Background(), "select from"); err == nil {
 		t.Fatal("expected invalid SQL to fail during prepare")
@@ -831,7 +831,7 @@ func TestPositionalParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	row := db.QueryRowContext(
 		context.Background(),
@@ -863,7 +863,7 @@ func TestQuestionMarkParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	row := db.QueryRowContext(
 		context.Background(),
@@ -891,7 +891,7 @@ func TestUnsupportedParameter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	_, err = db.QueryContext(context.Background(), "select $1", struct{}{})
 	if err == nil {
@@ -904,7 +904,7 @@ func TestDuplicateNamedParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	_, err = db.QueryContext(
 		context.Background(),
@@ -922,7 +922,7 @@ func TestNamedParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	var got int64
 	if err := db.QueryRowContext(context.Background(), "select $value + 1", sql.Named("value", int64(41))).Scan(&got); err != nil {
@@ -938,7 +938,7 @@ func TestMixedNamedAndPositionalParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	_, err = db.QueryContext(
 		context.Background(),
@@ -963,7 +963,7 @@ func TestNamedParameterShapeValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	tests := []struct {
 		name  string
@@ -1011,13 +1011,13 @@ func TestNumInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn, err := connector.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer driverConn.Close()
+	defer closeNoError(t, driverConn)
 
 	conn := driverConn.(*Conn)
 	tests := []struct {
@@ -1066,7 +1066,7 @@ func TestDirectQueryParameterArity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	if _, err := db.QueryContext(context.Background(), "select $1, $2", int64(1)); err == nil {
 		t.Fatal("expected too few arguments to fail before native execution")
@@ -1084,7 +1084,7 @@ func TestConcurrentPreparedStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 	db.SetMaxOpenConns(4)
 
 	ctx := context.Background()
@@ -1092,13 +1092,13 @@ func TestConcurrentPreparedStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer add.Close()
+	defer closeNoError(t, add)
 
 	mul, err := db.PrepareContext(ctx, "select $1 * 2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mul.Close()
+	defer closeNoError(t, mul)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 16)
@@ -1137,30 +1137,30 @@ func TestConcurrentArrowReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx := context.Background()
 	conn1, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn1.Close()
+	defer closeNoError(t, conn1)
 	conn2, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn2.Close()
+	defer closeNoError(t, conn2)
 
 	reader1, err := QueryArrowContext(ctx, conn1, "select * from range(3)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader1.Close()
+	defer closeNoError(t, reader1)
 	reader2, err := QueryArrowContext(ctx, conn2, "select * from range(3)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader2.Close()
+	defer closeNoError(t, reader2)
 
 	for i, reader := range []ArrowReader{reader1, reader2, reader1, reader2} {
 		rec, err := reader.Read()
@@ -1179,7 +1179,7 @@ func TestArrowReaderOutlivesSQLConnHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
@@ -1191,7 +1191,7 @@ func TestArrowReaderOutlivesSQLConnHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer closeNoError(t, reader)
 
 	if err := conn.Close(); err != nil {
 		t.Fatal(err)
@@ -1212,7 +1212,7 @@ func TestDateTimeAndDecimalScans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	row := db.QueryRowContext(
 		context.Background(),
@@ -1243,7 +1243,7 @@ func TestColumnTypeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	rows, err := db.QueryContext(
 		context.Background(),
@@ -1252,7 +1252,7 @@ func TestColumnTypeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	types, err := rows.ColumnTypes()
 	if err != nil {
@@ -1301,7 +1301,7 @@ func TestArrowSchemaColumnTypeMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	length, ok := rows.ColumnTypeLength(0)
 	if !ok || length != 16 {
@@ -1375,7 +1375,7 @@ func TestRowsNextResultSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	if rows.HasNextResultSet() {
 		t.Fatal("expected no additional result sets")
@@ -1390,7 +1390,7 @@ func TestLastInsertIDZero(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	result, err := db.ExecContext(context.Background(), "select 1")
 	if err != nil {
@@ -1406,7 +1406,7 @@ func TestRowsAffected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	result, err := db.ExecContext(context.Background(), "select 1 union all select 2")
 	if err != nil {
@@ -1476,7 +1476,7 @@ func TestCloseIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connector.Close()
+	defer closeNoError(t, connector)
 
 	driverConn, err := connector.Connect(ctx)
 	if err != nil {
@@ -1530,7 +1530,7 @@ func TestTimeParameter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	want := time.Date(2026, time.January, 2, 3, 4, 5, 123456789, time.FixedZone("offset", -5*60*60))
 
@@ -1548,14 +1548,14 @@ func TestBareTimeParameterPreservesIANAZone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	location, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -1567,7 +1567,7 @@ func TestBareTimeParameterPreservesIANAZone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer closeNoError(t, reader)
 
 	if got := reader.Schema().Field(0).Type.String(); got != "timestamp[ns, tz=America/New_York]" {
 		t.Fatalf("got timestamp type %q, want timestamp[ns, tz=America/New_York]", got)
@@ -1634,14 +1634,14 @@ func TestTypedParameterWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(t, conn)
 
 	date := time.Date(2026, time.January, 2, 23, 0, 0, 0, time.FixedZone("offset", -5*60*60))
 	clock := time.Date(2000, time.January, 1, 12, 34, 56, 789, time.FixedZone("offset", -5*60*60))
@@ -1661,7 +1661,7 @@ func TestTypedParameterWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer closeNoError(t, reader)
 
 	schema := reader.Schema()
 	if got := schema.Field(0).Type.ID(); got != arrow.UINT64 {
@@ -1715,7 +1715,7 @@ func TestTypedNullParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	rows, err := db.QueryContext(
 		context.Background(),
@@ -1727,7 +1727,7 @@ func TestTypedNullParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	types, err := rows.ColumnTypes()
 	if err != nil {
@@ -1764,7 +1764,7 @@ func TestAcceptedUnsignedAndDurationParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	var (
 		u   int64
@@ -1783,7 +1783,7 @@ func TestInvalidTypedParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	if _, err := db.QueryContext(context.Background(), "select $1", TimeNanos(int64(24*time.Hour))); err == nil {
 		t.Fatal("expected invalid time parameter error")
@@ -1807,14 +1807,14 @@ func TestQueryCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer closeNoError(t, db)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	rows, err := db.QueryContext(ctx, "select * from range(1000000)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer closeNoError(t, rows)
 
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {

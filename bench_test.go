@@ -15,7 +15,7 @@ func benchmarkDB(b *testing.B) *sql.DB {
 	if err != nil {
 		b.Fatal(err)
 	}
-	b.Cleanup(func() { db.Close() })
+	b.Cleanup(func() { closeNoError(b, db) })
 	return db
 }
 
@@ -40,7 +40,7 @@ func BenchmarkPreparedParameters(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer stmt.Close()
+	defer closeNoError(b, stmt)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -59,7 +59,7 @@ func BenchmarkArrowReaderRange(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer conn.Close()
+	defer closeNoError(b, conn)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -74,7 +74,7 @@ func BenchmarkArrowReaderRange(b *testing.B) {
 				break
 			}
 			if err != nil {
-				reader.Close()
+				_ = reader.Close()
 				b.Fatal(err)
 			}
 			record.Release()

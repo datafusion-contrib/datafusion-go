@@ -15,7 +15,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	ctx := context.Background()
 	day := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)

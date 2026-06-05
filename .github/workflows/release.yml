@@ -3,12 +3,8 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      driver_patch:
-        description: Driver patch component for v0.<datafusion-version>.<driver-patch>
-        required: true
-        type: string
       publish:
-        description: Commit, tag, and publish after artifact verification
+        description: Tag and publish after artifact verification
         required: true
         default: false
         type: boolean
@@ -60,6 +56,15 @@ jobs:
             make
             mingw-w64-x86_64-gcc
 
+      - name: Check generated version files
+        if: ${{ matrix.platform != 'windows-amd64' }}
+        run: make generate.check
+
+      - name: Check generated version files
+        if: ${{ matrix.platform == 'windows-amd64' }}
+        shell: msys2 {0}
+        run: make generate.check
+
       - name: Build and test bundled archive
         if: ${{ matrix.platform != 'windows-amd64' }}
         run: make test
@@ -96,24 +101,21 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Compute release tag
+      - name: Check generated version files
+        run: make generate.check
+
+      - name: Compute release metadata
         id: version
+        run: go run ./internal/tools/genversions -github-output "$GITHUB_OUTPUT"
+
+      - name: Check release tag
         run: |
           set -euo pipefail
-          encoded="$(awk -F'"' '/DataFusionVersionEncoded/ {print $2}' version.go)"
-          patch="${{ inputs.driver_patch }}"
-          case "$patch" in
-            ''|*[!0-9]*)
-              echo "driver_patch must be a non-negative integer" >&2
-              exit 1
-              ;;
-          esac
-          tag="v0.${encoded}.${patch}"
+          tag="${{ steps.version.outputs.release_tag }}"
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             echo "tag ${tag} already exists" >&2
             exit 1
           fi
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Download native archives
         uses: actions/download-artifact@v4
@@ -142,14 +144,32 @@ jobs:
       - name: Verify downloaded release artifacts
         run: make verify.release.downloaded
 
+      - name: Prepare release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.release_tag }}"
+          notes_file="$(mktemp)"
+          awk -v tag="$tag" '
+            $0 == "## " tag || index($0, "## " tag " - ") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > "$notes_file"
+          if ! grep -q '[^[:space:]]' "$notes_file"; then
+            echo "CHANGELOG.md entry for ${tag} is empty" >&2
+            exit 1
+          fi
+          echo "path=${notes_file}" >> "$GITHUB_OUTPUT"
+
       - name: Tag release
         if: ${{ inputs.publish }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag }}" -m "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          git tag -a "${{ steps.version.outputs.release_tag }}" -m "${{ steps.version.outputs.release_tag }}"
+          git push origin "${{ steps.version.outputs.release_tag }}"
 
       - name: Create GitHub release
         if: ${{ inputs.publish }}
@@ -161,7 +181,7 @@ jobs:
           while IFS= read -r file; do
             assets+=("$file")
           done < <(find internal/native/lib -name libdatafusion_go.a -print | sort)
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "${{ steps.version.outputs.tag }}" \
-            --notes "DataFusion $(awk -F'\"' '/DataFusionVersion / {print $2}' version.go)" \
+          gh release create "${{ steps.version.outputs.release_tag }}" \
+            --title "${{ steps.version.outputs.release_tag }}" \
+            --notes-file "${{ steps.notes.outputs.path }}" \
             "${assets[@]}"
