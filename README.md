@@ -66,7 +66,7 @@ Runnable examples live under `examples/` for basic queries, typed parameters, an
 
 ## DSN Semantics
 
-Supported DSNs are empty string, `:memory:`, `?<options>`, `:memory:?<options>`, `datafusion://`, `datafusion://?<options>`, and `datafusion://memory?<options>`.
+Supported DSNs are empty string, `:memory:`, `?<options>`, `:memory:?<options>`, `datafusion://`, and `datafusion://?<options>`. The URL form does not name a remote host or persistent database; it opens an in-process DataFusion session. `datafusion://memory` is accepted as an alias, but `datafusion://` is preferred.
 
 Query parameters are passed to DataFusion as session configuration options:
 

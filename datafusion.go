@@ -211,7 +211,7 @@ func (c *Connector) Close() error {
 }
 
 func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
-	const supportedDSNs = "supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, datafusion://, datafusion://?<options>, and datafusion://memory?<options>"
+	const supportedDSNs = "supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, datafusion://, and datafusion://?<options>"
 
 	if dsn == "" || dsn == ":memory:" {
 		return "", nil
@@ -230,8 +230,11 @@ func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
 		if parsed.Scheme != "datafusion" {
 			return "", fmt.Errorf("unsupported DataFusion DSN %q; %s", dsn, supportedDSNs)
 		}
+		// datafusion:// is the canonical URL DSN. datafusion://memory is accepted
+		// as a harmless alias for users coming from SQLite-style :memory: DSNs,
+		// but it does not select a separate native storage backend.
 		if parsed.Host != "" && parsed.Host != "memory" {
-			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty host or the memory host", dsn)
+			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs do not support hosts", dsn)
 		}
 		if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/:memory:" {
 			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty, /, or /:memory: path", dsn)

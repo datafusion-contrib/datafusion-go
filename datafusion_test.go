@@ -370,7 +370,6 @@ func TestDSNConfigOptions(t *testing.T) {
 		"?datafusion.execution.batch_size=2",
 		"datafusion://",
 		"datafusion://?datafusion.execution.batch_size=2",
-		"datafusion://memory?datafusion.execution.batch_size=2",
 		":memory:?datafusion.go.shared_session=true&datafusion.execution.batch_size=2",
 	} {
 		t.Run(dsn, func(t *testing.T) {
@@ -397,6 +396,22 @@ func TestDSNConfigOptions(t *testing.T) {
 				t.Fatalf("got %d rows, want 3", count)
 			}
 		})
+	}
+}
+
+func TestDSNMemoryURLAlias(t *testing.T) {
+	db, err := sql.Open("datafusion", "datafusion://memory?datafusion.execution.batch_size=2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var value int64
+	if err := db.QueryRowContext(context.Background(), "select 1").Scan(&value); err != nil {
+		t.Fatal(err)
+	}
+	if value != 1 {
+		t.Fatalf("got %d, want 1", value)
 	}
 }
 
