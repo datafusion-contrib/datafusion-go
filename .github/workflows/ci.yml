@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Go and Rust tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build bundled native library and test
+        run: make test
+
+      - name: Test source link mode
+        run: make test.source
+
+      - name: Test explicit static library mode
+        run: make test.static
+
+      - name: Race test
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        run: make lint
+
+      - name: Rust lint
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust format
+        run: cargo fmt --manifest-path rust/Cargo.toml -- --check
+
+      - name: Rust tests
+        run: cargo test --manifest-path rust/Cargo.toml --release
+
+      - name: No-cgo unsupported path
+        run: CGO_ENABLED=0 go test ./...
+
+  windows:
+    name: Windows cgo tests
+    runs-on: windows-2025
+
+    env:
+      CGO_ENABLED: "1"
+      CC: gcc
+      CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          path-type: inherit
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+
+      - name: Build bundled native library and test
+        shell: msys2 {0}
+        run: make test
+
+      - name: Test source link mode
+        shell: msys2 {0}
+        run: make test.source
+
+      - name: Test explicit static library mode
+        shell: msys2 {0}
+        run: make test.static
+
+      - name: Race test
+        shell: msys2 {0}
+        run: go test -race ./...
+
+      - name: Vet
+        shell: msys2 {0}
+        run: go vet ./...
+
+      - name: No-cgo unsupported path
+        shell: msys2 {0}
+        run: CGO_ENABLED=0 go test ./...

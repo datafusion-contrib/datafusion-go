@@ -1,32 +1,95 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# Go build outputs
+bin/
+build/
+dist/
+out/
+tmp/
+temp/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+*.a
+*.o
+*.obj
+*.wasm
+internal/native/lib/
+rust/target/
 
-# Test binary, built with `go test -c`
+# Go test, coverage, and profiling artifacts
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
 coverage.*
+coverage/
 *.coverprofile
+*.cov
 profile.cov
+cpu.pprof
+mem.pprof
+heap.pprof
+allocs.pprof
+block.pprof
+mutex.pprof
+trace.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
+# Go workspace files
+# Commit these when the repository intentionally uses a checked-in workspace.
 go.work
 go.work.sum
 
-# env file
-.env
+# Dependency and tool caches
+.cache/
+.gocache/
+.gomodcache/
+.gotmp/
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Generated files commonly produced by local tooling
+*.log
+*.pid
+*.seed
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.*.sw?
+.directory
+.Trash-*
+
+# Other
+.codex/
+.claude/
+research/
+
+
+# Optional: uncomment if this repository does not commit vendored dependencies.
+# vendor/

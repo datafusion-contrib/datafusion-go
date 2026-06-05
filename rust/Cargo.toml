@@ -1,0 +1,17 @@
+[package]
+name = "datafusion-go"
+version = "0.53.1"
+edition = "2024"
+rust-version = "1.88"
+
+[lib]
+name = "datafusion_go"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+arrow = { version = "58", features = ["ffi"] }
+datafusion = "53.1.0"
+datafusion-sql = "53.1.0"
+futures = "0.3"
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "sync"] }
+url = "2.5"
