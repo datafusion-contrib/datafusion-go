@@ -66,18 +66,18 @@ Runnable examples live under `examples/` for basic queries, typed parameters, an
 
 ## DSN Semantics
 
-Supported DSNs are empty string, `:memory:`, `?<options>`, `:memory:?<options>`, `datafusion://`, and `datafusion://?<options>`. The URL form does not name a remote host or persistent database; it opens an in-process DataFusion session. `datafusion://memory` is accepted as an alias, but `datafusion://` is preferred.
+Supported DSNs are empty string, `?<options>`, `datafusion://`, and `datafusion://?<options>`. The URL form does not name a remote host or persistent database; it opens an in-process DataFusion session.
 
 Query parameters are passed to DataFusion as session configuration options:
 
 ```text
-:memory:?datafusion.execution.batch_size=8192
+?datafusion.execution.batch_size=8192
 ```
 
 Driver-owned options use the `datafusion.go.` prefix and are stripped before the remaining options are passed to DataFusion. Connections from one `sql.DB` share a DataFusion `SessionContext` by default, so catalog changes such as `CREATE VIEW` are visible across pooled connections. Set `datafusion.go.shared_session=false` to restore isolated-per-connection session state:
 
 ```text
-:memory:?datafusion.go.shared_session=false
+?datafusion.go.shared_session=false
 ```
 
 File paths and other URL forms are rejected. DataFusion is not treated as a file-backed embedded database by this driver.

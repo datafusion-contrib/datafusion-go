@@ -211,16 +211,13 @@ func (c *Connector) Close() error {
 }
 
 func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
-	const supportedDSNs = "supported DSNs are empty string, :memory:, ?<options>, :memory:?<options>, datafusion://, and datafusion://?<options>"
+	const supportedDSNs = "supported DSNs are empty string, ?<options>, datafusion://, and datafusion://?<options>"
 
-	if dsn == "" || dsn == ":memory:" {
+	if dsn == "" {
 		return "", nil
 	}
 	if strings.HasPrefix(dsn, "?") {
-		return normalizeMemoryDSN(dsn[1:], opts)
-	}
-	if strings.HasPrefix(dsn, ":memory:?") {
-		return normalizeMemoryDSN(dsn[len(":memory:?"):], opts)
+		return normalizeSessionDSN(dsn[1:], opts)
 	}
 	if strings.HasPrefix(dsn, "datafusion://") {
 		parsed, err := url.Parse(dsn)
@@ -230,21 +227,18 @@ func normalizeDSN(dsn string, opts *connectorOptions) (string, error) {
 		if parsed.Scheme != "datafusion" {
 			return "", fmt.Errorf("unsupported DataFusion DSN %q; %s", dsn, supportedDSNs)
 		}
-		// datafusion:// is the canonical URL DSN. datafusion://memory is accepted
-		// as a harmless alias for users coming from SQLite-style :memory: DSNs,
-		// but it does not select a separate native storage backend.
-		if parsed.Host != "" && parsed.Host != "memory" {
+		if parsed.Host != "" {
 			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs do not support hosts", dsn)
 		}
-		if parsed.Path != "" && parsed.Path != "/" && parsed.Path != "/:memory:" {
-			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty, /, or /:memory: path", dsn)
+		if parsed.Path != "" && parsed.Path != "/" {
+			return "", fmt.Errorf("unsupported DataFusion DSN %q; datafusion:// DSNs only support an empty or / path", dsn)
 		}
-		return normalizeMemoryDSN(parsed.RawQuery, opts)
+		return normalizeSessionDSN(parsed.RawQuery, opts)
 	}
 	return "", fmt.Errorf("unsupported DataFusion DSN %q; %s", dsn, supportedDSNs)
 }
 
-func normalizeMemoryDSN(rawQuery string, opts *connectorOptions) (string, error) {
+func normalizeSessionDSN(rawQuery string, opts *connectorOptions) (string, error) {
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return "", err
@@ -266,7 +260,7 @@ func normalizeMemoryDSN(rawQuery string, opts *connectorOptions) (string, error)
 	if encoded == "" {
 		return "", nil
 	}
-	return ":memory:?" + encoded, nil
+	return "?" + encoded, nil
 }
 
 func parseBoolOption(key string, values []string) (bool, error) {

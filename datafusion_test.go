@@ -366,11 +366,10 @@ func TestQueryArrowContextParametersAndClose(t *testing.T) {
 
 func TestDSNConfigOptions(t *testing.T) {
 	for _, dsn := range []string{
-		":memory:?datafusion.execution.batch_size=2",
 		"?datafusion.execution.batch_size=2",
 		"datafusion://",
 		"datafusion://?datafusion.execution.batch_size=2",
-		":memory:?datafusion.go.shared_session=true&datafusion.execution.batch_size=2",
+		"?datafusion.go.shared_session=true&datafusion.execution.batch_size=2",
 	} {
 		t.Run(dsn, func(t *testing.T) {
 			db, err := sql.Open("datafusion", dsn)
@@ -399,24 +398,8 @@ func TestDSNConfigOptions(t *testing.T) {
 	}
 }
 
-func TestDSNMemoryURLAlias(t *testing.T) {
-	db, err := sql.Open("datafusion", "datafusion://memory?datafusion.execution.batch_size=2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	var value int64
-	if err := db.QueryRowContext(context.Background(), "select 1").Scan(&value); err != nil {
-		t.Fatal(err)
-	}
-	if value != 1 {
-		t.Fatalf("got %d, want 1", value)
-	}
-}
-
 func TestInvalidDSNConfigOption(t *testing.T) {
-	db, err := sql.Open("datafusion", ":memory:?datafusion.nope=1")
+	db, err := sql.Open("datafusion", "?datafusion.nope=1")
 	if err != nil {
 		return
 	}
@@ -442,11 +425,14 @@ func TestUnsupportedDSN(t *testing.T) {
 	if _, err := sql.Open("datafusion", "file.db"); err == nil {
 		t.Fatal("expected file path DSN to be rejected")
 	}
+	if _, err := sql.Open("datafusion", ":memory:"); err == nil {
+		t.Fatal("expected SQLite-style memory DSN to be rejected")
+	}
 	if _, err := sql.Open("datafusion", "file:///tmp/datafusion"); err == nil {
 		t.Fatal("expected URL DSN to be rejected")
 	}
 	if _, err := sql.Open("datafusion", "datafusion://disk/path"); err == nil {
-		t.Fatal("expected non-memory datafusion URL DSN to be rejected")
+		t.Fatal("expected datafusion URL with host to be rejected")
 	}
 }
 
@@ -563,7 +549,7 @@ func TestExecStatements(t *testing.T) {
 }
 
 func TestConnectionIsolationOptOut(t *testing.T) {
-	db, err := sql.Open("datafusion", ":memory:?datafusion.go.shared_session=false")
+	db, err := sql.Open("datafusion", "?datafusion.go.shared_session=false")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1147,7 +1133,7 @@ func TestConcurrentPreparedStatements(t *testing.T) {
 }
 
 func TestConcurrentArrowReaders(t *testing.T) {
-	db, err := sql.Open("datafusion", ":memory:?datafusion.execution.batch_size=1")
+	db, err := sql.Open("datafusion", "?datafusion.execution.batch_size=1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1817,7 +1803,7 @@ func TestInvalidTypedParameters(t *testing.T) {
 }
 
 func TestQueryCancellation(t *testing.T) {
-	db, err := sql.Open("datafusion", ":memory:?datafusion.execution.batch_size=1")
+	db, err := sql.Open("datafusion", "?datafusion.execution.batch_size=1")
 	if err != nil {
 		t.Fatal(err)
 	}
