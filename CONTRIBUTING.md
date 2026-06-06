@@ -35,6 +35,13 @@ Run linting:
 make lint
 ```
 
+On macOS, `go test -race` may emit a non-fatal Apple linker warning about a
+malformed `LC_DYSYMTAB` when cgo links the native DataFusion archive. Normal
+tests and non-race builds are quiet, and forcing `-Wl,-ld_classic` only trades
+that warning for a deprecated-linker warning. Treat this as a known macOS
+toolchain caveat unless it becomes fatal or appears outside race-enabled native
+tests.
+
 ## Version Bumps
 
 `versions.toml` is the human-maintained source of truth for release metadata:
