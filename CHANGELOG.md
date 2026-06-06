@@ -2,7 +2,7 @@
 
 All notable changes to datafusion-go are documented here.
 
-## v0.530100.0 - 2026-06-05
+## v0.530100.1 - 2026-06-05
 
 Initial release for Apache DataFusion 53.1.0.
 

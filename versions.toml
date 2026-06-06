@@ -7,9 +7,9 @@ version = "53.1.0"
 
 [datafusion_go]
 # Release tags are v<major>.<encoded-datafusion-version>.<patch>.
-# DataFusion 53.1.0 with major 0 and patch 0 becomes v0.530100.0.
+# DataFusion 53.1.0 with major 0 and patch 1 becomes v0.530100.1.
 major = 0
-patch = 0
+patch = 1
 
 [abi]
 # Increment when the C ABI shared by Rust, C, and Go changes incompatibly.
