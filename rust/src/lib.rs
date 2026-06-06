@@ -19,8 +19,8 @@ use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 use arrow::array::RecordBatchReader;
 use arrow::datatypes::SchemaRef;
@@ -67,13 +67,12 @@ mod ffi_types {
     }
 
     // Prepared statements keep normalized SQL plus parser-derived parameter
-    // metadata. Bindings are mutable because database/sql reuses statements.
+    // metadata. Parameter values are supplied per execution call.
     pub struct dfgo_statement {
         pub(super) inner: Arc<Inner>,
         pub(super) query: String,
         pub(super) params: ParameterMetadata,
         pub(super) serializes: bool,
-        pub(super) bindings: Mutex<Vec<Binding>>,
     }
 
     // A result can be exported exactly once as an Arrow C stream. The Option is
@@ -96,6 +95,26 @@ mod ffi_types {
         pub(super) kind: CString,
         pub(super) message: CString,
     }
+
+    // Parameter array element for dfgo_statement_execute_with_params. All
+    // pointer fields are borrowed only during that one FFI call.
+    #[repr(C)]
+    pub struct dfgo_parameter {
+        pub(super) index: i64,
+        pub(super) name: *const c_char,
+        pub(super) name_len: i64,
+        pub(super) type_code: i32,
+        pub(super) is_null: i32,
+        pub(super) int64_value: i64,
+        pub(super) uint64_value: u64,
+        pub(super) float64_value: f64,
+        pub(super) data: *const u8,
+        pub(super) data_len: i64,
+        pub(super) timezone: *const c_char,
+        pub(super) timezone_len: i64,
+        pub(super) precision: u8,
+        pub(super) scale: i8,
+    }
 }
 
 use ffi_types::*;
@@ -107,6 +126,7 @@ const ERROR_KIND_CANCELLED: &str = "cancelled";
 const ERROR_KIND_INVALID_ARGUMENT: &str = "invalid_argument";
 const ERROR_KIND_NATIVE: &str = "native";
 const ERROR_KIND_PANIC: &str = "panic";
+const PARAMETER_NULL: i32 = 0;
 const PARAMETER_BOOL: i32 = 1;
 const PARAMETER_INT64: i32 = 2;
 const PARAMETER_UINT64: i32 = 3;
@@ -795,43 +815,132 @@ fn param_values(
     }
 }
 
+fn bindings_from_params(
+    params: *const dfgo_parameter,
+    params_len: i64,
+) -> Result<Vec<Binding>, FfiError> {
+    if params.is_null() && params_len != 0 {
+        return Err(FfiError::invalid_argument("parameters pointer is null"));
+    }
+    if params_len < 0 {
+        return Err(FfiError::invalid_argument(format!(
+            "parameters length must be non-negative, got {params_len}"
+        )));
+    }
+
+    let params_len =
+        usize::try_from(params_len).map_err(|e| FfiError::invalid_argument(e.to_string()))?;
+    let params = if params_len == 0 {
+        &[]
+    } else {
+        // SAFETY: non-empty parameter arrays require a non-null pointer,
+        // negative lengths were rejected, and the borrow lasts only for this
+        // FFI call. Every nested pointer is copied into owned Rust data below.
+        unsafe { slice::from_raw_parts(params, params_len) }
+    };
+
+    let mut bindings = Vec::new();
+    for param in params {
+        if param.index <= 0 {
+            return Err(FfiError::invalid_argument(format!(
+                "parameter index must be positive, got {}",
+                param.index
+            )));
+        }
+
+        let index = usize::try_from(param.index - 1)
+            .map_err(|e| FfiError::invalid_argument(e.to_string()))?;
+        if bindings.len() <= index {
+            bindings.resize_with(index + 1, || Binding {
+                name: None,
+                value: None,
+            });
+        }
+
+        bindings[index] = Binding {
+            name: parameter_name(param)?,
+            value: Some(parameter_value(param)?),
+        };
+    }
+
+    Ok(bindings)
+}
+
+fn parameter_name(param: &dfgo_parameter) -> Result<Option<String>, FfiError> {
+    if param.name.is_null() && param.name_len == 0 {
+        return Ok(None);
+    }
+
+    let name = bytes_to_string(param.name, param.name_len, "parameter name")?;
+    if name.is_empty() {
+        return Err(FfiError::invalid_argument("parameter name is empty"));
+    }
+    Ok(Some(name))
+}
+
+fn parameter_value(param: &dfgo_parameter) -> Result<ScalarValue, FfiError> {
+    if param.is_null != 0 {
+        if param.type_code == PARAMETER_NULL {
+            return Ok(ScalarValue::Null);
+        }
+        return typed_null(
+            param.type_code,
+            param.precision,
+            param.scale,
+            optional_timezone(param.timezone, param.timezone_len)?,
+        );
+    }
+
+    match param.type_code {
+        PARAMETER_BOOL => Ok(ScalarValue::Boolean(Some(param.int64_value != 0))),
+        PARAMETER_INT64 => Ok(ScalarValue::Int64(Some(param.int64_value))),
+        PARAMETER_UINT64 => Ok(ScalarValue::UInt64(Some(param.uint64_value))),
+        PARAMETER_FLOAT64 => Ok(ScalarValue::Float64(Some(param.float64_value))),
+        PARAMETER_STRING => {
+            let value = bytes_to_string(
+                param.data.cast::<c_char>(),
+                param.data_len,
+                "string parameter",
+            )?;
+            Ok(ScalarValue::Utf8(Some(value)))
+        }
+        PARAMETER_BINARY => {
+            let bytes = bytes_from_ptr(param.data, param.data_len, "binary parameter")?;
+            Ok(ScalarValue::Binary(Some(bytes.to_vec())))
+        }
+        PARAMETER_DATE => {
+            let days = i32::try_from(param.int64_value)
+                .map_err(|e| FfiError::invalid_argument(e.to_string()))?;
+            Ok(ScalarValue::Date32(Some(days)))
+        }
+        PARAMETER_TIME => Ok(ScalarValue::Time64Nanosecond(Some(param.int64_value))),
+        PARAMETER_TIMESTAMP => Ok(ScalarValue::TimestampNanosecond(
+            Some(param.int64_value),
+            optional_timezone(param.timezone, param.timezone_len)?,
+        )),
+        PARAMETER_DURATION => Ok(ScalarValue::DurationNanosecond(Some(param.int64_value))),
+        PARAMETER_DECIMAL => {
+            let value =
+                bytes_to_string(param.data.cast::<c_char>(), param.data_len, "decimal value")?;
+            let scaled = parse_decimal128(&value, param.precision, param.scale)?;
+            Ok(ScalarValue::Decimal128(
+                Some(scaled),
+                param.precision,
+                param.scale,
+            ))
+        }
+        other => Err(FfiError::invalid_argument(format!(
+            "unsupported parameter type {other}"
+        ))),
+    }
+}
+
 fn expected_parameter_list(names: &BTreeSet<String>) -> String {
     names
         .iter()
         .map(|name| format!("${name}"))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn bind_value(stmt: *mut dfgo_statement, index: i64, value: ScalarValue) -> Result<(), FfiError> {
-    if stmt.is_null() {
-        return Err(FfiError::invalid_argument("statement handle is null"));
-    }
-    if index <= 0 {
-        return Err(FfiError::invalid_argument(format!(
-            "parameter index must be positive, got {index}"
-        )));
-    }
-
-    // SAFETY: `stmt` was checked for null above and is expected to be a live
-    // handle previously returned by dfgo_prepare.
-    let stmt = unsafe { &*stmt };
-    let mut bindings = stmt
-        .bindings
-        .lock()
-        .map_err(|e| FfiError::native(e.to_string()))?;
-    let index =
-        usize::try_from(index - 1).map_err(|e| FfiError::invalid_argument(e.to_string()))?;
-    if bindings.len() <= index {
-        // Grow sparse database/sql ordinals into explicit slots so later shape
-        // validation can distinguish "slot missing" from "value missing".
-        bindings.resize_with(index + 1, || Binding {
-            name: None,
-            value: None,
-        });
-    }
-    bindings[index].value = Some(value);
-    Ok(())
 }
 
 fn session_config_from_dsn(dsn: &str) -> Result<SessionConfig, FfiError> {
@@ -1319,7 +1428,6 @@ pub unsafe extern "C" fn dfgo_prepare(
             query: prepared.query,
             params: prepared.params,
             serializes,
-            bindings: Mutex::new(Vec::new()),
         };
 
         // SAFETY: `out` is non-null. Ownership of the statement handle moves to
@@ -1339,7 +1447,7 @@ pub unsafe extern "C" fn dfgo_prepare(
 pub unsafe extern "C" fn dfgo_statement_close(stmt: *mut dfgo_statement) {
     if !stmt.is_null() {
         // SAFETY: `stmt` must be a live handle returned from dfgo_prepare and
-        // not already closed. Dropping it also drops any cached bindings.
+        // not already closed.
         unsafe {
             drop(Box::from_raw(stmt));
         }
@@ -1427,405 +1535,44 @@ pub unsafe extern "C" fn dfgo_cancel_token_close(token: *mut dfgo_cancel_token) 
     }
 }
 
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_clear_bindings(
-    stmt: *mut dfgo_statement,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        if stmt.is_null() {
-            return Err(FfiError::invalid_argument("statement handle is null"));
-        }
+fn execute_with_bindings(
+    stmt: &dfgo_statement,
+    cancel: Arc<CancelToken>,
+    bindings: Vec<Binding>,
+    out: *mut *mut dfgo_result_stream,
+) -> Result<(), FfiError> {
+    let stream = execute_to_stream(
+        stmt.inner.clone(),
+        &stmt.query,
+        &stmt.params,
+        bindings,
+        cancel.clone(),
+    )?;
+    let result = dfgo_result_stream {
+        stream: Some(stream),
+        cancel,
+    };
 
-        // SAFETY: `stmt` is non-null and borrowed for the duration of the clear.
-        let stmt = unsafe { &*stmt };
-        stmt.bindings
-            .lock()
-            .map_err(|e| FfiError::native(e.to_string()))?
-            .clear();
-        Ok(())
-    })
+    // SAFETY: callers validate `out` before reaching this helper. Ownership of
+    // the result handle moves to the caller until dfgo_result_close.
+    unsafe {
+        *out = Box::into_raw(Box::new(result));
+    }
+    Ok(())
 }
 
 /// # Safety
 ///
-/// `stmt` must be a live statement handle. `name` must point to a valid
-/// NUL-terminated C string. `err`, when non-null, must point to writable
-/// error-handle storage.
+/// `stmt` and `cancel` must be live handles. `params` must be null when
+/// `params_len` is zero, or point to `params_len` readable dfgo_parameter values.
+/// Every nested pointer in `params` must remain readable for the duration of this
+/// call. `out` must point to writable storage for one result-stream handle.
+/// `err`, when non-null, must point to writable error-handle storage.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_set_param_name(
+pub unsafe extern "C" fn dfgo_statement_execute_with_params(
     stmt: *mut dfgo_statement,
-    index: i64,
-    name: *const c_char,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        if stmt.is_null() {
-            return Err(FfiError::invalid_argument("statement handle is null"));
-        }
-        if index <= 0 {
-            return Err(FfiError::invalid_argument(format!(
-                "parameter index must be positive, got {index}"
-            )));
-        }
-
-        let name = cstr_to_string(name, "parameter name")?;
-        if name.is_empty() {
-            return Err(FfiError::invalid_argument("parameter name is empty"));
-        }
-
-        // SAFETY: `stmt` is non-null and borrowed while updating its binding
-        // table. The mutex protects concurrent database/sql use of a statement.
-        let stmt = unsafe { &*stmt };
-        let mut bindings = stmt
-            .bindings
-            .lock()
-            .map_err(|e| FfiError::native(e.to_string()))?;
-        let index =
-            usize::try_from(index - 1).map_err(|e| FfiError::invalid_argument(e.to_string()))?;
-        if bindings.len() <= index {
-            // A name can arrive before its value. Preserve the partially-filled
-            // slot so the later value binder or execution validator can finish
-            // or report the correct missing-value error.
-            bindings.resize_with(index + 1, || Binding {
-                name: None,
-                value: None,
-            });
-        }
-        bindings[index].name = Some(name);
-        Ok(())
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_null(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || bind_value(stmt, index, ScalarValue::Null))
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_bool(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i32,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::Boolean(Some(value != 0)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_int64(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::Int64(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_uint64(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: u64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::UInt64(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_float64(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: f64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::Float64(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_date32(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i32,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::Date32(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_time64_ns(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::Time64Nanosecond(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_timestamp_ns(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        // Plain time.Time values from Go bind as UTC timestamps. Callers that
-        // need an explicit Arrow time zone use dfgo_statement_bind_timestamp_ns_tz.
-        bind_value(
-            stmt,
-            index,
-            ScalarValue::TimestampNanosecond(Some(value), Some(Arc::<str>::from("UTC"))),
-        )
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `timezone` must be null when
-/// `timezone_len` is zero, or point to `timezone_len` readable bytes for the
-/// duration of this call. `err`, when non-null, must point to writable
-/// error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_timestamp_ns_tz(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i64,
-    timezone: *const c_char,
-    timezone_len: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(
-            stmt,
-            index,
-            ScalarValue::TimestampNanosecond(
-                Some(value),
-                optional_timezone(timezone, timezone_len)?,
-            ),
-        )
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_duration_ns(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        bind_value(stmt, index, ScalarValue::DurationNanosecond(Some(value)))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `value` must be null when `len` is
-/// zero, or point to `len` readable bytes for the duration of this call. `err`,
-/// when non-null, must point to writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_decimal128(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: *const c_char,
-    len: i64,
-    precision: u8,
-    scale: i8,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        // Decimal inputs are copied into a Rust String before parsing, so the Go
-        // C string only needs to live for this call.
-        let value = bytes_to_string(value, len, "decimal value")?;
-        let scaled = parse_decimal128(&value, precision, scale)?;
-        bind_value(
-            stmt,
-            index,
-            ScalarValue::Decimal128(Some(scaled), precision, scale),
-        )
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `timezone` must be null when
-/// `timezone_len` is zero, or point to `timezone_len` readable bytes for the
-/// duration of this call. `err`, when non-null, must point to writable
-/// error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_typed_null(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    type_code: i32,
-    precision: u8,
-    scale: i8,
-    timezone: *const c_char,
-    timezone_len: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        // The typed-null payload is converted into a full ScalarValue now so
-        // execution does not need to inspect the original C arguments later.
-        let value = typed_null(
-            type_code,
-            precision,
-            scale,
-            optional_timezone(timezone, timezone_len)?,
-        )?;
-        bind_value(stmt, index, value)
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `value` must be null when `len` is
-/// zero, or point to `len` readable bytes for the duration of this call. `err`,
-/// when non-null, must point to writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_string(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: *const c_char,
-    len: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        if value.is_null() && len != 0 {
-            return Err(FfiError::invalid_argument("string value pointer is null"));
-        }
-        if len < 0 {
-            return Err(FfiError::invalid_argument(format!(
-                "string length must be non-negative, got {len}"
-            )));
-        }
-
-        let bytes = if len == 0 {
-            &[]
-        } else {
-            // SAFETY: non-empty strings require a non-null pointer, negative
-            // lengths were rejected, and the slice is copied into an owned
-            // String before this FFI call returns.
-            unsafe {
-                slice::from_raw_parts(
-                    value.cast::<u8>(),
-                    usize::try_from(len).map_err(|e| FfiError::invalid_argument(e.to_string()))?,
-                )
-            }
-        };
-        let value = std::str::from_utf8(bytes).map_err(|e| {
-            FfiError::invalid_argument(format!("string parameter is not valid UTF-8: {e}"))
-        })?;
-
-        bind_value(stmt, index, ScalarValue::Utf8(Some(value.to_owned())))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` must be a live statement handle. `value` must be null when `len` is
-/// zero, or point to `len` readable bytes for the duration of this call. `err`,
-/// when non-null, must point to writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_bind_binary(
-    stmt: *mut dfgo_statement,
-    index: i64,
-    value: *const u8,
-    len: i64,
-    err: *mut *mut dfgo_error,
-) -> i32 {
-    run_ffi(err, || {
-        if value.is_null() && len != 0 {
-            return Err(FfiError::invalid_argument("binary value pointer is null"));
-        }
-        if len < 0 {
-            return Err(FfiError::invalid_argument(format!(
-                "binary length must be non-negative, got {len}"
-            )));
-        }
-
-        let bytes = if len == 0 {
-            &[]
-        } else {
-            // SAFETY: non-empty binary values require a non-null pointer,
-            // negative lengths were rejected, and the bytes are copied into an
-            // owned Vec before this FFI call returns.
-            unsafe {
-                slice::from_raw_parts(
-                    value,
-                    usize::try_from(len).map_err(|e| FfiError::invalid_argument(e.to_string()))?,
-                )
-            }
-        };
-
-        bind_value(stmt, index, ScalarValue::Binary(Some(bytes.to_vec())))
-    })
-}
-
-/// # Safety
-///
-/// `stmt` and `cancel` must be live handles. `out` must point to writable
-/// storage for one result-stream handle. `err`, when non-null, must point to
-/// writable error-handle storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dfgo_statement_execute(
-    stmt: *mut dfgo_statement,
+    params: *const dfgo_parameter,
+    params_len: i64,
     cancel: *mut dfgo_cancel_token,
     out: *mut *mut dfgo_result_stream,
     err: *mut *mut dfgo_error,
@@ -1841,39 +1588,17 @@ pub unsafe extern "C" fn dfgo_statement_execute(
             return Err(FfiError::invalid_argument("cancel token handle is null"));
         }
 
-        // SAFETY: all handles were checked for null. They are borrowed only for
-        // this call; cloned Arcs and ScalarValues keep the execution state alive
-        // after the borrow ends.
+        // Copy params into local Bindings before execution. The statement keeps
+        // only immutable prepared-query metadata, so concurrent callers with
+        // separate params arrays cannot interleave parameter state.
+        let bindings = bindings_from_params(params, params_len)?;
+        // SAFETY: `stmt` is non-null and borrowed only for immutable prepared
+        // statement state. Execution clones the Arcs it needs.
         let stmt = unsafe { &*stmt };
         // SAFETY: `cancel` is non-null and borrowed just long enough to clone
         // its Arc-backed token.
         let cancel = unsafe { &*cancel }.cancel.clone();
-        // Clone bindings while holding the mutex, then release the lock before
-        // planning/execution. That avoids blocking concurrent statement cleanup
-        // or rebinding while DataFusion does async work.
-        let bindings = stmt
-            .bindings
-            .lock()
-            .map_err(|e| FfiError::native(e.to_string()))?
-            .clone();
-        let stream = execute_to_stream(
-            stmt.inner.clone(),
-            &stmt.query,
-            &stmt.params,
-            bindings,
-            cancel.clone(),
-        )?;
-        let result = dfgo_result_stream {
-            stream: Some(stream),
-            cancel,
-        };
-
-        // SAFETY: `out` is non-null. Ownership of the result handle moves to the
-        // caller until dfgo_result_close.
-        unsafe {
-            *out = Box::into_raw(Box::new(result));
-        }
-        Ok(())
+        execute_with_bindings(stmt, cancel, bindings, out)
     })
 }
 
@@ -1920,7 +1645,7 @@ pub unsafe extern "C" fn dfgo_result_export_arrow_stream(
 /// # Safety
 ///
 /// `result` must be null or a live result-stream handle returned by
-/// `dfgo_statement_execute` that has not already been closed.
+/// `dfgo_statement_execute_with_params` that has not already been closed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dfgo_result_close(result: *mut dfgo_result_stream) {
     if !result.is_null() {
@@ -1929,7 +1654,7 @@ pub unsafe extern "C" fn dfgo_result_close(result: *mut dfgo_result_stream) {
         let result_ref = unsafe { &*result };
         result_ref.cancel.cancel();
         // SAFETY: `result` must be a live handle returned from
-        // dfgo_statement_execute and not already closed.
+        // dfgo_statement_execute_with_params and not already closed.
         unsafe {
             drop(Box::from_raw(result));
         }

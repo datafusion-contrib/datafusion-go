@@ -302,9 +302,11 @@ func (stmt *Statement) ExecuteArrow(ctx context.Context, args []driver.NamedValu
 		return nil, err
 	}
 
-	if err := stmt.bindArgs(args); err != nil {
+	params, cleanup, err := statementParams(args)
+	if err != nil {
 		return nil, err
 	}
+	defer cleanup()
 
 	token, err := newCancelToken()
 	if err != nil {
@@ -322,7 +324,11 @@ func (stmt *Statement) ExecuteArrow(ctx context.Context, args []driver.NamedValu
 
 	var result *C.dfgo_result_stream
 	var cerr *C.dfgo_error
-	if C.dfgo_statement_execute(stmt.ptr, token.ptr, &result, &cerr) != stateOK {
+	var paramsPtr *C.dfgo_parameter
+	if len(params) != 0 {
+		paramsPtr = &params[0]
+	}
+	if C.dfgo_statement_execute_with_params(stmt.ptr, paramsPtr, C.int64_t(len(params)), token.ptr, &result, &cerr) != stateOK {
 		close(done)
 		token.Close()
 		return nil, contextError(ctx, takeError(cerr))
@@ -370,106 +376,93 @@ func (stmt *Statement) checkArgCount(args []driver.NamedValue) error {
 	return fmt.Errorf("datafusion-go SQL statement expects %d argument%s, got %d; pass exactly one argument for each ?, $1/$2, or distinct $name placeholder", want, plural, len(args))
 }
 
-func (stmt *Statement) bindArgs(args []driver.NamedValue) error {
-	var cerr *C.dfgo_error
-	if C.dfgo_statement_clear_bindings(stmt.ptr, &cerr) != stateOK {
-		return takeError(cerr)
+func statementParams(args []driver.NamedValue) ([]C.dfgo_parameter, func(), error) {
+	params := make([]C.dfgo_parameter, len(args))
+	var allocs []unsafe.Pointer
+	cleanup := func() {
+		for _, ptr := range allocs {
+			C.free(ptr)
+		}
 	}
-
 	for i, arg := range args {
 		ordinal := arg.Ordinal
 		if ordinal == 0 {
 			ordinal = i + 1
 		}
 		if ordinal <= 0 {
-			return fmt.Errorf("parameter ordinal must be positive, got %d", ordinal)
+			cleanup()
+			return nil, nil, fmt.Errorf("parameter ordinal must be positive, got %d", ordinal)
 		}
-		index := C.int64_t(ordinal)
 
+		param := &params[i]
+		param.index = C.int64_t(ordinal)
 		if arg.Name != "" {
-			cname := C.CString(arg.Name)
-			if C.dfgo_statement_set_param_name(stmt.ptr, index, cname, &cerr) != stateOK {
-				C.free(unsafe.Pointer(cname))
-				return takeError(cerr)
-			}
-			C.free(unsafe.Pointer(cname))
+			param.name = cParamString(&allocs, arg.Name)
+			param.name_len = C.int64_t(len(arg.Name))
 		}
 
-		if err := stmt.bindValue(index, arg.Value); err != nil {
-			return err
+		if err := setStatementParam(param, arg.Value, &allocs); err != nil {
+			cleanup()
+			return nil, nil, err
 		}
 	}
 
-	return nil
+	return params, cleanup, nil
 }
 
-func (stmt *Statement) bindValue(index C.int64_t, value driver.Value) error {
-	var cerr *C.dfgo_error
-
+func setStatementParam(param *C.dfgo_parameter, value driver.Value, allocs *[]unsafe.Pointer) error {
 	switch value := value.(type) {
 	case nil:
-		if C.dfgo_statement_bind_null(stmt.ptr, index, &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.is_null = C.int32_t(1)
 	case bool:
-		cvalue := C.int(0)
+		param.type_code = C.int32_t(ParameterBool)
 		if value {
-			cvalue = 1
-		}
-		if C.dfgo_statement_bind_bool(stmt.ptr, index, cvalue, &cerr) != stateOK {
-			return takeError(cerr)
+			param.int64_value = C.int64_t(1)
 		}
 	case int64:
-		if C.dfgo_statement_bind_int64(stmt.ptr, index, C.int64_t(value), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterInt64)
+		param.int64_value = C.int64_t(value)
 	case UInt64Parameter:
-		if C.dfgo_statement_bind_uint64(stmt.ptr, index, C.uint64_t(value.Value), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterUInt64)
+		param.uint64_value = C.uint64_t(value.Value)
 	case float64:
-		if C.dfgo_statement_bind_float64(stmt.ptr, index, C.double(value), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterFloat64)
+		param.float64_value = C.double(value)
 	case DateParameter:
-		if C.dfgo_statement_bind_date32(stmt.ptr, index, C.int32_t(value.Days), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterDate)
+		param.int64_value = C.int64_t(value.Days)
 	case TimeParameter:
-		if C.dfgo_statement_bind_time64_ns(stmt.ptr, index, C.int64_t(value.Nanoseconds), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterTime)
+		param.int64_value = C.int64_t(value.Nanoseconds)
 	case TimestampParameter:
-		if err := stmt.bindTimestamp(index, value, &cerr); err != nil {
-			return err
-		}
+		param.type_code = C.int32_t(ParameterTimestamp)
+		param.int64_value = C.int64_t(value.Nanoseconds)
+		param.timezone = cParamString(allocs, value.TimeZone)
+		param.timezone_len = C.int64_t(len(value.TimeZone))
 	case DurationParameter:
-		if C.dfgo_statement_bind_duration_ns(stmt.ptr, index, C.int64_t(value.Nanoseconds), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterDuration)
+		param.int64_value = C.int64_t(value.Nanoseconds)
 	case DecimalParameter:
-		if err := stmt.bindDecimal(index, value, &cerr); err != nil {
-			return err
-		}
+		param.type_code = C.int32_t(ParameterDecimal)
+		param.data = cParamData(allocs, []byte(value.Value))
+		param.data_len = C.int64_t(len(value.Value))
+		param.precision = C.uint8_t(value.Precision)
+		param.scale = C.int8_t(value.Scale)
 	case NullParameter:
-		if err := stmt.bindTypedNull(index, value, &cerr); err != nil {
-			return err
-		}
+		param.type_code = C.int32_t(value.Type)
+		param.is_null = C.int32_t(1)
+		param.precision = C.uint8_t(value.Precision)
+		param.scale = C.int8_t(value.Scale)
+		param.timezone = cParamString(allocs, value.TimeZone)
+		param.timezone_len = C.int64_t(len(value.TimeZone))
 	case string:
-		cvalue := C.CString(value)
-		if C.dfgo_statement_bind_string(stmt.ptr, index, cvalue, C.int64_t(len(value)), &cerr) != stateOK {
-			C.free(unsafe.Pointer(cvalue))
-			return takeError(cerr)
-		}
-		C.free(unsafe.Pointer(cvalue))
+		param.type_code = C.int32_t(ParameterString)
+		param.data = cParamData(allocs, []byte(value))
+		param.data_len = C.int64_t(len(value))
 	case []byte:
-		var ptr *C.uint8_t
-		if len(value) != 0 {
-			ptr = (*C.uint8_t)(unsafe.Pointer(&value[0]))
-		}
-		if C.dfgo_statement_bind_binary(stmt.ptr, index, ptr, C.int64_t(len(value)), &cerr) != stateOK {
-			return takeError(cerr)
-		}
+		param.type_code = C.int32_t(ParameterBinary)
+		param.data = cParamData(allocs, value)
+		param.data_len = C.int64_t(len(value))
 	default:
 		return fmt.Errorf("unsupported parameter type %T", value)
 	}
@@ -477,31 +470,20 @@ func (stmt *Statement) bindValue(index C.int64_t, value driver.Value) error {
 	return nil
 }
 
-func (stmt *Statement) bindTimestamp(index C.int64_t, value TimestampParameter, cerr **C.dfgo_error) error {
-	ctimezone := C.CString(value.TimeZone)
-	defer C.free(unsafe.Pointer(ctimezone))
-	if C.dfgo_statement_bind_timestamp_ns_tz(stmt.ptr, index, C.int64_t(value.Nanoseconds), ctimezone, C.int64_t(len(value.TimeZone)), cerr) != stateOK {
-		return takeError(*cerr)
+func cParamData(allocs *[]unsafe.Pointer, data []byte) *C.uint8_t {
+	if len(data) == 0 {
+		return nil
 	}
-	return nil
+	ptr := C.CBytes(data)
+	*allocs = append(*allocs, ptr)
+	return (*C.uint8_t)(ptr)
 }
 
-func (stmt *Statement) bindDecimal(index C.int64_t, value DecimalParameter, cerr **C.dfgo_error) error {
-	cvalue := C.CString(value.Value)
-	defer C.free(unsafe.Pointer(cvalue))
-	if C.dfgo_statement_bind_decimal128(stmt.ptr, index, cvalue, C.int64_t(len(value.Value)), C.uint8_t(value.Precision), C.int8_t(value.Scale), cerr) != stateOK {
-		return takeError(*cerr)
+func cParamString(allocs *[]unsafe.Pointer, value string) *C.char {
+	if value == "" {
+		return nil
 	}
-	return nil
-}
-
-func (stmt *Statement) bindTypedNull(index C.int64_t, value NullParameter, cerr **C.dfgo_error) error {
-	ctimezone := C.CString(value.TimeZone)
-	defer C.free(unsafe.Pointer(ctimezone))
-	if C.dfgo_statement_bind_typed_null(stmt.ptr, index, C.int32_t(value.Type), C.uint8_t(value.Precision), C.int8_t(value.Scale), ctimezone, C.int64_t(len(value.TimeZone)), cerr) != stateOK {
-		return takeError(*cerr)
-	}
-	return nil
+	return (*C.char)(unsafe.Pointer(cParamData(allocs, []byte(value))))
 }
 
 func newCancelToken() (*cancelToken, error) {

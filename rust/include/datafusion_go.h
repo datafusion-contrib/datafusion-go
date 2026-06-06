@@ -47,6 +47,23 @@ typedef struct dfgo_result_stream dfgo_result_stream;
 typedef struct dfgo_cancel_token dfgo_cancel_token;
 typedef struct dfgo_error dfgo_error;
 
+typedef struct dfgo_parameter {
+  int64_t index;
+  const char *name;
+  int64_t name_len;
+  int32_t type_code;
+  int32_t is_null;
+  int64_t int64_value;
+  uint64_t uint64_value;
+  double float64_value;
+  const uint8_t *data;
+  int64_t data_len;
+  const char *timezone;
+  int64_t timezone_len;
+  uint8_t precision;
+  int8_t scale;
+} dfgo_parameter;
+
 /*
  * ABI ownership rules:
  * - Handles returned through out parameters are Rust-owned and must be returned
@@ -57,6 +74,10 @@ typedef struct dfgo_error dfgo_error;
  *   remain live for the duration of the call.
  * - dfgo_connection_register_arrow_stream consumes a non-null ArrowArrayStream
  *   even when later validation or registration fails.
+ * - dfgo_statement_execute_with_params borrows params and all nested pointers
+ *   only for the duration of the call. Parameters are per-call state, so
+ *   concurrent executions with separate params arrays cannot interleave
+ *   parameter values.
  */
 
 int32_t dfgo_abi_version(void);
@@ -80,24 +101,7 @@ int dfgo_cancel_token_create(dfgo_cancel_token **out, dfgo_error **err);
 void dfgo_cancel_token_cancel(dfgo_cancel_token *token);
 void dfgo_cancel_token_close(dfgo_cancel_token *token);
 
-int dfgo_statement_clear_bindings(dfgo_statement *stmt, dfgo_error **err);
-int dfgo_statement_set_param_name(dfgo_statement *stmt, int64_t index, const char *name, dfgo_error **err);
-int dfgo_statement_bind_null(dfgo_statement *stmt, int64_t index, dfgo_error **err);
-int dfgo_statement_bind_bool(dfgo_statement *stmt, int64_t index, int value, dfgo_error **err);
-int dfgo_statement_bind_int64(dfgo_statement *stmt, int64_t index, int64_t value, dfgo_error **err);
-int dfgo_statement_bind_uint64(dfgo_statement *stmt, int64_t index, uint64_t value, dfgo_error **err);
-int dfgo_statement_bind_float64(dfgo_statement *stmt, int64_t index, double value, dfgo_error **err);
-int dfgo_statement_bind_date32(dfgo_statement *stmt, int64_t index, int32_t value, dfgo_error **err);
-int dfgo_statement_bind_time64_ns(dfgo_statement *stmt, int64_t index, int64_t value, dfgo_error **err);
-int dfgo_statement_bind_timestamp_ns(dfgo_statement *stmt, int64_t index, int64_t value, dfgo_error **err);
-int dfgo_statement_bind_timestamp_ns_tz(dfgo_statement *stmt, int64_t index, int64_t value, const char *timezone, int64_t timezone_len, dfgo_error **err);
-int dfgo_statement_bind_duration_ns(dfgo_statement *stmt, int64_t index, int64_t value, dfgo_error **err);
-int dfgo_statement_bind_decimal128(dfgo_statement *stmt, int64_t index, const char *value, int64_t len, uint8_t precision, int8_t scale, dfgo_error **err);
-int dfgo_statement_bind_typed_null(dfgo_statement *stmt, int64_t index, int32_t type_code, uint8_t precision, int8_t scale, const char *timezone, int64_t timezone_len, dfgo_error **err);
-int dfgo_statement_bind_string(dfgo_statement *stmt, int64_t index, const char *value, int64_t len, dfgo_error **err);
-int dfgo_statement_bind_binary(dfgo_statement *stmt, int64_t index, const uint8_t *value, int64_t len, dfgo_error **err);
-
-int dfgo_statement_execute(dfgo_statement *stmt, dfgo_cancel_token *token, dfgo_result_stream **out, dfgo_error **err);
+int dfgo_statement_execute_with_params(dfgo_statement *stmt, const dfgo_parameter *params, int64_t params_len, dfgo_cancel_token *token, dfgo_result_stream **out, dfgo_error **err);
 int dfgo_result_export_arrow_stream(dfgo_result_stream *result, struct ArrowArrayStream *out, dfgo_error **err);
 void dfgo_result_cancel(dfgo_result_stream *result);
 void dfgo_result_close(dfgo_result_stream *result);
