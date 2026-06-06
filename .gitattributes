@@ -1,0 +1,8 @@
+# Keep generated/version files stable across Windows checkouts so
+# `make generate.check` compares content, not platform line endings.
+versions.toml text eol=lf
+version.go text eol=lf
+internal/native/version_generated.go text eol=lf
+rust/Cargo.toml text eol=lf
+rust/Cargo.lock text eol=lf
+rust/src/generated.rs text eol=lf
