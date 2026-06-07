@@ -1,8 +1,9 @@
-//go:build !datafusion_use_static_lib && !datafusion_use_lib && !datafusion_use_source && darwin && arm64
+//go:build datafusion_use_bundled && darwin && arm64
 
 package native
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/lib/darwin-arm64 -ldatafusion_go
+#cgo CFLAGS: -DDFGO_DIRECT_LINK
+#cgo LDFLAGS: ${SRCDIR}/lib/darwin-arm64/libdatafusion_go.a
 */
 import "C"

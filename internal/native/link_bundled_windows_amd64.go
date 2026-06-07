@@ -1,8 +1,9 @@
-//go:build !datafusion_use_static_lib && !datafusion_use_lib && !datafusion_use_source && windows && amd64
+//go:build datafusion_use_bundled && windows && amd64
 
 package native
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/lib/windows-amd64 -ldatafusion_go -lws2_32 -luserenv -lbcrypt -ladvapi32 -lntdll
+#cgo CFLAGS: -DDFGO_DIRECT_LINK
+#cgo LDFLAGS: ${SRCDIR}/lib/windows-amd64/libdatafusion_go.a -lws2_32 -luserenv -lbcrypt -ladvapi32 -lntdll
 */
 import "C"

@@ -5,3 +5,4 @@ package native
 
 const abiVersion = 1
 const dataFusionVersion = "53.1.0"
+const dataFusionGoVersion = "0.530100.1"

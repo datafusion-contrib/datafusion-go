@@ -39,7 +39,14 @@ jobs:
         run: make test.static
 
       - name: Race test
-        run: go test -race ./...
+        run: |
+          set -euo pipefail
+          if [ "$(go env GOOS)" = "darwin" ]; then
+            shared="libdatafusion_go.dylib"
+          else
+            shared="libdatafusion_go.so"
+          fi
+          DATAFUSION_GO_LIBRARY="$PWD/internal/native/lib/$(go env GOOS)-$(go env GOARCH)/${shared}" go test -race ./...
 
       - name: Vet
         run: go vet ./...
@@ -106,7 +113,7 @@ jobs:
 
       - name: Race test
         shell: msys2 {0}
-        run: go test -race ./...
+        run: DATAFUSION_GO_LIBRARY="$PWD/internal/native/lib/windows-amd64/datafusion_go.dll" go test -race ./...
 
       - name: Vet
         shell: msys2 {0}

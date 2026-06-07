@@ -6,7 +6,7 @@ rust-version = "1.88"
 
 [lib]
 name = "datafusion_go"
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
 arrow = { version = "58", features = ["ffi"] }

@@ -78,11 +78,11 @@ jobs:
           CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
         run: make test
 
-      - name: Upload native archive
+      - name: Upload native libraries
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.platform }}
-          path: internal/native/lib/${{ matrix.platform }}/libdatafusion_go.a
+          path: internal/native/lib/${{ matrix.platform }}/*datafusion_go*
           if-no-files-found: error
 
   release:
@@ -130,10 +130,12 @@ jobs:
           for dir in internal/native/lib/native-*; do
             platform="${dir##*/native-}"
             mkdir -p "internal/native/lib/${platform}"
-            mv "${dir}/libdatafusion_go.a" "internal/native/lib/${platform}/libdatafusion_go.a"
+            find "${dir}" -maxdepth 1 -type f -print | while read -r file; do
+              mv "${file}" "internal/native/lib/${platform}/$(basename "${file}")"
+            done
             rmdir "${dir}"
           done
-          find internal/native/lib -name libdatafusion_go.a -print | sort
+          find internal/native/lib -type f -print | sort
 
       - name: Generate checksums
         run: make checksums
@@ -143,6 +145,23 @@ jobs:
 
       - name: Verify downloaded release artifacts
         run: make verify.release.downloaded
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.release_tag }}"
+          rm -rf dist
+          mkdir -p dist
+          while IFS= read -r file; do
+            platform="$(basename "$(dirname "${file}")")"
+            base="$(basename "${file}")"
+            cp "${file}" "dist/datafusion-go-${tag}-${platform}-${base}"
+          done < <(find internal/native/lib -mindepth 2 -maxdepth 2 -type f \( -name 'libdatafusion_go.a' -o -name 'libdatafusion_go.so' -o -name 'libdatafusion_go.dylib' -o -name 'datafusion_go.dll' \) -print | sort)
+          cd dist
+          shasum -a 256 datafusion-go-* > SHA256SUMS
+          shasum -a 256 -c SHA256SUMS
+          cd ..
+          cp dist/SHA256SUMS internal/native/lib/SHA256SUMS
 
       - name: Prepare release notes
         id: notes
@@ -162,6 +181,20 @@ jobs:
           fi
           echo "path=${notes_file}" >> "$GITHUB_OUTPUT"
 
+      - name: Commit release checksum manifest
+        if: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f internal/native/lib/SHA256SUMS
+          if git diff --cached --quiet; then
+            echo "release checksum manifest is unchanged"
+          else
+            git commit -m "chore: prepare ${{ steps.version.outputs.release_tag }} native checksums"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
       - name: Tag release
         if: ${{ inputs.publish }}
         run: |
@@ -177,10 +210,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          assets=(internal/native/lib/SHA256SUMS)
+          assets=(dist/SHA256SUMS)
           while IFS= read -r file; do
             assets+=("$file")
-          done < <(find internal/native/lib -name libdatafusion_go.a -print | sort)
+          done < <(find dist -type f -name 'datafusion-go-*' -print | sort)
           gh release create "${{ steps.version.outputs.release_tag }}" \
             --title "${{ steps.version.outputs.release_tag }}" \
             --notes-file "${{ steps.notes.outputs.path }}" \

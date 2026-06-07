@@ -14,7 +14,8 @@ temp/
 *.o
 *.obj
 *.wasm
-internal/native/lib/
+internal/native/lib/*
+!internal/native/lib/SHA256SUMS
 rust/target/
 
 # Go test, coverage, and profiling artifacts

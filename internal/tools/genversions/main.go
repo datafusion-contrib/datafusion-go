@@ -322,7 +322,8 @@ package native
 
 const abiVersion = %d
 const dataFusionVersion = %q
-`, cfg.ABIVersion, cfg.DataFusionVersion)
+const dataFusionGoVersion = %q
+`, cfg.ABIVersion, cfg.DataFusionVersion, cfg.dataFusionGoVersion())
 }
 
 func appendGitHubOutput(path string, cfg config) error {

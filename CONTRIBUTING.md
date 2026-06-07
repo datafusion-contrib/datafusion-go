@@ -67,7 +67,7 @@ changes incompatibly with the Go native wrapper.
 
 ## Native Libraries
 
-The Rust crate under `rust/` builds `libdatafusion_go.a`. The default Go build links the platform-specific archive from `internal/native/lib/<goos>-<goarch>/libdatafusion_go.a`.
+The Rust crate under `rust/` builds a static archive and a shared library. The default Go build loads the platform-specific shared library at runtime from `DATAFUSION_GO_LIBRARY`, from `internal/native/lib/<goos>-<goarch>` in source checkouts, or from the checksum-verified release-asset cache. The explicit `datafusion_use_bundled` mode links the platform-specific static archive from `internal/native/lib/<goos>-<goarch>/libdatafusion_go.a`.
 
 Use `make bundle` only when you intend to copy the current host build into `internal/native/lib`. Release verification uses `make verify.release.downloaded` so downloaded matrix artifacts are not overwritten by the release runner.
 
@@ -81,5 +81,5 @@ Go/Rust/no-cgo tests, and runs a clean consumer-module smoke test without
 tagging or creating a GitHub release.
 
 When the dry run succeeds, rerun the same workflow with `publish=true`. It tags
-the checked-out commit with the derived release tag and uploads the generated
-native archives plus checksums.
+commits the release-asset checksum manifest, tags that commit with the derived
+release tag, and uploads the generated native libraries plus checksums.

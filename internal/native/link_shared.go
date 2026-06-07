@@ -3,6 +3,7 @@
 package native
 
 /*
+#cgo CFLAGS: -DDFGO_DIRECT_LINK
 #cgo LDFLAGS: -ldatafusion_go
 */
 import "C"

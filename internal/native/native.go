@@ -1,8 +1,28 @@
 package native
 
 /*
+#cgo linux LDFLAGS: -ldl
 #cgo CFLAGS: -I${SRCDIR}/../../rust/include
+#ifndef DFGO_DIRECT_LINK
+#define DFGO_NO_FUNCTION_PROTOTYPES
+#endif
 #include "datafusion_go.h"
+#ifdef DFGO_DIRECT_LINK
+static int dfgo_native_uses_dynamic_loader(void) {
+	return 0;
+}
+
+static int dfgo_native_load_library(const char *path) {
+	(void)path;
+	return 0;
+}
+
+static const char *dfgo_native_load_error(void) {
+	return "";
+}
+#else
+#include "dynamic_loader.h"
+#endif
 #include <stdlib.h>
 
 static struct ArrowArrayStream *dfgo_arrow_stream_alloc(void) {
@@ -129,6 +149,9 @@ type resultReader struct {
 }
 
 func OpenDatabase(dsn string) (*Database, error) {
+	if err := ensureNativeLibraryLoaded(); err != nil {
+		return nil, err
+	}
 	if err := checkNativeVersion(); err != nil {
 		return nil, err
 	}
@@ -146,6 +169,30 @@ func OpenDatabase(dsn string) (*Database, error) {
 	}
 
 	return &Database{ptr: db}, nil
+}
+
+var nativeLoad struct {
+	once sync.Once
+	err  error
+}
+
+func ensureNativeLibraryLoaded() error {
+	nativeLoad.once.Do(func() {
+		if C.dfgo_native_uses_dynamic_loader() == 0 {
+			return
+		}
+		path, err := resolveNativeLibrary()
+		if err != nil {
+			nativeLoad.err = err
+			return
+		}
+		cpath := C.CString(path)
+		defer C.free(unsafe.Pointer(cpath))
+		if C.dfgo_native_load_library(cpath) != 0 {
+			nativeLoad.err = fmt.Errorf("could not load datafusion-go native library %q: %s", path, C.GoString(C.dfgo_native_load_error()))
+		}
+	})
+	return nativeLoad.err
 }
 
 func checkNativeVersion() error {

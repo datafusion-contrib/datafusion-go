@@ -80,6 +80,7 @@ typedef struct dfgo_parameter {
  *   parameter values.
  */
 
+#ifndef DFGO_NO_FUNCTION_PROTOTYPES
 int32_t dfgo_abi_version(void);
 const char *dfgo_datafusion_version(void);
 
@@ -109,6 +110,7 @@ void dfgo_result_close(dfgo_result_stream *result);
 const char *dfgo_error_message(const dfgo_error *err);
 const char *dfgo_error_kind(const dfgo_error *err);
 void dfgo_error_free(dfgo_error *err);
+#endif
 
 #ifdef __cplusplus
 }
