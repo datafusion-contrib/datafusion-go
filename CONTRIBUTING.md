@@ -72,19 +72,19 @@ The Rust crate under `rust/` builds a static archive and a shared library. The d
 
 Use `make bundle` only when you intend to copy the current host build into `internal/native/lib`. Release verification uses `make verify.release.downloaded` so downloaded matrix artifacts are not overwritten by the release runner.
 
-## Release Dry Run
+## Release Automation
 
 Before publishing, update `versions.toml`, run `make generate`, update
-`CHANGELOG.md`, and run the `Release` GitHub Actions workflow with
-`publish=false`. The workflow derives the tag from `versions.toml`, builds the
-native matrix, downloads all archives into one checkout, stages release assets
-using the exact filenames the runtime downloader requests, embeds the
-release-asset checksum manifest, and runs Go/Rust/no-cgo tests without tagging
-or creating a GitHub release.
+`CHANGELOG.md`, and merge the release PR into `main` after CI passes. Releases
+are cut only by GitHub Actions after the `CI` workflow completes successfully on
+`main`.
 
-When the dry run succeeds, rerun the same workflow with `publish=true`. It tags
-commits the release-asset checksum manifest, tags that commit with the derived
-release tag, and uploads the generated native libraries plus checksums. The tag
-must point at the commit containing release asset names in
-`internal/native/lib/SHA256SUMS`; otherwise `go get` consumers cannot verify or
-download native libraries automatically.
+The `Release` workflow derives the tag from `versions.toml`. If that tag already
+exists, the workflow exits without publishing. Otherwise, it builds the native
+matrix, downloads all archives into one checkout, stages release assets using
+the exact filenames the runtime downloader requests, embeds the release-asset
+checksum manifest, runs Go/Rust/no-cgo verification, commits the checksum
+manifest to `main`, tags that commit with the derived release tag, and uploads
+the generated native libraries plus checksums. The tag must point at the commit
+containing release asset names in `internal/native/lib/SHA256SUMS`; otherwise
+`go get` consumers cannot verify or download native libraries automatically.

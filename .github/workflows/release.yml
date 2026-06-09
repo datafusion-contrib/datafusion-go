@@ -1,20 +1,65 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: Tag and publish after artifact verification
-        required: true
-        default: false
-        type: boolean
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Prepare release
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-22.04
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      should_release: ${{ steps.tag.outputs.should_release }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check generated version files
+        run: make generate.check
+
+      - name: Compute release metadata
+        id: version
+        run: go run ./internal/tools/genversions -github-output "$GITHUB_OUTPUT"
+
+      - name: Check release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.release_tag }}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Release ${tag} already exists; skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   native:
     name: Native archive ${{ matrix.platform }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.should_release == 'true' }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -33,6 +78,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: actions/setup-go@v5
         with:
@@ -87,12 +134,19 @@ jobs:
 
   release:
     name: Cut release
-    needs: native
+    needs:
+      - prepare
+      - native
+    if: ${{ needs.prepare.outputs.should_release == 'true' }}
     runs-on: ubuntu-22.04
+    env:
+      CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
 
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -104,16 +158,16 @@ jobs:
       - name: Check generated version files
         run: make generate.check
 
-      - name: Compute release metadata
-        id: version
-        run: go run ./internal/tools/genversions -github-output "$GITHUB_OUTPUT"
-
-      - name: Check release tag
+      - name: Check main is still current
         run: |
           set -euo pipefail
-          tag="${{ steps.version.outputs.release_tag }}"
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "tag ${tag} already exists" >&2
+          git fetch origin main --tags
+          if [ "$(git rev-parse origin/main)" != "$CI_HEAD_SHA" ]; then
+            echo "main advanced after CI validated ${CI_HEAD_SHA}; waiting for a newer release run" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "tag ${RELEASE_TAG} already exists" >&2
             exit 1
           fi
 
@@ -140,9 +194,6 @@ jobs:
       - name: Stage release assets
         run: make stage.release.assets
 
-      - name: Verify release assets
-        run: make verify.release.assets
-
       - name: Verify downloaded release artifacts
         run: make verify.release.downloaded
 
@@ -150,7 +201,7 @@ jobs:
         id: notes
         run: |
           set -euo pipefail
-          tag="${{ steps.version.outputs.release_tag }}"
+          tag="${RELEASE_TAG}"
           notes_file="$(mktemp)"
           awk -v tag="$tag" '
             $0 == "## " tag || index($0, "## " tag " - ") == 1 { found = 1; next }
@@ -165,7 +216,6 @@ jobs:
           echo "path=${notes_file}" >> "$GITHUB_OUTPUT"
 
       - name: Commit release checksum manifest
-        if: ${{ inputs.publish }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -174,21 +224,19 @@ jobs:
           if git diff --cached --quiet; then
             echo "release checksum manifest is unchanged"
           else
-            git commit -m "chore: prepare ${{ steps.version.outputs.release_tag }} native checksums"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git commit -m "chore: prepare ${RELEASE_TAG} native checksums"
+            git push origin "HEAD:main"
           fi
 
       - name: Tag release
-        if: ${{ inputs.publish }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.release_tag }}" -m "${{ steps.version.outputs.release_tag }}"
-          git push origin "${{ steps.version.outputs.release_tag }}"
+          git tag -a "${RELEASE_TAG}" -m "${RELEASE_TAG}"
+          git push origin "${RELEASE_TAG}"
 
       - name: Create GitHub release
-        if: ${{ inputs.publish }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -197,7 +245,7 @@ jobs:
           while IFS= read -r file; do
             assets+=("$file")
           done < <(find dist -type f -name 'datafusion-go-*' -print | sort)
-          gh release create "${{ steps.version.outputs.release_tag }}" \
-            --title "${{ steps.version.outputs.release_tag }}" \
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
             --notes-file "${{ steps.notes.outputs.path }}" \
             "${assets[@]}"

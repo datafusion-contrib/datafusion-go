@@ -159,7 +159,6 @@ verify.release.downloaded: verify.release.assets test.bundled test.source test.s
 	go vet ./...
 	cargo test --manifest-path rust/Cargo.toml --release
 	CGO_ENABLED=0 go test ./...
-	$(MAKE) verify.release.assets
 
 clean:
 	cargo clean --manifest-path rust/Cargo.toml
