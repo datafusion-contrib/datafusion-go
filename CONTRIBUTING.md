@@ -26,6 +26,7 @@ make test.static
 Run the release verification path for already-bundled/downloaded artifacts:
 
 ```sh
+make stage.release.assets
 make verify.release.downloaded
 ```
 
@@ -76,10 +77,14 @@ Use `make bundle` only when you intend to copy the current host build into `inte
 Before publishing, update `versions.toml`, run `make generate`, update
 `CHANGELOG.md`, and run the `Release` GitHub Actions workflow with
 `publish=false`. The workflow derives the tag from `versions.toml`, builds the
-native matrix, downloads all archives into one checkout, verifies checksums, runs
-Go/Rust/no-cgo tests, and runs a clean consumer-module smoke test without
-tagging or creating a GitHub release.
+native matrix, downloads all archives into one checkout, stages release assets
+using the exact filenames the runtime downloader requests, embeds the
+release-asset checksum manifest, and runs Go/Rust/no-cgo tests without tagging
+or creating a GitHub release.
 
 When the dry run succeeds, rerun the same workflow with `publish=true`. It tags
 commits the release-asset checksum manifest, tags that commit with the derived
-release tag, and uploads the generated native libraries plus checksums.
+release tag, and uploads the generated native libraries plus checksums. The tag
+must point at the commit containing release asset names in
+`internal/native/lib/SHA256SUMS`; otherwise `go get` consumers cannot verify or
+download native libraries automatically.
