@@ -137,31 +137,14 @@ jobs:
           done
           find internal/native/lib -type f -print | sort
 
-      - name: Generate checksums
-        run: make checksums
+      - name: Stage release assets
+        run: make stage.release.assets
 
-      - name: Verify checksums
-        run: make verify.checksums
+      - name: Verify release assets
+        run: make verify.release.assets
 
       - name: Verify downloaded release artifacts
         run: make verify.release.downloaded
-
-      - name: Stage release assets
-        run: |
-          set -euo pipefail
-          tag="${{ steps.version.outputs.release_tag }}"
-          rm -rf dist
-          mkdir -p dist
-          while IFS= read -r file; do
-            platform="$(basename "$(dirname "${file}")")"
-            base="$(basename "${file}")"
-            cp "${file}" "dist/datafusion-go-${tag}-${platform}-${base}"
-          done < <(find internal/native/lib -mindepth 2 -maxdepth 2 -type f \( -name 'libdatafusion_go.a' -o -name 'libdatafusion_go.so' -o -name 'libdatafusion_go.dylib' -o -name 'datafusion_go.dll' \) -print | sort)
-          cd dist
-          shasum -a 256 datafusion-go-* > SHA256SUMS
-          shasum -a 256 -c SHA256SUMS
-          cd ..
-          cp dist/SHA256SUMS internal/native/lib/SHA256SUMS
 
       - name: Prepare release notes
         id: notes

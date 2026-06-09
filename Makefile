@@ -1,6 +1,7 @@
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 MACOSX_DEPLOYMENT_TARGET ?= 13.0
+DIST_DIR ?= dist
 NATIVE_PLATFORM := $(GOOS)-$(GOARCH)
 NATIVE_LIB_DIR := internal/native/lib/$(NATIVE_PLATFORM)
 NATIVE_LIB := $(NATIVE_LIB_DIR)/libdatafusion_go.a
@@ -39,7 +40,7 @@ else ifeq ($(GOOS),windows)
 STRIP_SHARED := strip --strip-unneeded
 endif
 
-.PHONY: generate generate.check rust bundle checksums verify.checksums test test.dynamic test.bundled test.source test.static consumer.smoke lint verify.release verify.release.downloaded clean
+.PHONY: generate generate.check rust bundle checksums verify.checksums stage.release.assets verify.release.assets test test.dynamic test.bundled test.source test.static consumer.smoke lint verify.release verify.release.downloaded clean
 
 generate:
 	go run ./internal/tools/genversions
@@ -65,6 +66,39 @@ checksums:
 verify.checksums:
 	test -s internal/native/lib/SHA256SUMS
 	cd internal/native/lib && shasum -a 256 -c SHA256SUMS
+
+stage.release.assets:
+	@metadata=$$(mktemp); \
+	go run ./internal/tools/genversions -github-output "$$metadata"; \
+	. "$$metadata"; \
+	rm -f "$$metadata"; \
+	rm -rf "$(DIST_DIR)"; \
+	mkdir -p "$(DIST_DIR)"; \
+	find internal/native/lib -mindepth 2 -maxdepth 2 -type f \( -name 'libdatafusion_go.a' -o -name 'libdatafusion_go.so' -o -name 'libdatafusion_go.dylib' -o -name 'datafusion_go.dll' \) -print | sort | while IFS= read -r file; do \
+		platform="$$(basename "$$(dirname "$$file")")"; \
+		base="$$(basename "$$file")"; \
+		cp "$$file" "$(DIST_DIR)/datafusion-go-$${release_tag}-$${platform}-$${base}"; \
+	done
+	cd "$(DIST_DIR)" && shasum -a 256 datafusion-go-* > SHA256SUMS
+	cd "$(DIST_DIR)" && shasum -a 256 -c SHA256SUMS
+	cp "$(DIST_DIR)/SHA256SUMS" internal/native/lib/SHA256SUMS
+
+verify.release.assets:
+	@metadata=$$(mktemp); \
+	go run ./internal/tools/genversions -github-output "$$metadata"; \
+	. "$$metadata"; \
+	rm -f "$$metadata"; \
+	cmp "$(DIST_DIR)/SHA256SUMS" internal/native/lib/SHA256SUMS; \
+	(cd "$(DIST_DIR)" && shasum -a 256 -c SHA256SUMS); \
+	for asset in \
+		"datafusion-go-$${release_tag}-darwin-arm64-libdatafusion_go.dylib" \
+		"datafusion-go-$${release_tag}-darwin-amd64-libdatafusion_go.dylib" \
+		"datafusion-go-$${release_tag}-linux-amd64-libdatafusion_go.so" \
+		"datafusion-go-$${release_tag}-linux-arm64-libdatafusion_go.so" \
+		"datafusion-go-$${release_tag}-windows-amd64-datafusion_go.dll"; do \
+		test -f "$(DIST_DIR)/$$asset"; \
+		grep -F "  $$asset" "$(DIST_DIR)/SHA256SUMS" >/dev/null; \
+	done
 
 test: bundle
 	$(MAKE) test.dynamic
@@ -120,12 +154,12 @@ verify.release: test test.source test.static
 	$(MAKE) checksums
 	$(MAKE) verify.checksums
 
-verify.release.downloaded: verify.checksums test.bundled consumer.smoke test.source test.static
+verify.release.downloaded: verify.release.assets test.bundled test.source test.static
 	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -race ./...
 	go vet ./...
 	cargo test --manifest-path rust/Cargo.toml --release
 	CGO_ENABLED=0 go test ./...
-	$(MAKE) verify.checksums
+	$(MAKE) verify.release.assets
 
 clean:
 	cargo clean --manifest-path rust/Cargo.toml
