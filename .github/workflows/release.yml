@@ -8,177 +8,112 @@ on:
       - completed
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: CI run ID to take native artifacts from
+        required: true
+      dry_run:
+        description: Stop before committing, tagging, or publishing
+        type: boolean
+        default: true
 
 permissions:
   contents: write
+  # required to download artifacts from another workflow run
+  actions: read
 
 concurrency:
   group: release-main
   cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: Prepare release
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+  release:
+    name: Cut release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-22.04
-    outputs:
-      release_tag: ${{ steps.version.outputs.release_tag }}
-      should_release: ${{ steps.tag.outputs.should_release }}
+    env:
+      CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.ci_run_id }}
+      CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.CI_HEAD_SHA }}
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Check generated version files
-        run: make generate.check
 
       - name: Compute release metadata
         id: version
         run: go run ./internal/tools/genversions -github-output "$GITHUB_OUTPUT"
 
-      - name: Check release tag
-        id: tag
-        run: |
-          set -euo pipefail
-          tag="${{ steps.version.outputs.release_tag }}"
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Release ${tag} already exists; skipping."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  native:
-    name: Native archive ${{ matrix.platform }}
-    needs: prepare
-    if: ${{ needs.prepare.outputs.should_release == 'true' }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: darwin-arm64
-            runner: macos-15
-          - platform: darwin-amd64
-            runner: macos-15-intel
-          - platform: linux-amd64
-            runner: ubuntu-22.04
-          - platform: linux-arm64
-            runner: ubuntu-22.04-arm
-          - platform: windows-amd64
-            runner: windows-2025
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: ${{ matrix.platform != 'windows-amd64' }}
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: ${{ matrix.platform == 'windows-amd64' }}
-        with:
-          targets: x86_64-pc-windows-gnu
-
-      - uses: msys2/setup-msys2@v2
-        if: ${{ matrix.platform == 'windows-amd64' }}
-        with:
-          msystem: MINGW64
-          update: true
-          path-type: inherit
-          install: >-
-            make
-            mingw-w64-x86_64-gcc
-
-      - name: Check generated version files
-        if: ${{ matrix.platform != 'windows-amd64' }}
-        run: make generate.check
-
-      - name: Check generated version files
-        if: ${{ matrix.platform == 'windows-amd64' }}
-        shell: msys2 {0}
-        run: make generate.check
-
-      - name: Build and test bundled archive
-        if: ${{ matrix.platform != 'windows-amd64' }}
-        run: make test
-
-      - name: Build and test bundled archive
-        if: ${{ matrix.platform == 'windows-amd64' }}
-        shell: msys2 {0}
+      - name: Gate on tag novelty and main currency
+        id: gate
         env:
-          CGO_ENABLED: "1"
-          CC: gcc
-          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
-        run: make test
-
-      - name: Upload native libraries
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-${{ matrix.platform }}
-          path: internal/native/lib/${{ matrix.platform }}/*datafusion_go*
-          if-no-files-found: error
-
-  release:
-    name: Cut release
-    needs:
-      - prepare
-      - native
-    if: ${{ needs.prepare.outputs.should_release == 'true' }}
-    runs-on: ubuntu-22.04
-    env:
-      CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Check generated version files
-        run: make generate.check
-
-      - name: Check main is still current
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin main --tags
-          if [ "$(git rev-parse origin/main)" != "$CI_HEAD_SHA" ]; then
-            echo "main advanced after CI validated ${CI_HEAD_SHA}; waiting for a newer release run" >&2
+          should_release=true
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "Release ${RELEASE_TAG} already exists."
+            should_release=false
+          elif [ "$(git rev-parse origin/main)" != "$CI_HEAD_SHA" ]; then
+            echo "main advanced past ${CI_HEAD_SHA}; a newer run will release."
+            should_release=false
+          fi
+          if [ "$should_release" = "false" ] && [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run: continuing through verification anyway."
+            should_release=true
+          fi
+          echo "should_release=${should_release}" >> "$GITHUB_OUTPUT"
+
+      # On the workflow_run path the artifact run and CI_HEAD_SHA agree by
+      # construction; a hand-entered ci_run_id does not, so a non-dry-run
+      # dispatch must prove the artifacts were built from the SHA being tagged.
+      # Dry runs skip the hard check: rehearsing from a PR branch against a
+      # main CI run intentionally mismatches.
+      - name: Verify dispatched CI run built the release SHA
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          env.DRY_RUN != 'true' &&
+          steps.gate.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}")"
+          run_sha="$(jq -r .head_sha <<<"$run_json")"
+          run_name="$(jq -r .name <<<"$run_json")"
+          run_conclusion="$(jq -r .conclusion <<<"$run_json")"
+          if [ "$run_name" != "CI" ] || [ "$run_conclusion" != "success" ]; then
+            echo "run ${CI_RUN_ID} is '${run_name}' with conclusion '${run_conclusion}'; need a successful CI run" >&2
             exit 1
           fi
-          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
-            echo "tag ${RELEASE_TAG} already exists" >&2
+          if [ "$run_sha" != "$CI_HEAD_SHA" ]; then
+            echo "ci_run_id ${CI_RUN_ID} built ${run_sha}, but this release would tag ${CI_HEAD_SHA}" >&2
             exit 1
           fi
 
-      - name: Download native archives
+      - name: Download native artifacts from CI run
+        if: steps.gate.outputs.should_release == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: native-*
           path: internal/native/lib
           merge-multiple: false
+          run-id: ${{ env.CI_RUN_ID }}
+          github-token: ${{ github.token }}
 
       - name: Place native archives
+        if: steps.gate.outputs.should_release == 'true'
         run: |
           set -euo pipefail
           for dir in internal/native/lib/native-*; do
@@ -191,31 +126,53 @@ jobs:
           done
           find internal/native/lib -type f -print | sort
 
-      - name: Stage release assets
-        run: make stage.release.assets
-
-      - name: Verify downloaded release artifacts
-        run: make verify.release.downloaded
-
-      - name: Prepare release notes
-        id: notes
+      - name: Verify build-time checksums
+        if: steps.gate.outputs.should_release == 'true'
         run: |
           set -euo pipefail
-          tag="${RELEASE_TAG}"
+          found=0
+          for manifest in internal/native/lib/*/SHA256SUMS-*; do
+            found=1
+            (cd "$(dirname "$manifest")" && shasum -a 256 -c "$(basename "$manifest")")
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "no build-time checksum manifests found" >&2
+            exit 1
+          fi
+
+      - name: Stage release assets
+        if: steps.gate.outputs.should_release == 'true'
+        run: make stage.release.assets
+
+      - name: Verify release assets and smoke-test downloaded libraries
+        if: steps.gate.outputs.should_release == 'true'
+        run: make release.verify
+
+      - name: Prepare release notes
+        if: steps.gate.outputs.should_release == 'true'
+        id: notes
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
           notes_file="$(mktemp)"
-          awk -v tag="$tag" '
+          awk -v tag="$RELEASE_TAG" '
             $0 == "## " tag || index($0, "## " tag " - ") == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
             END { if (!found) exit 1 }
           ' CHANGELOG.md > "$notes_file"
           if ! grep -q '[^[:space:]]' "$notes_file"; then
-            echo "CHANGELOG.md entry for ${tag} is empty" >&2
+            echo "CHANGELOG.md entry for ${RELEASE_TAG} is empty" >&2
             exit 1
           fi
           echo "path=${notes_file}" >> "$GITHUB_OUTPUT"
 
-      - name: Commit release checksum manifest
+      - name: Commit checksum manifest, tag, and publish
+        if: steps.gate.outputs.should_release == 'true' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -227,20 +184,8 @@ jobs:
             git commit -m "chore: prepare ${RELEASE_TAG} native checksums"
             git push origin "HEAD:main"
           fi
-
-      - name: Tag release
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${RELEASE_TAG}" -m "${RELEASE_TAG}"
           git push origin "${RELEASE_TAG}"
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
           assets=(dist/SHA256SUMS)
           while IFS= read -r file; do
             assets+=("$file")
