@@ -6,69 +6,63 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
-    name: Go and Rust tests
-    runs-on: ${{ matrix.os }}
+  go-checks:
+    name: Go checks (lint, vet, no-cgo)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # cargo metadata only (generate.check inside go.lint); no Rust build
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Vet
+        run: make go.vet
+
+      - name: No-cgo unsupported path
+        run: make go.test.nocgo
+
+      - name: Lint
+        run: make go.lint
+
+  rust-lint:
+    name: Rust lint (clippy, fmt)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          key: lint
+
+      - name: Clippy and fmt
+        run: make rust.lint
+
+  rust:
+    name: Rust build+test (${{ matrix.target.platform }})
+    runs-on: ${{ matrix.target.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Check generated version files
-        run: make generate.check
-
-      - name: Build bundled native library and test
-        run: make test
-
-      - name: Test source link mode
-        run: make test.source
-
-      - name: Test explicit static library mode
-        run: make test.static
-
-      - name: Race test
-        run: |
-          set -euo pipefail
-          if [ "$(go env GOOS)" = "darwin" ]; then
-            shared="libdatafusion_go.dylib"
-          else
-            shared="libdatafusion_go.so"
-          fi
-          DATAFUSION_GO_LIBRARY="$PWD/internal/native/lib/$(go env GOOS)-$(go env GOARCH)/${shared}" go test -race ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Lint
-        run: make lint
-
-      - name: Rust tests
-        run: cargo test --manifest-path rust/Cargo.toml --release
-
-      - name: No-cgo unsupported path
-        run: CGO_ENABLED=0 go test ./...
-
-  windows:
-    name: Windows cgo tests
-    runs-on: windows-2025
-
-    env:
-      CGO_ENABLED: "1"
-      CC: gcc
-      CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
-
+        target:
+          - { platform: linux-amd64, runner: ubuntu-22.04 }
+          - { platform: linux-arm64, runner: ubuntu-22.04-arm }
+          - { platform: darwin-arm64, runner: macos-15 }
+          - { platform: darwin-amd64, runner: macos-15-intel }
+          - { platform: windows-amd64, runner: windows-2025 }
     steps:
       - uses: actions/checkout@v4
 
@@ -78,41 +72,110 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-gnu
+          targets: ${{ matrix.target.platform == 'windows-amd64' && 'x86_64-pc-windows-gnu' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          # the job id is shared across matrix legs; the key must disambiguate
+          key: ${{ matrix.target.platform }}
 
       - uses: msys2/setup-msys2@v2
+        if: matrix.target.platform == 'windows-amd64'
         with:
           msystem: MINGW64
-          update: true
+          path-type: inherit
+          # perl: guarantees core_perl/shasum for checksum.native even if a
+          # future msys2-base repackaging drops perl from the default closure
+          install: >-
+            make
+            perl
+            mingw-w64-x86_64-gcc
+
+      - name: Build, test, bundle, checksum
+        if: matrix.target.platform != 'windows-amd64'
+        run: |
+          set -euo pipefail
+          make bundle
+          make rust.test
+          make checksum.native
+
+      - name: Build, test, bundle, checksum (windows)
+        if: matrix.target.platform == 'windows-amd64'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+          CC: gcc
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: |
+          set -euo pipefail
+          make bundle
+          make rust.test
+          make checksum.native
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target.platform }}
+          path: internal/native/lib/${{ matrix.target.platform }}/
+          if-no-files-found: error
+          retention-days: 7
+          # v4 artifacts are immutable within a run; without this,
+          # "Re-run all jobs" fails the upload with a 409 Conflict
+          overwrite: true
+
+  go-test:
+    name: Go ${{ matrix.mode }} (${{ matrix.target.platform }})
+    needs: rust
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [dynamic, bundled, race]
+        target:
+          - { platform: linux-amd64, runner: ubuntu-22.04 }
+          - { platform: linux-arm64, runner: ubuntu-22.04-arm }
+          - { platform: darwin-arm64, runner: macos-15 }
+          - { platform: darwin-amd64, runner: macos-15-intel }
+          - { platform: windows-amd64, runner: windows-2025 }
+        include:
+          - mode: source
+            target: { platform: linux-amd64, runner: ubuntu-22.04 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-${{ matrix.target.platform }}
+          path: internal/native/lib/${{ matrix.target.platform }}
+
+      - uses: msys2/setup-msys2@v2
+        if: matrix.target.platform == 'windows-amd64'
+        with:
+          msystem: MINGW64
           path-type: inherit
           install: >-
             make
             mingw-w64-x86_64-gcc
 
-      - name: Check generated version files
-        shell: msys2 {0}
-        run: make generate.check
+      - name: Place source-mode archive
+        if: matrix.mode == 'source'
+        run: |
+          set -euo pipefail
+          mkdir -p rust/target/release
+          cp internal/native/lib/linux-amd64/libdatafusion_go.a rust/target/release/
 
-      - name: Build bundled native library and test
-        shell: msys2 {0}
-        run: make test
+      - name: Test
+        if: matrix.target.platform != 'windows-amd64'
+        run: make go.test.${{ matrix.mode }}
 
-      - name: Test source link mode
+      - name: Test (windows)
+        if: matrix.target.platform == 'windows-amd64'
         shell: msys2 {0}
-        run: make test.source
-
-      - name: Test explicit static library mode
-        shell: msys2 {0}
-        run: make test.static
-
-      - name: Race test
-        shell: msys2 {0}
-        run: DATAFUSION_GO_LIBRARY="$PWD/internal/native/lib/windows-amd64/datafusion_go.dll" go test -race ./...
-
-      - name: Vet
-        shell: msys2 {0}
-        run: go vet ./...
-
-      - name: No-cgo unsupported path
-        shell: msys2 {0}
-        run: CGO_ENABLED=0 go test ./...
+        env:
+          CGO_ENABLED: "1"
+          CC: gcc
+        run: make go.test.${{ matrix.mode }}

@@ -40,7 +40,7 @@ else ifeq ($(GOOS),windows)
 STRIP_SHARED := strip --strip-unneeded
 endif
 
-.PHONY: generate generate.check rust bundle checksums verify.checksums stage.release.assets verify.release.assets test test.dynamic test.bundled test.source test.static consumer.smoke lint verify.release verify.release.downloaded clean
+.PHONY: generate generate.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
 
 generate:
 	go run ./internal/tools/genversions
@@ -50,14 +50,24 @@ generate.check:
 	go run ./internal/tools/genversions -check
 	cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 >/dev/null
 
-rust: generate.check
+rust.build: generate.check
 	$(RUST_BUILD_ENV) cargo build --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
 
-bundle: rust
+rust.test:
+	cargo test --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
+
+rust.lint:
+	cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+	cargo fmt --manifest-path rust/Cargo.toml -- --check
+
+bundle: rust.build
 	mkdir -p $(NATIVE_LIB_DIR)
 	cp $(RUST_TARGET_RELEASE_DIR)/libdatafusion_go.a $(NATIVE_LIB)
 	cp $(RUST_SHARED_LIB) $(NATIVE_SHARED)
 	if [ -n "$(STRIP_SHARED)" ]; then $(STRIP_SHARED) $(NATIVE_SHARED); fi
+
+checksum.native:
+	cd $(NATIVE_LIB_DIR) && shasum -a 256 *datafusion_go* > SHA256SUMS-$(NATIVE_PLATFORM)
 
 checksums:
 	mkdir -p internal/native/lib
@@ -100,21 +110,38 @@ verify.release.assets:
 		grep -F "  $$asset" "$(DIST_DIR)/SHA256SUMS" >/dev/null; \
 	done
 
+go.lint: generate.check
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
+
+go.vet:
+	go vet ./...
+
+# -count=1 on every native-linked suite: Go's build cache does not hash
+# external cgo archives (golang/go#28019), so cached test results could
+# report success without exercising the native library currently on disk.
+go.test.dynamic:
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -count=1 ./...
+
+go.test.bundled:
+	go test -count=1 -tags=datafusion_use_bundled ./...
+
+go.test.race:
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -race -count=1 ./...
+
+go.test.source:
+	go test -count=1 -tags=datafusion_use_source ./...
+
+go.test.nocgo:
+	CGO_ENABLED=0 go test -count=1 ./...
+
 test: bundle
-	$(MAKE) test.dynamic
-	$(MAKE) test.bundled
+	$(MAKE) go.test.dynamic
+	$(MAKE) go.test.bundled
 
-test.dynamic:
-	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test ./...
+test.source: rust.build
+	$(MAKE) go.test.source
 
-test.bundled:
-	go test -tags=datafusion_use_bundled ./...
-
-test.source: rust
-	go test -tags=datafusion_use_source ./...
-
-test.static: rust
-	go test -tags=datafusion_use_static_lib ./...
+lint: go.lint rust.lint
 
 consumer.smoke:
 	@tmpdir=$$(mktemp -d); \
@@ -141,24 +168,9 @@ consumer.smoke:
 		'}' > main.go; \
 		DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go run .
 
-lint: generate.check
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
-	cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
-	cargo fmt --manifest-path rust/Cargo.toml -- --check
-
-verify.release: test test.source test.static
-	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -race ./...
-	go vet ./...
-	cargo test --manifest-path rust/Cargo.toml --release
-	CGO_ENABLED=0 go test ./...
-	$(MAKE) checksums
-	$(MAKE) verify.checksums
-
-verify.release.downloaded: verify.release.assets test.bundled test.source test.static
-	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -race ./...
-	go vet ./...
-	cargo test --manifest-path rust/Cargo.toml --release
-	CGO_ENABLED=0 go test ./...
+release.verify: verify.release.assets
+	$(MAKE) go.test.bundled
+	$(MAKE) go.test.race
 
 clean:
 	cargo clean --manifest-path rust/Cargo.toml

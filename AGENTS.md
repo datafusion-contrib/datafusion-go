@@ -10,8 +10,7 @@ Required baseline:
 make lint
 make test
 make test.source
-make test.static
-cargo test --manifest-path rust/Cargo.toml --release
+make rust.test
 ```
 
 For release-sensitive changes, prefer the full release verification targets documented in `CONTRIBUTING.md`.
