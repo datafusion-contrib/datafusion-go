@@ -40,7 +40,7 @@ else ifeq ($(GOOS),windows)
 STRIP_SHARED := strip --strip-unneeded
 endif
 
-.PHONY: generate generate.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
+.PHONY: generate generate.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums changelog.check stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
 
 generate:
 	go run ./internal/tools/genversions
@@ -77,8 +77,21 @@ verify.checksums:
 	test -s internal/native/lib/SHA256SUMS
 	cd internal/native/lib && shasum -a 256 -c SHA256SUMS
 
+# The release workflow extracts notes for the derived tag with the same
+# heading contract: exactly "## <tag>" or "## <tag> - <date>", non-empty body.
+changelog.check:
+	@set -eu; \
+	metadata=$$(mktemp); \
+	go run ./internal/tools/genversions -github-output "$$metadata"; \
+	. "$$metadata"; \
+	rm -f "$$metadata"; \
+	awk -v tag="$$release_tag" '$$0 == "## " tag || index($$0, "## " tag " - ") == 1 { found = 1; next }; found && /^## / { exit }; found { print }; END { if (!found) exit 1 }' CHANGELOG.md \
+		| grep -q '[^[:space:]]' \
+		|| { echo "CHANGELOG.md is missing a non-empty '## $$release_tag' or '## $$release_tag - <date>' entry" >&2; exit 1; }
+
 stage.release.assets:
-	@metadata=$$(mktemp); \
+	@set -eu; \
+	metadata=$$(mktemp); \
 	go run ./internal/tools/genversions -github-output "$$metadata"; \
 	. "$$metadata"; \
 	rm -f "$$metadata"; \
@@ -94,7 +107,8 @@ stage.release.assets:
 	cp "$(DIST_DIR)/SHA256SUMS" internal/native/lib/SHA256SUMS
 
 verify.release.assets:
-	@metadata=$$(mktemp); \
+	@set -eu; \
+	metadata=$$(mktemp); \
 	go run ./internal/tools/genversions -github-output "$$metadata"; \
 	. "$$metadata"; \
 	rm -f "$$metadata"; \
@@ -111,7 +125,7 @@ verify.release.assets:
 	done
 
 go.lint: generate.check
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run
 
 go.vet:
 	go vet ./...
@@ -144,7 +158,8 @@ test.source: rust.build
 lint: go.lint rust.lint
 
 consumer.smoke:
-	@tmpdir=$$(mktemp -d); \
+	@set -eu; \
+	tmpdir=$$(mktemp -d); \
 	trap 'rm -rf "$$tmpdir"' EXIT; \
 	cd "$$tmpdir"; \
 	go mod init example.com/datafusion-smoke >/dev/null; \

@@ -19,12 +19,15 @@ on:
         default: true
 
 permissions:
+  # write: push the release tag and create the GitHub release
   contents: write
   # required to download artifacts from another workflow run
   actions: read
 
 concurrency:
-  group: release-main
+  # dry-run rehearsals get their own group: a queued rehearsal must never
+  # cancel the pending slot of a real release
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'release-rehearsal' || 'release-main' }}
   cancel-in-progress: false
 
 jobs:
@@ -33,20 +36,27 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-22.04
+    # the concurrency group is cancel-in-progress: false, so a hung run would
+    # hold the release slot and block every future release until GitHub's 6h
+    # default; bound it well above a normal download+verify+smoke-test run
+    timeout-minutes: 30
     env:
       CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.ci_run_id }}
       CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ env.CI_HEAD_SHA }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
 
@@ -57,23 +67,41 @@ jobs:
       - name: Gate on tag novelty and main currency
         id: gate
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin main --tags
+          main_sha="$(git rev-parse origin/main)"
           should_release=true
+          resume=false
+          reason="releasing ${RELEASE_TAG} from ${CI_HEAD_SHA}"
           if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
-            echo "Release ${RELEASE_TAG} already exists."
+            # a leftover draft (failed asset upload) does not count as published
+            if [ "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || echo missing)" = "false" ]; then
+              reason="skipped: release ${RELEASE_TAG} already exists"
+              should_release=false
+            else
+              # a previous run pushed the tag but died before publishing
+              reason="resuming: tag ${RELEASE_TAG} exists without a published release"
+              resume=true
+            fi
+          elif [ "$main_sha" != "$CI_HEAD_SHA" ]; then
+            reason="skipped: main advanced past ${CI_HEAD_SHA}; a newer run will release"
             should_release=false
-          elif [ "$(git rev-parse origin/main)" != "$CI_HEAD_SHA" ]; then
-            echo "main advanced past ${CI_HEAD_SHA}; a newer run will release."
-            should_release=false
+            if ! git diff --quiet "${CI_HEAD_SHA}" origin/main -- versions.toml; then
+              echo "::warning::versions.toml changed after ${CI_HEAD_SHA}; the newer run will release a different tag and ${RELEASE_TAG} will never be published"
+              reason="${reason} (WARNING: versions.toml changed; ${RELEASE_TAG} will never be published)"
+            fi
           fi
+          echo "${reason}"
+          echo "Release gate: ${reason}" >> "$GITHUB_STEP_SUMMARY"
           if [ "$should_release" = "false" ] && [ "$DRY_RUN" = "true" ]; then
             echo "Dry run: continuing through verification anyway."
             should_release=true
           fi
           echo "should_release=${should_release}" >> "$GITHUB_OUTPUT"
+          echo "resume=${resume}" >> "$GITHUB_OUTPUT"
 
       # On the workflow_run path the artifact run and CI_HEAD_SHA agree by
       # construction; a hand-entered ci_run_id does not, so a non-dry-run
@@ -92,9 +120,10 @@ jobs:
           run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}")"
           run_sha="$(jq -r .head_sha <<<"$run_json")"
           run_name="$(jq -r .name <<<"$run_json")"
+          run_event="$(jq -r .event <<<"$run_json")"
           run_conclusion="$(jq -r .conclusion <<<"$run_json")"
-          if [ "$run_name" != "CI" ] || [ "$run_conclusion" != "success" ]; then
-            echo "run ${CI_RUN_ID} is '${run_name}' with conclusion '${run_conclusion}'; need a successful CI run" >&2
+          if [ "$run_name" != "CI" ] || [ "$run_conclusion" != "success" ] || [ "$run_event" != "push" ]; then
+            echo "run ${CI_RUN_ID} is '${run_name}' (event '${run_event}') with conclusion '${run_conclusion}'; need a successful push-triggered CI run" >&2
             exit 1
           fi
           if [ "$run_sha" != "$CI_HEAD_SHA" ]; then
@@ -104,7 +133,7 @@ jobs:
 
       - name: Download native artifacts from CI run
         if: steps.gate.outputs.should_release == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-*
           path: internal/native/lib
@@ -116,7 +145,13 @@ jobs:
         if: steps.gate.outputs.should_release == 'true'
         run: |
           set -euo pipefail
-          for dir in internal/native/lib/native-*; do
+          shopt -s nullglob
+          dirs=(internal/native/lib/native-*)
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo "::error::CI run ${CI_RUN_ID} provided no native-* artifacts; they may have expired (30-day retention)" >&2
+            exit 1
+          fi
+          for dir in "${dirs[@]}"; do
             platform="${dir##*/native-}"
             mkdir -p "internal/native/lib/${platform}"
             find "${dir}" -maxdepth 1 -type f -print | while read -r file; do
@@ -130,6 +165,7 @@ jobs:
         if: steps.gate.outputs.should_release == 'true'
         run: |
           set -euo pipefail
+          shopt -s nullglob
           found=0
           for manifest in internal/native/lib/*/SHA256SUMS-*; do
             found=1
@@ -156,41 +192,82 @@ jobs:
         run: |
           set -euo pipefail
           notes_file="$(mktemp)"
-          awk -v tag="$RELEASE_TAG" '
+          if ! awk -v tag="$RELEASE_TAG" '
             $0 == "## " tag || index($0, "## " tag " - ") == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
             END { if (!found) exit 1 }
-          ' CHANGELOG.md > "$notes_file"
+          ' CHANGELOG.md > "$notes_file"; then
+            echo "::error::CHANGELOG.md is missing a '## ${RELEASE_TAG}' or '## ${RELEASE_TAG} - <date>' heading" >&2
+            exit 1
+          fi
           if ! grep -q '[^[:space:]]' "$notes_file"; then
-            echo "CHANGELOG.md entry for ${RELEASE_TAG} is empty" >&2
+            echo "::error::CHANGELOG.md entry for ${RELEASE_TAG} is empty" >&2
             exit 1
           fi
           echo "path=${notes_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Show staged manifest diff (dry run)
+        if: steps.gate.outputs.should_release == 'true' && env.DRY_RUN == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo '### Staged checksum manifest diff'
+            echo '```diff'
+            git --no-pager diff -- internal/native/lib/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          git --no-pager diff -- internal/native/lib/SHA256SUMS
 
       - name: Commit checksum manifest, tag, and publish
         if: steps.gate.outputs.should_release == 'true' && env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RESUME: ${{ steps.gate.outputs.resume }}
+          # pass the notes path through env, never interpolated into the script:
+          # keeps this workflow free of ${{ }} expansion inside run: blocks
+          NOTES_FILE: ${{ steps.notes.outputs.path }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f internal/native/lib/SHA256SUMS
-          if git diff --cached --quiet; then
-            echo "release checksum manifest is unchanged"
+          if [ "${RESUME}" = "true" ]; then
+            # A previous run pushed the tag but failed before publishing the
+            # release. The staged manifest must match the tagged tree exactly;
+            # anything else means these artifacts are not what the tag promises.
+            release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+            if ! git diff --quiet "refs/tags/${RELEASE_TAG}" -- internal/native/lib/SHA256SUMS; then
+              echo "::error::staged manifest does not match existing tag ${RELEASE_TAG}; re-run the original Release run for this tag" >&2
+              exit 1
+            fi
           else
-            git commit -m "chore: prepare ${RELEASE_TAG} native checksums"
-            git push origin "HEAD:main"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            release_sha="${CI_HEAD_SHA}"
+            git add -f internal/native/lib/SHA256SUMS
+            if git diff --cached --quiet; then
+              echo "release checksum manifest is unchanged"
+            else
+              # The release commit is pushed only as the tag target, never to
+              # main: branch rules stay intact, main keeps its placeholder
+              # manifest, and no follow-up CI run fires. GitHub labels the
+              # commit "does not belong to any branch"; that is expected.
+              git commit -m "chore: prepare ${RELEASE_TAG} native checksums"
+              release_sha="$(git rev-parse HEAD)"
+            fi
+            git tag -a "${RELEASE_TAG}" -m "${RELEASE_TAG}" "${release_sha}"
+            # checkout runs with persist-credentials: false; authenticate only
+            # this push so the token never lands in .git/config
+            git -c credential.helper='!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f' \
+              push origin "refs/tags/${RELEASE_TAG}"
           fi
-          git tag -a "${RELEASE_TAG}" -m "${RELEASE_TAG}"
-          git push origin "${RELEASE_TAG}"
+
           assets=(dist/SHA256SUMS)
           while IFS= read -r file; do
             assets+=("$file")
           done < <(find dist -type f -name 'datafusion-go-*' -print | sort)
-          gh release create "${RELEASE_TAG}" \
+          release_url="$(gh release create "${RELEASE_TAG}" \
+            --verify-tag \
             --title "${RELEASE_TAG}" \
-            --notes-file "${{ steps.notes.outputs.path }}" \
-            "${assets[@]}"
+            --notes-file "${NOTES_FILE}" \
+            "${assets[@]}")"
+          echo "Released ${RELEASE_TAG} at ${release_sha}: ${release_url}" >> "$GITHUB_STEP_SUMMARY"
