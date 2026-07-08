@@ -1,2 +1,10 @@
-c75fb21c41f79efdef64ecf8a383c59dda046f5b6df80cf826a147e25f520f82  datafusion-go-v0.530100.1-darwin-arm64-libdatafusion_go.a
-fd7493192b3c2667145380cd558befb0b79f48e4b6cf5533b799a151e258e065  datafusion-go-v0.530100.1-darwin-arm64-libdatafusion_go.dylib
+0e27767743438f99f4d30708824e5dd9c0aff65a8bf9054e7d641265bd750b74  datafusion-go-v0.530100.1-darwin-amd64-libdatafusion_go.a
+dc5b96cd8bc2577c6c5371181cdac04b43dbc82e0f7e7c9f12b2f3a2112cc65f  datafusion-go-v0.530100.1-darwin-amd64-libdatafusion_go.dylib
+63e70acd4d423abb57ac3cc72267304a3ec6ba46d5bbbef6fb56cd922d9e6e39  datafusion-go-v0.530100.1-darwin-arm64-libdatafusion_go.a
+50d25ba3395e50b242b673542f242a6665ec35397b140fc0dc7116c05772c844  datafusion-go-v0.530100.1-darwin-arm64-libdatafusion_go.dylib
+35f144804322b8aaafe39c010f44b6c775a9f28f03fb74a0d66a0d8ad1cf35c9  datafusion-go-v0.530100.1-linux-amd64-libdatafusion_go.a
+0b49f8f83d5cc22b5fe1008d0f6f4a99e48e3e47935f236d8435c8bc1144a9ef  datafusion-go-v0.530100.1-linux-amd64-libdatafusion_go.so
+293b5abeac844d823486e5f28ffaccd7fc8f092b012c0e8cacf2a5fa02ed4265  datafusion-go-v0.530100.1-linux-arm64-libdatafusion_go.a
+b1f18b362c6c3443142aef66f9c7e8c28f1b5b138a704fe57bf26f135f0223c7  datafusion-go-v0.530100.1-linux-arm64-libdatafusion_go.so
+d637717f0fc93234f7a52f78a932300399fb478e0c0dc101c0076bbf238bc281  datafusion-go-v0.530100.1-windows-amd64-datafusion_go.dll
+8f62825577fed677139bdf6c7122a9305d0e61ca188c0a97fee83f3e0c194d7f  datafusion-go-v0.530100.1-windows-amd64-libdatafusion_go.a
