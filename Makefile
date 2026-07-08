@@ -125,7 +125,9 @@ verify.release.assets:
 	done
 
 go.lint: generate.check
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run
+	# v2.8.0 is the newest golangci-lint that still supports go 1.24 (v2.9.0+
+	# require go 1.25); keep this in step with the go directive in go.mod
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 run
 
 go.vet:
 	go vet ./...
