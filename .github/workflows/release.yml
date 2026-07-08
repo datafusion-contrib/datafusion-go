@@ -261,6 +261,20 @@ jobs:
               push origin "refs/tags/${RELEASE_TAG}"
           fi
 
+          # a successful git push does not guarantee the tag is visible to the
+          # REST API yet; --verify-tag reads through the API, so wait out the
+          # replication lag instead of failing the release on a stale read
+          for attempt in $(seq 1 30); do
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --silent 2>/dev/null; then
+              break
+            fi
+            if [ "${attempt}" = "30" ]; then
+              echo "::error::tag ${RELEASE_TAG} not visible via the API after 60s; re-run this Release run to resume publication" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
           assets=(dist/SHA256SUMS)
           while IFS= read -r file; do
             assets+=("$file")
