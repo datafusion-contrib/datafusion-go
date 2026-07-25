@@ -2,6 +2,11 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.530100.2 - 2026-07-19
+
+- Added foreign FFI table provider support: register a `datafusion-ffi` `FFI_TableProvider` produced by another library with `RegisterFFITableProvider` and query it with projection and filter pushdown reaching the provider. Returns a `*RegisteredTable` handle for explicit `Deregister`, with an exact `DataFusionVersion` handshake checked before the provider pointer is dereferenced.
+- Restructured the README in Apache DataFusion style.
+
 ## v0.530100.1 - 2026-06-05
 
 Initial release for Apache DataFusion 53.1.0.
