@@ -91,6 +91,12 @@ non-empty body; `make changelog.check` validates this and runs in CI, and the
 release workflow extracts the release notes from that entry. Releases
 are cut only by GitHub Actions after the `CI` workflow completes successfully on
 `main`, using the default workflow token; no extra credentials are required.
+CI also runs `make release.check`: when the tag derived from `versions.toml`
+already exists, any release-relevant change since that tag fails the build and
+must increment the version before merging. Documentation, examples, tests, and
+GitHub workflow/configuration changes do not require a module release. The
+tag-only checksum manifest is also excluded because `main` intentionally keeps
+the placeholder described below.
 
 The `Release` workflow derives the tag from `versions.toml`. If that tag already
 exists, the workflow exits without publishing. Otherwise, it downloads the

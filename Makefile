@@ -40,7 +40,7 @@ else ifeq ($(GOOS),windows)
 STRIP_SHARED := strip --strip-unneeded
 endif
 
-.PHONY: generate generate.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums changelog.check stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
+.PHONY: generate generate.check release.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums changelog.check stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
 
 generate:
 	go run ./internal/tools/genversions
@@ -49,6 +49,9 @@ generate:
 generate.check:
 	go run ./internal/tools/genversions -check
 	cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 >/dev/null
+
+release.check:
+	go run ./internal/tools/genversions -check-release
 
 rust.build: generate.check
 	$(RUST_BUILD_ENV) cargo build --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)

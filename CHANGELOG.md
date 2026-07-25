@@ -2,6 +2,16 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.530100.2 - 2026-07-25
+
+- Added registration and explicit deregistration of foreign `datafusion-ffi`
+  table providers, including exact DataFusion version validation and
+  projection/filter pushdown support.
+- Improved the README and contributor guidance for the database/sql, Arrow,
+  native-runtime, and release workflows.
+- Hardened release automation against GitHub tag-visibility lag and added a CI
+  guard that requires a new version before release-relevant changes can merge.
+
 ## v0.530100.1 - 2026-06-05
 
 Initial release for Apache DataFusion 53.1.0.

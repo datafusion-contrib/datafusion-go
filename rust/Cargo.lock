@@ -1252,7 +1252,7 @@ dependencies = [
 
 [[package]]
 name = "datafusion-go"
-version = "0.530100.1"
+version = "0.530100.2"
 dependencies = [
  "arrow",
  "datafusion",
