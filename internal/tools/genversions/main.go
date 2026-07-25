@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -23,12 +26,23 @@ type config struct {
 
 func main() {
 	check := flag.Bool("check", false, "check generated files without writing")
+	checkRelease := flag.Bool("check-release", false, "require a new tag when release-relevant files changed")
 	githubOutput := flag.String("github-output", "", "append computed release values to a GitHub Actions output file")
 	flag.Parse()
 
 	cfg, err := readConfig("versions.toml")
 	if err != nil {
 		fatal(err)
+	}
+
+	if *checkRelease {
+		if *check || *githubOutput != "" {
+			fatal(errors.New("-check-release cannot be combined with -check or -github-output"))
+		}
+		if err := checkReleaseNovelty(cfg); err != nil {
+			fatal(err)
+		}
+		return
 	}
 
 	if *githubOutput != "" {
@@ -217,6 +231,94 @@ func (cfg config) dataFusionGoVersion() string {
 
 func (cfg config) releaseTag() string {
 	return "v" + cfg.dataFusionGoVersion()
+}
+
+func checkReleaseNovelty(cfg config) error {
+	shallow, err := gitOutput("rev-parse", "--is-shallow-repository")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(shallow) == "true" {
+		return errors.New("release check requires complete Git history and tags; fetch with --unshallow --tags")
+	}
+
+	tag := cfg.releaseTag()
+	if _, err := gitOutput("rev-parse", "-q", "--verify", "refs/tags/"+tag+"^{commit}"); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			fmt.Printf("release tag %s is new\n", tag)
+			return nil
+		}
+		return err
+	}
+
+	changed, err := gitOutputBytes("diff", "--name-only", "-z", "refs/tags/"+tag+"^{commit}", "--")
+	if err != nil {
+		return err
+	}
+
+	var relevant []string
+	for _, raw := range bytes.Split(changed, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		path := filepath.ToSlash(string(raw))
+		if releaseRelevantPath(path) {
+			relevant = append(relevant, path)
+		}
+	}
+	if len(relevant) == 0 {
+		fmt.Printf("release tag %s already exists; no release-relevant files changed\n", tag)
+		return nil
+	}
+
+	slices.Sort(relevant)
+	return fmt.Errorf(
+		"release tag %s already exists, but release-relevant files changed since it:\n  %s\nincrement the release in versions.toml, run `make generate`, and update CHANGELOG.md",
+		tag,
+		strings.Join(relevant, "\n  "),
+	)
+}
+
+func gitOutput(args ...string) (string, error) {
+	output, err := gitOutputBytes(args...)
+	return string(output), err
+}
+
+func gitOutputBytes(args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...)
+	output, err := cmd.Output()
+	if err == nil {
+		return output, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) != 0 {
+		return nil, fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(exitErr.Stderr)), err)
+	}
+	return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+}
+
+func releaseRelevantPath(path string) bool {
+	switch path {
+	case ".gitattributes",
+		".gitignore",
+		".golangci.yml",
+		"AGENTS.md",
+		"CHANGELOG.md",
+		"CONTRIBUTING.md",
+		"LICENSE",
+		"README.md",
+		"internal/native/lib/SHA256SUMS":
+		return false
+	}
+
+	for _, prefix := range []string{".github/", "docs/", "examples/"} {
+		if strings.HasPrefix(path, prefix) {
+			return false
+		}
+	}
+
+	return !strings.HasSuffix(path, "_test.go")
 }
 
 func plannedUpdates(cfg config) (map[string][]byte, error) {
