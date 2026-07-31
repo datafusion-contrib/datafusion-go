@@ -3,13 +3,13 @@
 
 [datafusion]
 # Exact Rust `datafusion` and `datafusion-sql` crate version.
-version = "53.1.0"
+version = "54.1.0"
 
 [datafusion_go]
 # Release tags are v<major>.<encoded-datafusion-version>.<patch>.
 # DataFusion 53.1.0 with major 0 and patch 1 becomes v0.530100.1.
 major = 0
-patch = 2
+patch = 0
 
 [abi]
 # Increment when the C ABI shared by Rust, C, and Go changes incompatibly.

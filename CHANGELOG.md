@@ -2,6 +2,11 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.540100.0 - 2026-07-31
+
+- Upgraded the bundled Apache DataFusion to 54.1.0. No driver API changed.
+- `datafusion-ffi` 54 builds its stable ABI on `stabby` instead of `abi_stable`, so foreign table providers passed to `RegisterFFITableProvider` must come from `datafusion-ffi` 54.1.0. The exact `DataFusionVersion` handshake rejects providers built against any other version before their pointer is dereferenced.
+
 ## v0.530100.2 - 2026-07-19
 
 - Added foreign FFI table provider support: register a `datafusion-ffi` `FFI_TableProvider` produced by another library with `RegisterFFITableProvider` and query it with projection and filter pushdown reaching the provider. Returns a `*RegisteredTable` handle for explicit `Deregister`, with an exact `DataFusionVersion` handshake checked before the provider pointer is dereferenced.
