@@ -4,17 +4,17 @@ package datafusion
 
 const (
 	// DataFusionVersion is the exact Rust datafusion crate version pinned by this release.
-	DataFusionVersion = "53.1.0"
+	DataFusionVersion = "54.1.0"
 
 	// DataFusionVersionEncoded is used in Go module tags: v<major>.<encoded-datafusion-version>.<patch>.
-	DataFusionVersionEncoded = "530100"
+	DataFusionVersionEncoded = "540100"
 
 	// DataFusionGoMajor is the major component of datafusion-go release tags.
 	DataFusionGoMajor = 0
 
 	// DataFusionGoPatch is the patch component of datafusion-go release tags.
-	DataFusionGoPatch = 2
+	DataFusionGoPatch = 0
 
 	// DataFusionGoVersion is the full datafusion-go module version without the leading v.
-	DataFusionGoVersion = "0.530100.2"
+	DataFusionGoVersion = "0.540100.0"
 )
