@@ -56,7 +56,7 @@ jobs:
           toolchain: "1.96.0"
           components: clippy, rustfmt
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: rust
           key: lint
@@ -90,7 +90,7 @@ jobs:
           toolchain: "1.96.0"
           targets: ${{ matrix.target.platform == 'windows-amd64' && 'x86_64-pc-windows-gnu' || '' }}
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: rust
           # the job id is shared across matrix legs; the key must disambiguate
