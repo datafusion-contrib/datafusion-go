@@ -7,176 +7,235 @@
 
 ## What is datafusion-go?
 
-datafusion-go is in-process analytic SQL for Go, powered by [Apache DataFusion](https://datafusion.apache.org/) — an extensible query engine written in Rust that uses [Apache Arrow](https://arrow.apache.org/) as its in-memory format. It ships as a standard `database/sql` driver with an Arrow-native escape hatch: no server, no network connection, nothing else to run.
+datafusion-go is a `database/sql` driver for analytic SQL in Go. It runs [Apache DataFusion](https://datafusion.apache.org/) in the Go process. DataFusion is a query engine in Rust. It uses [Apache Arrow](https://arrow.apache.org/) as its in-memory format.
 
-Out of the box, datafusion-go offers the familiar `database/sql` interface, analytic SQL over CSV and Parquet files, Arrow record batches in and out, and prebuilt native runtimes for macOS, Linux, and Windows that install themselves on first use. DataFusion's columnar, multi-threaded, vectorized execution engine does the heavy lifting; the driver's job is to make it feel like Go.
+Applications can query CSV and Parquet files through SQL. Arrow-native APIs give access to record batches, exact schemas, and complex values. DataFusion executes queries with a columnar, multi-threaded, vectorized engine. No database server is necessary.
 
-That makes datafusion-go great for building data-heavy tools and CLIs, tests for analytic pipelines, services that want embedded query features, and more. It is not a network database client, and it does not turn DataFusion into a persistent file database: catalog and session state live in memory and last only as long as the process.
+The driver supports tools, command-line interfaces (CLIs), pipeline tests, and services with embedded queries. The process keeps catalog and session state in memory. This state does not persist after the process stops.
 
-Here are links to some important information:
+datafusion-go is an unofficial community binding in the [datafusion-contrib](https://github.com/datafusion-contrib) organization.
+
+Project resources:
 
 - [Go package documentation](https://pkg.go.dev/github.com/datafusion-contrib/datafusion-go)
+- [Releases and native libraries](https://github.com/datafusion-contrib/datafusion-go/releases)
 - [Runnable examples](examples)
-- [Apache DataFusion documentation](https://datafusion.apache.org/) and its [SQL reference](https://datafusion.apache.org/user-guide/sql/index.html)
 - [Contributor guide](CONTRIBUTING.md)
+- [Issues](https://github.com/datafusion-contrib/datafusion-go/issues)
 - [Changelog](CHANGELOG.md)
-
-datafusion-go is a community-maintained binding in the [datafusion-contrib](https://github.com/datafusion-contrib) organization, alongside other bindings and extensions built around Apache DataFusion.
+- [Apache DataFusion documentation](https://datafusion.apache.org/) and its [SQL reference](https://datafusion.apache.org/user-guide/sql/index.html).
 
 ## How do I install and use it?
 
 ### Install
 
+The package has these prerequisites:
+
+- Go 1.25 or newer
+- A C toolchain for the target platform
+- The `cgo` tool enabled.
+
+For Windows, use a MinGW/GNU C toolchain. Windows builds use the `x86_64-pc-windows-gnu` Rust ABI. For native builds with a C compiler, Go enables cgo by default.
+
+Prebuilt native libraries support these platforms:
+
+| Operating system | Go platforms |
+| --- | --- |
+| macOS | `darwin-arm64`, `darwin-amd64` |
+| Linux | `linux-amd64`, `linux-arm64` |
+| Windows | `windows-amd64` |
+
+The shell examples use POSIX shell syntax.
+
+If you do not have a Go module, run these commands in order:
+
+```sh
+mkdir datafusion-quickstart
+cd datafusion-quickstart
+go mod init example.com/datafusion-quickstart
+```
+
+From your module directory, install the package:
+
 ```sh
 go get github.com/datafusion-contrib/datafusion-go
 ```
 
-Requires Go 1.25+ with cgo enabled (the default) and a C toolchain. On supported platforms — `darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`, and `windows-amd64` — there is no other setup: the driver downloads the matching `libdatafusion_go` native library from the module's GitHub release and checksum-verifies it on first use. See [Native Runtime](#native-runtime) to override resolution or disable downloads.
+On first use, the driver downloads `libdatafusion_go` from the GitHub release for the installed module version. The driver verifies the library checksum. For library selection and download controls, see [Native Runtime](#native-runtime).
 
-Install from a tagged release for normal consumer use. Pseudo-versions from `@main` are development snapshots and may not have matching GitHub Release assets for the native runtime downloader; source checkouts build the library locally with `make bundle` instead.
+Use a tagged release for applications. Development snapshots from `@main` can lack native libraries with the same version.
+
+For a source checkout, see [CONTRIBUTING.md](CONTRIBUTING.md#requirements) for toolchain requirements. Then build the native library with `make bundle`.
 
 ### Quick Start
 
-Give it a CSV file:
+Use the module directory from [Install](#install) for this example.
 
-```sh
-printf 'city,trips\nnyc,3\nnyc,5\nsf,2\n' > trips.csv
-```
+1. Create `trips.csv`:
 
-Register the file as a table and run analytic SQL against it:
+	```sh
+	printf 'city,trips\nnyc,3\nnyc,5\nsf,2\n' > trips.csv
+	```
 
-```go
-package main
+2. Save this code as `main.go` in the same directory:
 
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"log"
+	```go
+	package main
 
-	_ "github.com/datafusion-contrib/datafusion-go"
-)
+	import (
+		"context"
+		"database/sql"
+		"fmt"
+		"log"
 
-func main() {
-	ctx := context.Background()
+		_ "github.com/datafusion-contrib/datafusion-go"
+	)
 
-	db, err := sql.Open("datafusion", "")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+	func main() {
+		ctx := context.Background()
 
-	_, err = db.ExecContext(ctx, `create external table trips
-		stored as csv location 'trips.csv'
-		options ('format.has_header' 'true')`)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rows, err := db.QueryContext(ctx, `select city, sum(trips) as total
-		from trips group by city order by total desc`)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var city string
-		var total int64
-		if err := rows.Scan(&city, &total); err != nil {
+		db, err := sql.Open("datafusion", "")
+		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("%s\t%d\n", city, total)
-	}
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-```
+		defer db.Close()
 
-```text
-nyc	8
-sf	2
-```
+		_, err = db.ExecContext(ctx, `create external table trips
+			stored as csv location 'trips.csv'
+			options ('format.has_header' 'true')`)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-The same pattern works for Parquet (`stored as parquet`).
+		rows, err := db.QueryContext(ctx, `select city, sum(trips) as total
+			from trips group by city order by total desc`)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var city string
+			var total int64
+			if err := rows.Scan(&city, &total); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("%s\t%d\n", city, total)
+		}
+		if err := rows.Err(); err != nil {
+			log.Fatal(err)
+		}
+	}
+	```
+
+	The program registers the CSV file as a table. Then it queries the table to calculate the total trips for each city.
+
+3. Run the program:
+
+	```sh
+	go run .
+	```
+
+	The output is:
+
+	```text
+	nyc	8
+	sf	2
+	```
+
+For a Parquet file, use `stored as parquet` in the table definition.
 
 ### Examples
 
-More runnable examples live in [examples/](examples): [simple](examples/simple), [parameters](examples/parameters), and [arrow](examples/arrow). Try one without cloning anything:
+The [examples directory](examples) contains programs for [simple queries](examples/simple), [parameters](examples/parameters), and [Arrow](examples/arrow).
+
+To run the simple example without a source checkout, use this command:
 
 ```sh
 go run github.com/datafusion-contrib/datafusion-go/examples/simple@latest
 ```
 
-From a source checkout, run `make bundle` once, then `go run ./examples/simple`.
+The simple example prints `1`.
 
-**Finding your way:** [Loading Data](#loading-data) covers most use beyond the quick start. Arrow interop is under [Arrow-Native Usage](#arrow-native-usage), exact scanning behavior under [Type Conversion](#type-conversion) and [Semantics and Limits](#semantics-and-limits), and building from source under [Native Runtime](#native-runtime) and [CONTRIBUTING.md](CONTRIBUTING.md).
+For a source checkout, run these commands from the repository root:
+
+```sh
+make bundle
+go run ./examples/simple
+```
+
+For file and memory input, see [Loading Data](#loading-data). For Arrow APIs, see [Arrow-Native Usage](#arrow-native-usage). For value conversion and driver behavior, see [Type Conversion](#type-conversion) and [Semantics and Limits](#semantics-and-limits). For development setup and tests, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Philosophy
 
-- **In-process by design.** The driver embeds a query engine in your process rather than connecting to one somewhere else. It suits local analytic execution, tests, tools, embedded query features, and services that want DataFusion inside the Go process — and it deliberately refuses DSNs that look like hosts or file paths rather than pretending to be a client.
-- **Standard interfaces first.** Everything that `database/sql` can express goes through `database/sql`: pooling, prepared statements, parameters, cancellation. Arrow-native APIs exist as an escape hatch for what it cannot express — exact schemas, complex types, record-batch streaming — not as a parallel API surface.
-- **Zero setup, no surprises.** Prebuilt native libraries download and checksum-verify themselves on first use, and every step of that is overridable: point at your own library, disable downloads, or build from source.
-- **A query engine, not a database.** There is no persistence, no transactions, and no insert IDs. Where DataFusion doesn't provide a behavior, the driver returns an explicit unsupported error instead of emulating it. Files are the durable layer: `CREATE EXTERNAL TABLE` reads them, `COPY ... TO` writes them.
-- **Track upstream faithfully.** Each release bundles a specific DataFusion version, encoded in the module version itself — see [Versioning](#versioning).
+The driver has these design properties:
+
+- The query engine runs in the Go process. The driver rejects DSNs that contain hosts or file paths.
+- The `database/sql` interface supports connection pooling, prepared statements, parameters, and cancellation. Arrow-native APIs give access to complex types, schemas, and record-batch streams.
+- Prebuilt libraries support automatic setup. Applications can select a local library or disable downloads.
+- Files store persistent data. `CREATE EXTERNAL TABLE` reads files, and `COPY ... TO` writes files. The driver does not support transactions or insert IDs.
+- Each release uses a specified DataFusion version. The module tag encodes that version.
 
 ## Features
 
-- **Standard `database/sql` driver** — registered as `datafusion`, with connection pooling, prepared statements, SQL parameters, and context cancellation.
-- **Files as tables** — `CREATE EXTERNAL TABLE` over CSV and Parquet files, `COPY ... TO` to write results back out.
-- **Arrow-native APIs** — stream results as `arrow.RecordBatch` values and register Go Arrow readers as DataFusion tables, with a zero-copy option.
-- **Foreign table providers** — register a `datafusion-ffi` `FFI_TableProvider` produced by another library and query it with projection/filter pushdown reaching the provider.
-- **Typed SQL parameters** — `?`, `$1`, and `$name` styles, plus typed wrappers for dates, times, timestamps, durations, decimals, and typed nulls.
-- **Context cancellation end to end** — Go contexts bridge to native cancellation during planning, stream creation, and record-batch reads.
-- **Structured errors** — machine-readable native error kinds, matchable with `errors.Is`.
-- **Zero-setup native runtime** — prebuilt libraries for macOS, Linux, and Windows are downloaded and checksum-verified automatically on first use.
+The package has these features:
+
+- A `database/sql` driver with the name `datafusion`
+- SQL queries for CSV and Parquet files, and SQL commands to write results to files
+- Arrow record batches as input and output, with a zero-copy registration option
+- Foreign table providers through `datafusion-ffi`, with projection and filter pushdown
+- SQL parameters with `?`, `$1`, and `$name` syntax, plus wrappers for exact types and typed nulls
+- Context cancellation during query planning, stream creation, and record-batch reads
+- Structured native errors that support `errors.Is`
+- Prebuilt native libraries for macOS, Linux, and Windows.
 
 ## User Guide
 
 ### Loading Data
 
-Data reaches a session two ways: SQL DDL over files, or Arrow registration from Go memory. Both are session-scoped — see [Driver and Sessions](#driver-and-sessions) for how catalog state is shared across pooled connections.
+A session can read files through SQL DDL or accept Arrow data from Go memory. File tables and Arrow tables belong to the session. [Driver and Sessions](#driver-and-sessions) explains how pooled connections share catalog state.
 
 #### Files
 
-`CREATE EXTERNAL TABLE` registers a file as a queryable table. CSV and Parquet work out of the box:
+`CREATE EXTERNAL TABLE` registers a file as a queryable table. The driver supports CSV and Parquet files:
 
 ```go
 _, err := db.ExecContext(ctx, `create external table events
 	stored as parquet location '/data/events.parquet'`)
 ```
 
-`COPY` writes query results back to files:
+`COPY` writes query results to files:
 
 ```go
 _, err := db.ExecContext(ctx, `copy (select * from events where kind = 'click')
 	to '/data/clicks.parquet' stored as parquet`)
 ```
 
-File paths appear only in SQL; the DSN never carries them — see [DSNs](#dsns).
+File paths belong in SQL. The DSN does not accept file paths. See [DSNs](#dsns).
 
 #### Go Memory
 
-Register any Go Arrow record reader as an in-memory table with `RegisterArrowReader`, or skip the defensive copy with `RegisterArrowReaderZeroCopy` when buffer lifetimes allow it. See [Register Arrow Tables](#register-arrow-tables).
+To register a Go Arrow record reader as an in-memory table, use `RegisterArrowReader`.
+
+The zero-copy alternative, `RegisterArrowReaderZeroCopy`, has buffer-lifetime requirements. Before you use it, read [Register Arrow Tables](#register-arrow-tables).
 
 ### Driver and Sessions
 
-The package registers itself with `database/sql` as `datafusion`.
+The package registers itself with `database/sql` as `datafusion`:
 
 ```go
 db, err := sql.Open("datafusion", "")
 ```
 
-A `sql.DB` opened by one connector shares a DataFusion `SessionContext` by default. This matches typical `database/sql` expectations: catalog changes such as `CREATE VIEW` or `CREATE EXTERNAL TABLE` are visible across pooled connections from the same `sql.DB`.
+By default, connections from one connector share a DataFusion `SessionContext`. Catalog changes, such as `CREATE VIEW` and `CREATE EXTERNAL TABLE`, are visible across pooled connections from the same `sql.DB`.
 
-Use isolated sessions when you want each physical connection to have its own DataFusion session state:
+If each physical connection must have its own session state, use isolated sessions:
 
 ```go
 db, err := sql.Open("datafusion", "?datafusion.go.shared_session=false")
 ```
 
-Or configure it directly on a connector:
+To select isolated sessions on a connector, use `WithSharedSession(false)`:
 
 ```go
 connector, err := datafusion.NewConnectorWithInitContext(
@@ -186,14 +245,9 @@ connector, err := datafusion.NewConnectorWithInitContext(
 )
 ```
 
-Closing a `*sql.Conn` returns its physical connection to the pool. Isolated
-sessions are reset before reuse, and cached prepared statements are reprepared
-in the new session. Closing the handle does not immediately release registered
-tables or outstanding Arrow batches.
+When you close a `*sql.Conn`, its physical connection returns to the pool. Before reuse, the driver resets an isolated session. It prepares cached statements again in the new session. Connection closure does not immediately release registered tables or Arrow batches that callers still hold.
 
-DataFusion's default query memory pool is unbounded. Set a budget in the
-connector initializer so it applies before queries run and after isolated
-session resets:
+By default, the memory pool for DataFusion queries has no limit. Set a memory budget in the connector initializer:
 
 ```go
 connector, err := datafusion.NewConnectorWithInitContext("",
@@ -207,42 +261,42 @@ connector, err := datafusion.NewConnectorWithInitContext("",
 db := sql.OpenDB(connector)
 ```
 
-This budget covers tracked query execution memory. Registered in-memory tables,
-Arrow batches retained by callers, and Go allocations need their own budgets.
-Large sorts and aggregations can spill or return a resource-exhaustion error.
+The initializer applies the budget before queries run and after isolated-session resets. The budget limits only the query-execution memory that DataFusion tracks. Large sorts and aggregations can spill or return a resource-exhaustion error.
+
+Set different budgets for registered in-memory tables, Arrow batches that callers keep, and Go allocations.
 
 ### DSNs
 
-Supported DSNs are:
+The driver accepts these data source name (DSN) forms:
 
-- `""`
-- `?<options>`
-- `datafusion://`
-- `datafusion://?<options>`
+- An empty string, `""`
+- Options after a question mark, `?<options>`
+- The URL form, `datafusion://`
+- The URL form with options, `datafusion://?<options>`.
 
-The DSN opens an in-process DataFusion session, not a remote host or file-backed embedded database. Query parameters are passed to DataFusion as session configuration options:
+The DSN opens an in-process DataFusion session. It does not select a remote host or a persistent file database. The driver passes query parameters to DataFusion as session configuration options:
 
 ```text
 ?datafusion.execution.batch_size=8192
 ```
 
-Driver-owned options use the `datafusion.go.` prefix and are stripped before the remaining options are passed to DataFusion:
+Driver-owned options use the `datafusion.go.` prefix. The driver removes these options before it passes the remaining options to DataFusion:
 
 ```text
 ?datafusion.go.shared_session=false
 ```
 
-File paths, hosts, and other URL forms are rejected. The URL form exists only to carry session options; files are queried through SQL instead — see [Loading Data](#loading-data).
+The driver rejects file paths, hosts, and other URL forms. The URL form carries only session options. To query files, use SQL as shown in [Loading Data](#loading-data).
 
 ### Query Paths
 
-Use ordinary `database/sql` calls when rows contain scalar Arrow values that can be represented as `database/sql/driver.Value` values:
+For scalar Arrow values that fit `database/sql/driver.Value`, use ordinary `database/sql` calls:
 
 ```go
 rows, err := db.QueryContext(ctx, "select 1 as value")
 ```
 
-Use `QueryArrowContext` when you need exact Arrow schemas, record-batch streaming, or complex Arrow values that `database/sql` cannot scan:
+For exact Arrow schemas, record-batch streams, or complex values that `database/sql` cannot scan, use `QueryArrowContext`:
 
 ```go
 conn, err := db.Conn(ctx)
@@ -258,11 +312,11 @@ if err != nil {
 defer reader.Close()
 ```
 
-Records returned by `Read` must be released by the caller.
+After you finish with each record from `Read`, call `Release` on that record.
 
 ### Initialization
 
-Use `NewConnector` or `NewConnectorWithInitContext` when a pooled database needs setup SQL before use.
+If setup SQL is necessary before you use a pooled database, use `NewConnector` or `NewConnectorWithInitContext`:
 
 ```go
 connector, err := datafusion.NewConnectorWithInitContext(
@@ -281,24 +335,27 @@ db := sql.OpenDB(connector)
 defer db.Close()
 ```
 
-In shared-session mode, the initialization callback runs once per connector. In isolated-session mode, it runs for each connection and reset.
+In shared-session mode, the initialization callback runs one time for each connector. In isolated-session mode, it runs for each connection and reset.
 
 ### Multiple Setup Statements
 
-DataFusion prepares one SQL statement at a time. Split migration or setup scripts before calling the driver, then execute the statements in order:
+DataFusion prepares one SQL statement at a time.
 
-```go
-err := datafusion.ExecStatements(ctx, db, []string{
-	"create view one as select 1 as n",
-	"create view two as select 2 as n",
-})
-```
+1. Split migration or setup scripts into individual SQL statements.
+2. Execute the statements in order with `ExecStatements`:
 
-The helper skips blank statements and wraps errors with the statement index.
+	```go
+	err := datafusion.ExecStatements(ctx, db, []string{
+		"create view one as select 1 as n",
+		"create view two as select 2 as n",
+	})
+	```
+
+The helper skips blank statements. If a statement fails, the helper includes its index in the error.
 
 ### Context Cancellation
 
-Query contexts are bridged to native cancellation. Cancellation is checked during planning, stream creation, and record-batch reads.
+The driver connects Go query contexts to native cancellation. It checks for cancellation during query planning, stream creation, and record-batch reads:
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -307,7 +364,7 @@ defer cancel()
 rows, err := db.QueryContext(ctx, "select * from some_large_table")
 ```
 
-Native cancellation errors can be matched with `errors.Is(err, datafusion.ErrNativeCancelled)`.
+To identify native cancellation errors, use `errors.Is(err, datafusion.ErrNativeCancelled)`.
 
 ### SQL Parameters
 
@@ -317,23 +374,23 @@ The driver supports DataFusion SQL parameters through `database/sql`:
 row := db.QueryRowContext(ctx, "select ? + 1, ?", int64(41), "x")
 ```
 
-Supported ordinary parameter values are:
+The driver accepts these ordinary parameter values:
 
-- `nil`
-- `bool`
-- signed integer types that fit `int64`
-- unsigned integer types as DataFusion `UInt64`
-- floating-point values as `float64`
-- `string`
-- `[]byte`
-- `time.Time` as `Timestamp[ns]`
-- `time.Duration` as `Duration[ns]`
+- A null value, `nil`
+- A Boolean value, `bool`
+- Signed integer types in the `int64` range
+- Unsigned integer types as DataFusion `UInt64`
+- Floating-point values as `float64`
+- A string, `string`
+- A byte slice, `[]byte`
+- A time value, `time.Time`, as `Timestamp[ns]`
+- A duration, `time.Duration`, as `Duration[ns]`.
 
-`time.Time` preserves loadable IANA locations such as `America/New_York`. Fixed-offset, local, or otherwise non-loadable locations bind as UTC unless `TimestampWithTimeZone` is used. `float32` values are promoted to DataFusion `Float64` through `database/sql` conversion.
+The `time.Time` conversion keeps loadable IANA locations, such as `America/New_York`. Fixed-offset, local, and other non-loadable locations bind as UTC. To supply an explicit Arrow time zone, use `TimestampWithTimeZone`.
 
-Other values are rejected by `CheckNamedValue` before native execution.
+The `database/sql` conversion promotes `float32` values to DataFusion `Float64`. Before native execution, `CheckNamedValue` rejects other value types.
 
-Use typed wrappers when inference would be ambiguous or when exact Arrow/DataFusion types matter:
+If type inference is ambiguous or exact Arrow/DataFusion types are necessary, use typed wrappers:
 
 ```go
 row := db.QueryRowContext(
@@ -347,19 +404,31 @@ row := db.QueryRowContext(
 )
 ```
 
-Available wrappers cover `UInt64`, `Date`, `Time`, `Timestamp`, `Duration`, `Decimal`, and typed nulls through `NullOf`, `NullDecimal`, and `NullTimestamp`.
+The wrappers support `UInt64`, `Date`, `Time`, `Timestamp`, `Duration`, and `Decimal`. The `NullOf`, `NullDecimal`, and `NullTimestamp` wrappers create typed nulls.
 
-Bare `nil` binds as DataFusion's untyped null. Use `NullOf`, `NullDecimal`, or `NullTimestamp` when DataFusion needs a concrete type, for example `select $1 + 1` with `NullOf(ParameterInt64)`.
+Bare `nil` binds as an untyped DataFusion null. If a concrete type is necessary, use `NullOf`, `NullDecimal`, or `NullTimestamp`. For example, `select $1 + 1` accepts `NullOf(ParameterInt64)`.
 
-Prepared statements report `Stmt.NumInput` for `?` placeholders, `$1`/`$2` positional parameters, and distinct `$name` parameters. Repeated named parameters count once; each `?` occurrence counts as a separate positional parameter. Mixed question-mark, dollar-numbered, and named parameter styles are rejected during prepare.
+Prepared statements report `Stmt.NumInput` for these parameter styles:
 
-Named statements must be executed with matching `sql.Named` arguments. Positional arguments for named statements, named arguments for positional statements, missing names, extra names, and duplicate supplied names are rejected before query execution is handed to DataFusion.
+- Each `?` occurrence counts as a separate positional parameter.
+- Dollar-numbered parameters, such as `$1` and `$2`, use positional counts.
+- Each name, such as `$name`, counts as one parameter regardless of the number of occurrences.
+
+The driver rejects statements that mix question-mark, dollar-numbered, and named parameter styles during preparation.
+
+Execute named statements with `sql.Named` arguments that have the same names. Before DataFusion executes the query, the driver rejects these argument errors:
+
+- Positional arguments for named statements
+- Named arguments for positional statements
+- Missing names
+- Extra names
+- Duplicate supplied names.
 
 ### Arrow-Native Usage
 
 #### Query Arrow Batches
 
-`QueryArrowContext` executes SQL on a `*sql.Conn` and returns a closeable Arrow reader:
+`QueryArrowContext` executes SQL on a `*sql.Conn` and returns an Arrow reader:
 
 ```go
 reader, err := datafusion.QueryArrowContext(ctx, conn, "select $1", int64(42))
@@ -381,11 +450,11 @@ for {
 }
 ```
 
-The Arrow reader owns native stream resources and must be closed. A finalizer is installed as a leak safety net, but finalizers are not prompt cleanup and should not be relied on for normal resource management.
+The Arrow reader owns native stream resources. After you finish with the reader, call its `Close` method. The driver installs a finalizer, but the finalizer does not guarantee immediate cleanup.
 
 #### Register Arrow Tables
 
-Arrow record readers can be registered as in-memory DataFusion tables:
+To register an Arrow record reader as an in-memory DataFusion table, use `RegisterArrowReader`:
 
 ```go
 rdr, err := array.NewRecordReader(schema, []arrow.RecordBatch{batch})
@@ -399,15 +468,19 @@ if err := datafusion.RegisterArrowReader(ctx, conn, "events", rdr); err != nil {
 }
 ```
 
-`RegisterArrowReader` consumes the remaining batches from the reader, serializes them as an Arrow IPC stream, and registers decoded Rust-owned batches. The copy is intentional: a registered table can outlive the cgo call, while ordinary Go Arrow arrays can contain Go-owned buffers that native code must not retain.
+`RegisterArrowReader` consumes the remaining batches from the reader. It serializes the batches as an Arrow IPC stream, then registers decoded Rust-owned batches. The copy lets the table outlive the cgo call. Ordinary Go Arrow arrays can contain Go-owned buffers that native code must not keep after that call.
 
-`RegisterArrowReaderZeroCopy` skips the IPC copy by exporting the reader through the Arrow C Stream Interface. Use it only when every exported Arrow buffer is valid for native code to retain until the table is dropped or the owning session/connector closes, for example data built with Arrow Go's `memory/mallocator` package or another C/foreign allocator.
+`RegisterArrowReaderZeroCopy` exports the reader through the Arrow C Stream Interface without an IPC copy. Each exported buffer must stay valid for native use until table removal or closure of its session or connector.
 
-Do not use the zero-copy API with ordinary Go-allocated Arrow buffers unless you fully own that lifetime and cgo pointer-safety tradeoff.
+Before you use `RegisterArrowReaderZeroCopy`, make sure that native code can keep all exported buffers for this period. Examples include buffers from Arrow Go's `memory/mallocator` package and other C or foreign allocators.
+
+For Go-allocated buffers, obey the [cgo pointer rules](https://pkg.go.dev/cmd/cgo#hdr-Passing_pointers) during the full period of native use. Keep these buffers valid for this period. If you cannot satisfy these requirements, use `RegisterArrowReader`.
 
 #### Register Foreign FFI Table Providers
 
-If another library produces a `datafusion-ffi` `FFI_TableProvider` — a language binding, or a client that talks to a remote catalog and streams Arrow — register it directly so SQL can plan against it, with projection and filter predicates pushed down into the provider:
+A foreign library can supply a `datafusion-ffi` `FFI_TableProvider`. The library can be a language binding or a client for a remote catalog that streams Arrow data. DataFusion can plan SQL queries against the provider, with projection and filter pushdown.
+
+To register a foreign provider, use `RegisterFFITableProvider`:
 
 ```go
 // providerPtr is an *FFI_TableProvider handed to you by the producing library,
@@ -421,29 +494,57 @@ defer table.Deregister(ctx)
 rows, err := db.QueryContext(ctx, `SELECT ... FROM t WHERE ...`)
 ```
 
-A few contract points, all enforced or documented on `RegisterFFITableProvider`:
+**Version and ownership**
 
-- **Version handshake.** `providerVersion` must equal this package's `DataFusionVersion`; obtain it from the producing library, not from `DataFusionVersion`. The check runs before the provider pointer is dereferenced, so a mismatch is a clean error rather than a crash. The match is required to be exact — deliberately stricter than datafusion-ffi's major-version ABI contract, because datafusion is pre-1.0 and has broken layouts across minor releases.
-- **Ownership.** The provider pointer must be memory owned by the producing foreign library (C/Rust), not Go heap memory, since native code retains callback pointers cloned out of it past the call. Registration clones the provider (bumping its refcount), so you retain ownership of the original pointer and may free it through its producing library once the call returns.
-- **Library lifetime.** The producing library must outlive every registration, dependent view/query plan, reader, and returned Arrow batch. These objects may invoke foreign callbacks after deregistration. Stop new queries, deregister tables, remove dependent views, close readers, release batches, and free the original provider before unloading its library.
-- **Deregistration is explicit.** `RegisterFFITableProvider` returns a `*RegisteredTable` handle. Call `Deregister` while its `*sql.Conn` is still open to remove the catalog entry. In both session modes, closing `*sql.Conn` normally returns the physical connection to the pool and does not guarantee table release. Even closing the connector cannot release foreign objects retained by outstanding queries. Dropping the registration handle never deregisters it.
+1. Get `providerVersion` from the library that supplies the provider.
+2. Make sure that `providerVersion` equals this package's `DataFusionVersion`.
+
+Do not substitute this package's `DataFusionVersion` for the version from the foreign library. The driver compares versions before it dereferences the provider pointer. A mismatch returns an error.
+
+The DataFusion versions must be equal. DataFusion is pre-1.0, and minor releases changed memory layouts in the past. This requirement is stricter than the major-version ABI contract of datafusion-ffi.
+
+The provider pointer must refer to memory that the foreign library owns. This memory must come from the foreign C or Rust library. Do not supply a pointer to Go heap memory. Native code retains cloned callback pointers after registration returns.
+
+Registration clones the provider and increases its reference count. You retain ownership of the original pointer. After registration returns, you can free the original pointer through its library.
+
+**Library lifetime**
+
+The foreign library must stay loaded while registrations or dependent foreign objects exist. These objects include views, query plans, readers, and returned Arrow batches. They can invoke foreign callbacks after deregistration.
+
+Before you unload the library, complete these steps:
+
+1. Stop new queries.
+2. Deregister the tables.
+3. Remove dependent views.
+4. Close the readers.
+5. Release the Arrow batches.
+6. Free the original provider through its library.
+7. Release all other dependent foreign objects.
+
+**Deregistration**
+
+`RegisterFFITableProvider` returns a `*RegisteredTable` handle. While its `*sql.Conn` is open, call `Deregister` to remove the catalog entry.
+
+In shared and isolated modes, connection closure normally returns the physical connection to the pool. It does not guarantee table release. Queries can retain foreign objects even after the connector closes. The driver does not deregister a table when you discard its registration handle.
 
 ### API Overview
 
-The most important exported APIs:
+The primary exported APIs are:
 
-- `NewConnector` / `NewConnectorWithInitContext`: pooled databases with setup SQL and connector options such as `WithSharedSession`.
-- `QueryArrowContext`: streams Arrow record batches from a `*sql.Conn`.
-- `RegisterArrowReader` / `RegisterArrowReaderZeroCopy`: register Go Arrow readers as DataFusion tables.
-- `RegisterFFITableProvider`: register a foreign `datafusion-ffi` `FFI_TableProvider` and query it with pushdown; returns a `*RegisteredTable` handle for explicit `Deregister`.
-- `ExecStatements`: executes an already-split slice of SQL statements.
-- `Error` and the `ErrNative*` sentinels: structured driver errors with operation type and native error kind.
+| API | Purpose |
+| --- | --- |
+| `NewConnector` / `NewConnectorWithInitContext` | Create pooled databases with setup SQL and options such as `WithSharedSession`. |
+| `QueryArrowContext` | Stream Arrow record batches from a `*sql.Conn`. |
+| `RegisterArrowReader` / `RegisterArrowReaderZeroCopy` | Register Go Arrow readers as DataFusion tables. |
+| `RegisterFFITableProvider` | Register a foreign `FFI_TableProvider` with pushdown support. Return a `*RegisteredTable` handle for explicit deregistration. |
+| `ExecStatements` | Execute a slice of individual SQL statements. |
+| `Error` and `ErrNative*` | Report structured errors with the operation type and native error kind. |
 
-See the [Go package documentation](https://pkg.go.dev/github.com/datafusion-contrib/datafusion-go) for the complete API reference.
+For the full API reference, see the [Go package documentation](https://pkg.go.dev/github.com/datafusion-contrib/datafusion-go).
 
 ### Type Conversion
 
-`database/sql` row conversion currently supports:
+The `database/sql` row conversion supports these types:
 
 | Arrow type family | Go value |
 | --- | --- |
@@ -459,61 +560,94 @@ See the [Go package documentation](https://pkg.go.dev/github.com/datafusion-cont
 | Decimal | `string` |
 | Intervals | `string` |
 
-Column metadata is exposed through `database/sql` where Arrow schema information is precise: nullable columns use typed `sql.Null*` scan types where practical, fixed-size binary columns report length, decimal columns report precision and scale, and temporal/interval database type names include their Arrow unit or interval subtype.
+Where the Arrow schema provides precise information, the driver exposes column metadata through `database/sql`:
 
-Variable-width string and binary columns do not report declared lengths because DataFusion's Arrow result schema does not preserve SQL declarations such as `VARCHAR(32)`.
+- Nullable columns use typed `sql.Null*` scan types where practical.
+- Fixed-size binary columns report length.
+- Decimal columns report precision and scale.
+- Temporal and interval database type names include their Arrow unit or interval subtype.
 
-Time-only values are returned as UTC `time.Time` values on the Unix epoch date. Duration values are returned as `int64` nanoseconds because `time.Duration` is not a legal `database/sql/driver.Value`. Interval values are returned as strings that preserve their month, day, millisecond, and nanosecond components.
+Variable-width string and binary columns do not report declared lengths. The Arrow result schema does not preserve SQL declarations such as `VARCHAR(32)`.
 
-Nested and complex Arrow values such as lists, structs, maps, unions, dictionaries, extensions, and run-end encoded values are rejected from `database/sql` row conversion when schema information is available. Use the Arrow-native reader for exact batch data.
+The driver converts time-only values to UTC `time.Time` values on the Unix epoch date. It converts durations to `int64` nanoseconds because `database/sql/driver.Value` does not accept `time.Duration`. Interval strings keep the month, day, millisecond, and nanosecond components.
+
+When schema information is available, `database/sql` row conversion rejects these complex Arrow values:
+
+- Lists
+- Structs
+- Maps
+- Unions
+- Dictionaries
+- Extensions
+- Run-end encoded values.
+
+For exact batch data, use the Arrow-native reader.
 
 ### Semantics and Limits
 
-- `PrepareContext` validates SQL syntax with DataFusion's parser.
-- A prepared query must contain exactly one SQL statement. Multiple result sets are not supported; `Rows.NextResultSet` reports no additional result sets.
-- `Stmt.NumInput` reports parser-derived parameter counts for question-mark, dollar-numbered, or named parameters.
-- Connections from one connector share a DataFusion `SessionContext` by default.
-- Shared sessions intentionally share session-scoped catalog/config mutations, including `CREATE VIEW`, `DROP VIEW`, and `SET`, across all connections from the same connector.
-- Non-query statements are serialized at the connector level across `ExecContext`, `QueryContext`, and `QueryArrowContext`; queries can still observe normal ordering effects if they run concurrently with DDL.
-- Pooled reuse implements `driver.SessionResetter`. Shared sessions validate the connection and preserve shared session state; isolated sessions recreate the underlying `SessionContext` and rerun the connector initialization callback when one was provided.
-- Connections implement `driver.Validator`; closed connections are reported invalid before they return to the pool.
-- Native errors carry machine-readable error kinds across the C ABI and are exposed on `*datafusion.Error.NativeKind`.
-- `errors.Is` can match native sentinel errors: `ErrNativeCancelled`, `ErrNativeInvalidArgument`, `ErrNativeFailure`, and `ErrNativePanic`.
-- `RowsAffected` returns `0` by default and reports the sum of a single integer `count`, `rows_affected`, or `rowsaffected` output column when DataFusion emits one.
-- `LastInsertId` returns `0, nil`; DataFusion does not expose insert IDs through this driver.
-- Prepared statement handles are reused when callers use `db.Prepare` or `conn.PrepareContext`, but DataFusion still plans and executes each run; the driver does not cache DataFusion physical plans.
-- `Close` is idempotent for connectors, connections, statements, rows, and Arrow readers.
-- Transactions are unsupported and return explicit unsupported errors. `BeginTx` still honors an already-canceled context before returning the unsupported transaction error.
+The driver has these behaviors and limits:
 
-SQL executes with the host process's filesystem and network permissions. Isolated sessions separate catalogs; they are not a sandbox for hostile SQL or native FFI providers. Run untrusted workloads in a separate process with restricted OS permissions and resource limits.
+- `PrepareContext` validates SQL syntax with the DataFusion parser. A prepared query must contain exactly one SQL statement.
+- The driver does not support multiple result sets. `Rows.NextResultSet` reports no additional result sets.
+- `Stmt.NumInput` reports parameter counts from the parser for question-mark, dollar-numbered, or named parameters.
+- Connections from one connector share a DataFusion `SessionContext` by default. Catalog and configuration changes apply across these connections. This includes `CREATE VIEW`, `DROP VIEW`, and `SET`.
+- The connector serializes non-query statements across `ExecContext`, `QueryContext`, and `QueryArrowContext`. Concurrent queries and DDL can still have ordering effects.
+- Pooled reuse implements `driver.SessionResetter`. Shared sessions validate the connection and keep shared state. Isolated sessions recreate the `SessionContext` and run the initialization callback again if the connector has one.
+- Connections implement `driver.Validator`. The driver reports closed connections as invalid before they return to the pool.
+- Native errors carry machine-readable kinds across the C ABI. The driver exposes these kinds on `*datafusion.Error.NativeKind`.
+- `errors.Is` matches the native sentinels `ErrNativeCancelled`, `ErrNativeInvalidArgument`, `ErrNativeFailure`, and `ErrNativePanic`.
+- `RowsAffected` returns `0` by default. If DataFusion emits a single integer output column named `count`, `rows_affected`, or `rowsaffected`, the driver reports its sum.
+- `LastInsertId` returns `0, nil`. DataFusion does not expose insert IDs through this driver.
+- The driver reuses statement handles for `db.Prepare` and `conn.PrepareContext`. DataFusion plans and executes each run. The driver does not cache physical plans.
+- `Close` is idempotent for connectors, connections, statements, rows, and Arrow readers.
+- Transactions return explicit unsupported errors. For an already-canceled context, `BeginTx` returns the context error.
+
+SQL executes with the filesystem and network permissions of the host process. Isolated sessions have independent catalogs. They do not sandbox hostile SQL or native FFI providers.
+
+Run untrusted workloads in a different process with restricted operating-system permissions and resource limits.
 
 ### Native Runtime
 
-Default builds use cgo but do not link DataFusion at Go link time. At runtime, the driver loads a shared `libdatafusion_go` library, resolved in this order:
+Default builds use cgo but do not link DataFusion at Go link time. At runtime, the driver searches for a shared `libdatafusion_go` library in this order:
 
-1. `DATAFUSION_GO_LIBRARY`, if set.
-2. `internal/native/lib/<goos>-<goarch>/` in a source checkout.
-3. A checksum-verified library downloaded from the matching GitHub Release into the user cache.
+1. The path in `DATAFUSION_GO_LIBRARY`, if set
+2. The source-checkout directory `internal/native/lib/<goos>-<goarch>/`
+3. The user cache, with automatic download from the GitHub release for the installed module version.
 
-Environment variables:
+The driver verifies checksums for downloaded libraries. These environment variables control library selection and downloads:
 
-- `DATAFUSION_GO_LIBRARY` — explicit absolute path to a trusted shared library.
-- `DATAFUSION_GO_NO_DOWNLOAD=1` — disable automatic release-asset downloads.
-- `DATAFUSION_GO_DOWNLOAD_BASE` — override the release download base with an HTTPS URL. Redirects must also use HTTPS.
+| Variable | Effect |
+| --- | --- |
+| `DATAFUSION_GO_LIBRARY` | Selects an explicit absolute path to a trusted shared library. |
+| `DATAFUSION_GO_NO_DOWNLOAD=1` | Disables automatic release-asset downloads. |
+| `DATAFUSION_GO_DOWNLOAD_BASE` | Selects an alternative HTTPS base URL for release downloads. Redirects must also use HTTPS. |
 
-Automatic source and cache resolution checks the library and its ancestors for ownership and write permissions. Keep these directories private to the service account or system administrators. Explicit library paths are trusted configuration and bypass automatic permission checks. Setuid, setgid, and Linux file-capability processes must use a library linked at build time (`datafusion_use_bundled` or `datafusion_use_source`); runtime resolution is disabled for them.
+Automatic source and cache resolution checks ownership and write permissions for the library and its ancestor directories. Keep these directories private to the service account or system administrators. An explicit library path is trusted configuration and bypasses automatic permission checks.
 
-Prebuilt native libraries are published for `darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`, and `windows-amd64`. Windows arm64 is not currently bundled.
+For setuid, setgid, or Linux file-capability processes, use `datafusion_use_bundled` or `datafusion_use_source`. These processes must link the library at build time. The driver disables runtime resolution for them.
 
-`CGO_ENABLED=0` is not supported for normal use; the package returns a clear `datafusion-go requires cgo` error in that mode.
+[Install](#install) lists the platforms with prebuilt native libraries. The project does not supply a prebuilt library for Windows arm64. With `CGO_ENABLED=0`, the package returns `datafusion-go requires cgo`.
 
-Source checkouts should run `make bundle` or `make test` before invoking Go tests or examples that open the driver directly; both build the Rust shim and copy the native archive and shared library into `internal/native/lib/<goos>-<goarch>/`. Alternative link modes (bundled static archive, source, static-lib, and system shared-library linking) are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+Before you run driver examples or Go tests from a source checkout, run `make bundle` or `make test`. Each target builds the Rust shim and copies the native archive and shared library into `internal/native/lib/<goos>-<goarch>/`.
+
+The package also has these link modes:
+
+| Build tag | Library source |
+| --- | --- |
+| `datafusion_use_bundled` | The static archive in `internal/native/lib/<goos>-<goarch>/`. |
+| `datafusion_use_source` | The static archive from the Rust release build in the source checkout. |
+| `datafusion_use_static_lib` | The same static archive as `datafusion_use_source`. |
+| `datafusion_use_lib` | A system library that the linker finds through `-ldatafusion_go`. |
+
+Select one link mode with `go build -tags=<build-tag>`. For `datafusion_use_lib`, use `CGO_LDFLAGS` to add the library directory with `-L`. Configure the runtime loader to find the shared library on your operating system.
+
+For native-build setup and tests, see [CONTRIBUTING.md](CONTRIBUTING.md#native-libraries).
 
 ## Troubleshooting
 
 ### `datafusion-go requires cgo`
 
-Enable cgo for normal execution:
+Enable cgo to run the package:
 
 ```sh
 CGO_ENABLED=1 go test ./...
@@ -521,26 +655,30 @@ CGO_ENABLED=1 go test ./...
 
 ### Native library not found
 
-If automatic download is disabled or the release does not publish an asset for your platform, either set `DATAFUSION_GO_LIBRARY` or build a local library:
+If automatic download is unavailable, set `DATAFUSION_GO_LIBRARY` to a local library.
+
+For a source checkout on Linux, run these commands from the repository root:
 
 ```sh
 make bundle
 DATAFUSION_GO_LIBRARY="$PWD/internal/native/lib/$(go env GOOS)-$(go env GOARCH)/libdatafusion_go.so" go test ./...
 ```
 
-On macOS, use `libdatafusion_go.dylib`. On Windows, use `datafusion_go.dll`.
+For macOS, replace `libdatafusion_go.so` with `libdatafusion_go.dylib` in the command. For Windows, use `datafusion_go.dll` in a shell that supports this syntax.
 
 ### Local checkout tests fail before opening the driver
 
-Run the project build/test target so `internal/native/lib/<goos>-<goarch>/` is populated:
+From the repository root, run the project test target:
 
 ```sh
 make test
 ```
 
+This target builds the native library and populates `internal/native/lib/<goos>-<goarch>/` before the Go tests run.
+
 ### DSN rejected
 
-Use an empty DSN or a session-options DSN. Paths, hosts, and file URLs are intentionally unsupported; register files through SQL instead — see [Loading Data](#loading-data).
+Use an empty DSN or a DSN with session options:
 
 ```go
 sql.Open("datafusion", "")
@@ -548,21 +686,36 @@ sql.Open("datafusion", "?datafusion.execution.batch_size=8192")
 sql.Open("datafusion", "datafusion://?datafusion.go.shared_session=false")
 ```
 
+The driver rejects paths, hosts, and file URLs in DSNs. To register files through SQL, see [Loading Data](#loading-data).
+
 ### `database/sql` cannot scan a result column
 
-The `database/sql` path rejects complex Arrow values. Use `QueryArrowContext` to read exact Arrow record batches.
+The `database/sql` path rejects complex Arrow values. To read exact Arrow record batches, use `QueryArrowContext`.
 
 ### Windows build or test failures
 
-Use a MinGW/GNU C toolchain. The bundled Windows build targets Rust's `x86_64-pc-windows-gnu` ABI.
+Use a MinGW/GNU C toolchain. Windows builds target the `x86_64-pc-windows-gnu` Rust ABI.
 
 ## Developing
 
-Run `make lint` and `make test` before sending changes. Setup, the full test matrix, native link modes, version bumps, and the release process are documented in [CONTRIBUTING.md](CONTRIBUTING.md). Questions, bug reports, and pull requests are welcome on GitHub.
+For setup, test modes, version changes, and the release process, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Before you submit code changes, run these commands from the repository root:
+
+```sh
+make lint
+make test
+make test.source
+make rust.test
+```
+
+For questions and ordinary bug reports, use [GitHub Issues](https://github.com/datafusion-contrib/datafusion-go/issues). Code and documentation contributions are welcome through [pull requests](https://github.com/datafusion-contrib/datafusion-go/pulls).
 
 ## Versioning
 
-Release tags encode the bundled DataFusion version as `v<major>.<encoded-datafusion-version>.<patch>`: DataFusion `53.1.0` encodes as `530100`, so `v0.530100.1` bundles DataFusion `53.1.0`. Release metadata is maintained in [versions.toml](versions.toml); the version-bump and release workflow is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+Release tags encode the bundled DataFusion version as `v<major>.<encoded-datafusion-version>.<patch>`: DataFusion `53.1.0` encodes as `530100`, so `v0.530100.1` bundles DataFusion `53.1.0`.
+
+[versions.toml](versions.toml) contains the release metadata. For version changes and the release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md#version-bumps).
 
 ## License
 
