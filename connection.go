@@ -3,6 +3,7 @@ package datafusion
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"sync"
 
 	"github.com/datafusion-contrib/datafusion-go/internal/native"
@@ -12,13 +13,16 @@ import (
 type Conn struct {
 	conn      *native.Connection
 	connector *Connector
+	// Driver.Open owns its private connector; pooled connections do not.
+	ownsConnector bool
 
-	mu     sync.Mutex
-	closed bool
+	mu         sync.Mutex
+	closed     bool
+	statements map[*Stmt]struct{}
 }
 
 func newConn(conn *native.Connection, connector *Connector) *Conn {
-	return &Conn{conn: conn, connector: connector}
+	return &Conn{conn: conn, connector: connector, statements: make(map[*Stmt]struct{})}
 }
 
 // Prepare validates and prepares query using a background context.
@@ -31,8 +35,10 @@ func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := conn.checkOpen(); err != nil {
-		return nil, err
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.closed {
+		return nil, driverError(ErrorClosed, "datafusion connection is closed", nil)
 	}
 
 	stmt, err := conn.conn.Prepare(query)
@@ -40,23 +46,45 @@ func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt
 		return nil, driverError(ErrorPrepare, "could not prepare DataFusion statement", err)
 	}
 
-	return &Stmt{stmt: stmt, connector: conn.connector, query: query}, nil
+	s := &Stmt{stmt: stmt, conn: conn, query: query, numInput: stmt.NumInput(), serializes: stmt.Serializes()}
+	conn.statements[s] = struct{}{}
+	return s, nil
 }
 
 // Close releases the native connection handle.
 func (conn *Conn) Close() error {
 	conn.mu.Lock()
-	defer conn.mu.Unlock()
 
 	if conn.closed {
+		conn.mu.Unlock()
 		return nil
 	}
 	conn.closed = true
+	conn.invalidateStatementsLocked()
 	if conn.conn != nil {
 		conn.conn.Close()
 		conn.conn = nil
 	}
+	owned := conn.ownsConnector
+	conn.mu.Unlock()
+	if owned {
+		return conn.connector.Close()
+	}
 	return nil
+}
+
+// The caller holds conn.mu. Always acquire statement locks after conn.mu.
+// Cached database/sql statements keep their SQL and metadata but must no
+// longer retain the session that is being closed or reset.
+func (conn *Conn) invalidateStatementsLocked() {
+	for stmt := range conn.statements {
+		stmt.mu.Lock()
+		if stmt.stmt != nil {
+			stmt.stmt.Close()
+			stmt.stmt = nil
+		}
+		stmt.mu.Unlock()
+	}
 }
 
 // Begin returns an unsupported error because DataFusion transactions are not supported.
@@ -113,14 +141,16 @@ func (conn *Conn) ResetSession(ctx context.Context) error {
 
 	nc, err := connector.connectNative(ctx)
 	if err != nil {
-		return err
+		_ = conn.Close()
+		return errors.Join(driver.ErrBadConn, err)
 	}
 
 	replacement := newConn(nc, connector)
 	if connector.initFn != nil {
 		if err := connector.initFn(ctx, replacement); err != nil {
 			_ = replacement.Close()
-			return err
+			_ = conn.Close()
+			return errors.Join(driver.ErrBadConn, err)
 		}
 	}
 
@@ -131,6 +161,7 @@ func (conn *Conn) ResetSession(ctx context.Context) error {
 		return driver.ErrBadConn
 	}
 	old := conn.conn
+	conn.invalidateStatementsLocked()
 	conn.conn = replacement.conn
 	replacement.conn = nil
 	conn.mu.Unlock()

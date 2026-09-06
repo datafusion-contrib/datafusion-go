@@ -5,3 +5,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /rust
+    schedule:
+      interval: weekly
+    # Generated DataFusion pins must be changed through versions.toml.
+    ignore:
+      - dependency-name: datafusion
+      - dependency-name: datafusion-ffi
+      - dependency-name: datafusion-sql

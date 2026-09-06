@@ -10,9 +10,11 @@ import (
 
 // Stmt is a prepared DataFusion statement.
 type Stmt struct {
-	stmt      *native.Statement
-	connector *Connector
-	query     string
+	stmt       *native.Statement
+	conn       *Conn
+	query      string
+	numInput   int
+	serializes bool
 
 	mu     sync.Mutex
 	closed bool
@@ -20,6 +22,8 @@ type Stmt struct {
 
 // Close releases the native prepared statement handle.
 func (s *Stmt) Close() error {
+	s.conn.mu.Lock()
+	defer s.conn.mu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -27,7 +31,11 @@ func (s *Stmt) Close() error {
 		return nil
 	}
 	s.closed = true
-	s.stmt.Close()
+	if s.stmt != nil {
+		s.stmt.Close()
+		s.stmt = nil
+	}
+	delete(s.conn.statements, s)
 	return nil
 }
 
@@ -39,7 +47,7 @@ func (s *Stmt) NumInput() int {
 	if s.closed {
 		return -1
 	}
-	return s.stmt.NumInput()
+	return s.numInput
 }
 
 // CheckNamedValue normalizes DataFusion-specific parameter wrapper types.
@@ -131,11 +139,23 @@ func (s *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driv
 }
 
 func (s *Stmt) executeArrow(ctx context.Context, named []driver.NamedValue) (ArrowReader, error) {
+	s.conn.mu.Lock()
 	s.mu.Lock()
-	if s.closed {
+	if s.closed || s.conn.closed {
 		s.mu.Unlock()
+		s.conn.mu.Unlock()
 		return nil, driverError(ErrorClosed, "datafusion statement is closed", nil)
 	}
+	if s.stmt == nil {
+		stmt, err := s.conn.conn.Prepare(s.query)
+		if err != nil {
+			s.mu.Unlock()
+			s.conn.mu.Unlock()
+			return nil, driverError(ErrorPrepare, "could not reprepare DataFusion statement after session reset", err)
+		}
+		s.stmt = stmt
+	}
+	s.conn.mu.Unlock()
 
 	reader, err := s.stmt.ExecuteArrow(ctx, named)
 	s.mu.Unlock()
@@ -152,13 +172,13 @@ func (s *Stmt) executeArrow(ctx context.Context, named []driver.NamedValue) (Arr
 }
 
 func (s *Stmt) lockSerializedStatement(ctx context.Context) (func(), error) {
-	if s.connector == nil {
+	if s.conn.connector == nil {
 		return nil, nil
 	}
 	s.mu.Lock()
-	serializes := !s.closed && s.stmt.Serializes()
+	serializes := !s.closed && s.serializes
 	s.mu.Unlock()
-	return s.connector.lockSerializedStatement(ctx, serializes)
+	return s.conn.connector.lockSerializedStatement(ctx, serializes)
 }
 
 var _ driver.Stmt = (*Stmt)(nil)

@@ -78,8 +78,9 @@ typedef struct dfgo_parameter {
  *   and clones it into the session; the caller retains ownership of the
  *   pointer and must free it through its producing library. The clone only
  *   bumps a refcount: the producing library must stay loaded and un-freed for
- *   as long as the table is registered, since the registered table calls back
- *   into the provider on every scan. provider_datafusion_version is checked
+ *   as long as the table is registered and any dependent views, query plans,
+ *   streams, or returned Arrow batches remain alive. Deregistration alone
+ *   does not release these foreign callbacks. provider_datafusion_version is checked
  *   against this library's datafusion version before the provider is
  *   dereferenced; a mismatch is reported as an error rather than risking UB.
  * - dfgo_statement_execute_with_params borrows params and all nested pointers

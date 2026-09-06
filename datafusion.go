@@ -31,6 +31,7 @@ func (d Driver) Open(dsn string) (driver.Conn, error) {
 		}
 		return nil, err
 	}
+	conn.(*Conn).ownsConnector = true
 	return conn, nil
 }
 
@@ -63,8 +64,8 @@ type Connector struct {
 	sharedSession bool
 
 	mu                sync.Mutex
-	sharedInitMu      sync.Mutex
-	ddlMu             sync.Mutex
+	sharedInitMu      contextMutex
+	ddlMu             contextMutex
 	closed            bool
 	sharedInitialized bool
 }
@@ -161,7 +162,9 @@ func (c *Connector) initializeShared(ctx context.Context, conn driver.ExecerCont
 		return err
 	}
 
-	c.sharedInitMu.Lock()
+	if err := c.sharedInitMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer c.sharedInitMu.Unlock()
 
 	if c.sharedInitialized {
@@ -189,9 +192,7 @@ func (c *Connector) lockSerializedStatement(ctx context.Context, serializes bool
 		return nil, nil
 	}
 
-	c.ddlMu.Lock()
-	if err := ctx.Err(); err != nil {
-		c.ddlMu.Unlock()
+	if err := c.ddlMu.Lock(ctx); err != nil {
 		return nil, err
 	}
 	return c.ddlMu.Unlock, nil
