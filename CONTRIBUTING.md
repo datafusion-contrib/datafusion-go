@@ -2,9 +2,11 @@
 
 ## Requirements
 
-- Go with cgo enabled for normal development and tests.
+- A supported, patched Go toolchain with cgo enabled. `go.mod` recommends
+  Go 1.27.1; Go automatically selects it for development in this module.
+  The module requires Go 1.25 or newer.
 - A C toolchain for the target platform.
-- Rust stable for rebuilding the DataFusion FFI shim.
+- Rust 1.94 or newer for rebuilding the DataFusion FFI shim.
 
 `CGO_ENABLED=0` is intentionally unsupported for normal execution; tests cover that the package returns a clear error in that mode.
 
@@ -44,6 +46,22 @@ Run linting:
 ```sh
 make lint
 ```
+
+Run dependency vulnerability checks:
+
+```sh
+make go.vuln
+cargo install cargo-audit --version 0.22.2 --locked
+make rust.audit
+```
+
+CI runs both scans on a current Go toolchain. Native lifecycle tests check
+session/runtime destruction with Rust weak references and Arrow buffer release
+with a checked C allocator, including cancellation, reset, and registration
+failures. Go's race detector supplements these allocation checks.
+
+The Rust build, test, and lint targets use the same macOS deployment settings
+so switching targets does not invalidate native dependency builds.
 
 On macOS, `go test -race` may emit a non-fatal Apple linker warning about a
 malformed `LC_DYSYMTAB` when cgo links the native DataFusion archive. Normal

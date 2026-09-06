@@ -272,10 +272,10 @@ func (conn *Connection) RegisterArrowIPC(name string, data []byte) error {
 // (produced by another library) under name. provider must point to a valid
 // FFI_TableProvider; the callee clones it, so the caller retains ownership of
 // the pointer. providerDataFusionVersion is the datafusion version the producing
-// library reports, checked against the native library's version before the
-// provider is dereferenced. The producing library must stay loaded for as long
-// as the table is registered, since the registered table calls back into it on
-// every scan. See datafusion.RegisterFFITableProvider for the full contract.
+// library reports, checked before the provider is dereferenced. The producing
+// library must outlive every registration, dependent query/view, stream, and
+// returned batch, which may retain foreign callbacks after deregistration.
+// See datafusion.RegisterFFITableProvider for the full contract.
 func (conn *Connection) RegisterFFITableProvider(name string, provider unsafe.Pointer, providerDataFusionVersion string) error {
 	if conn == nil || conn.ptr == nil {
 		return errors.New("datafusion-go connection is closed")
@@ -666,9 +666,7 @@ func (r *resultReader) Read() (arrow.RecordBatch, error) {
 
 	if errno := C.dfgo_arrow_stream_get_next(r.stream, r.array); errno != 0 {
 		err := contextError(r.ctx, streamError(r.stream, errno))
-		if r.ctx.Err() != nil {
-			r.closeLocked()
-		}
+		r.closeLocked()
 		return nil, err
 	}
 	if C.dfgo_arrow_array_is_released(r.array) != 0 {
@@ -678,6 +676,7 @@ func (r *resultReader) Read() (arrow.RecordBatch, error) {
 
 	rec, err := cdata.ImportCRecordBatchWithSchema((*cdata.CArrowArray)(unsafe.Pointer(r.array)), r.schema)
 	if err != nil {
+		r.closeLocked()
 		return nil, err
 	}
 	return rec, nil
@@ -695,15 +694,9 @@ func (r *resultReader) Cancel() {
 		return
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.result != nil {
-		C.dfgo_result_cancel(r.result)
-	}
-	if r.token != nil {
-		r.token.Cancel()
-	}
+	// token is immutable after construction and synchronizes its own handle.
+	// Cancellation must not wait for the mutex held across a native Read.
+	r.token.Cancel()
 }
 
 func (r *resultReader) Close() error {
@@ -711,6 +704,7 @@ func (r *resultReader) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(r, nil)
+	r.Cancel()
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -719,6 +713,7 @@ func (r *resultReader) Close() error {
 }
 
 func (r *resultReader) finalize() {
+	r.Cancel()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closeLocked()
@@ -750,7 +745,6 @@ func (r *resultReader) closeLocked() {
 	}
 	if r.token != nil {
 		r.token.Close()
-		r.token = nil
 	}
 }
 

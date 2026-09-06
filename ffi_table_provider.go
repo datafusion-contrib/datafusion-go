@@ -9,16 +9,20 @@ import (
 )
 
 // RegisteredTable is a handle to a table registered on a connection by
-// RegisterFFITableProvider. Call Deregister to remove the table before the
-// producing library tears down. The handle is safe for concurrent use.
+// RegisterFFITableProvider. The handle is safe for concurrent use.
 //
 // The table's lifetime follows the session it was registered on, not this
-// handle. With an isolated session (WithSharedSession(false)) the table lives
-// only as long as sqlConn, so closing that *sql.Conn also releases it. With a
-// shared session (the default) it is registered on the connector's shared
-// SessionContext and outlives sqlConn: it persists until Deregister is called
-// or the owning Connector is closed, and closing sqlConn alone does not release
-// it.
+// handle. Closing sqlConn returns its physical connection to the pool, and
+// does not guarantee table release in either session mode. An isolated session
+// is discarded when that connection is reset or physically closed; a shared
+// session can outlive every individual sqlConn. Deregister explicitly while
+// sqlConn is open when deterministic catalog removal is needed.
+//
+// Catalog removal does not invalidate already-created query plans, views,
+// readers, or Arrow batches. Before unloading the producing library, callers
+// must stop new queries, remove every registration and dependent view, close
+// all dependent readers, and release their batches. The library must remain
+// loaded until all foreign objects (including the original provider) are freed.
 //
 // Dropping the handle never deregisters the table: a caller may legitimately
 // keep querying it after dropping the handle. Deregistration is therefore
@@ -58,12 +62,12 @@ type RegisteredTable struct {
 // Lifetime: registration clones the provider (bumping its internal refcount), so
 // the caller still owns the original FFI_TableProvider pointer and may free it
 // through its producing library once this call returns. The producing library
-// itself, however, must stay loaded for as long as the table remains registered
-// (see RegisteredTable for exactly when that ends): the registered table calls
-// back into the provider's function pointers on every scan, and unloading the
-// library leaves them dangling. The DataFusion session backing the provider should also
-// outlive the registration; if it does not, queries against the table fail with
-// a clean error rather than crashing.
+// itself must stay loaded until every registration and dependent foreign object
+// is released, including query plans, views, readers, and returned Arrow batches
+// (see RegisteredTable). Deregister or closing sqlConn alone does not establish
+// that lifetime. Unloading earlier leaves foreign callbacks dangling. The
+// DataFusion session backing the provider should also outlive all dependent
+// queries; if it does not, queries fail with an error.
 func RegisterFFITableProvider(ctx context.Context, sqlConn *sql.Conn, tableName string, provider unsafe.Pointer, providerDataFusionVersion string) (*RegisteredTable, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -104,14 +108,10 @@ func (t *RegisteredTable) Name() string {
 // no-op that returns nil, and deregistering a name that is no longer registered
 // is not an error.
 //
-// With an isolated session, closing the underlying *sql.Conn already releases
-// the table, so an explicit Deregister is only needed to remove it sooner. With
-// a shared session (the default) the table lives on the shared SessionContext,
-// so closing sqlConn does not release it: Deregister (or closing the owning
-// Connector) is required. Deregister runs on sqlConn, so it must still be open;
-// like the other connection operations in this package, Deregister on a closed
-// connection propagates the error database/sql reports (sql.ErrConnDone) rather
-// than masking it.
+// Deregister removes the catalog entry in either session mode. Existing views,
+// query plans, readers, and batches can retain foreign objects afterward, so
+// the producing library must still outlive them. Deregister runs on sqlConn,
+// which must remain open; a closed connection returns sql.ErrConnDone.
 func (t *RegisteredTable) Deregister(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -28,6 +28,7 @@ use arrow::error::ArrowError;
 use arrow::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow::ipc::reader::StreamReader;
 use arrow::record_batch::RecordBatch;
+use datafusion::arrow;
 use datafusion::catalog::TableProvider;
 use datafusion::common::{DataFusionError, ParamValues, ScalarValue};
 use datafusion::datasource::MemTable;
@@ -510,9 +511,10 @@ fn register_record_batches(
 }
 
 fn ipc_batches(data: &[u8]) -> Result<(SchemaRef, Vec<RecordBatch>), FfiError> {
-    // Own the IPC bytes on the Rust side before decoding. This keeps the safe
-    // registration path independent of the Go byte slice passed through cgo.
-    let mut reader = StreamReader::try_new(Cursor::new(data.to_vec()), None)?;
+    // StreamReader copies message bodies into Rust-owned Arrow buffers. Only
+    // the synchronous decoder borrows the input during this FFI call; returned
+    // batches never borrow it, so a second full IPC copy is unnecessary.
+    let mut reader = StreamReader::try_new(Cursor::new(data), None)?;
     let schema = reader.schema();
     let batches = reader.by_ref().collect::<Result<Vec<_>, ArrowError>>()?;
     Ok((schema, batches))
@@ -710,22 +712,35 @@ fn execute_to_stream(
     bindings: Vec<Binding>,
     cancel: Arc<CancelToken>,
 ) -> Result<FFI_ArrowArrayStream, FfiError> {
+    // Validate argument shape before any catalog or session mutation.
+    let values = param_values(params, bindings)?;
     let stream = inner.runtime.block_on(async {
         // Check cancellation around both planning and execution. DataFusion may
         // still do CPU work between await points, but these gates keep canceled
         // contexts from starting avoidable work and make streaming reads stop.
-        let df = tokio::select! {
+        let state = inner.ctx.state();
+        let plan = tokio::select! {
+            biased;
             _ = cancel.cancelled() => return Err(FfiError::cancelled()),
-            df = inner.ctx.sql(query) => df.map_err(FfiError::from)?,
+            plan = state.create_logical_plan(query) => plan.map_err(FfiError::from)?,
         };
 
-        let df = if let Some(values) = param_values(params, bindings)? {
-            df.with_param_values(values).map_err(FfiError::from)?
+        let plan = if let Some(values) = values {
+            plan.with_param_values(values).map_err(FfiError::from)?
         } else {
-            df
+            plan
+        };
+
+        // SessionContext::sql executes DDL immediately. Bind the logical plan
+        // first so CREATE TABLE/VIEW never execute with unresolved parameters.
+        let df = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(FfiError::cancelled()),
+            df = inner.ctx.execute_logical_plan(plan) => df.map_err(FfiError::from)?,
         };
 
         tokio::select! {
+            biased;
             _ = cancel.cancelled() => Err(FfiError::cancelled()),
             stream = df.execute_stream() => stream.map_err(FfiError::from),
         }
@@ -1430,7 +1445,9 @@ pub unsafe extern "C" fn dfgo_connection_register_arrow_stream(
 /// The clone only bumps the foreign provider's refcount; the registered table
 /// invokes the provider's function pointers on every scan. The producing
 /// library therefore must stay loaded and un-freed for as long as the table
-/// remains registered on `conn` — its `scan`/`clone`/`release` function
+/// remains registered on `conn` and until all dependent views, query plans,
+/// streams, and returned batches are released. Deregistration does not release
+/// those outstanding references. Its `scan`/`clone`/`release` function
 /// pointers dangle if it is unloaded, which is undefined behavior. The session
 /// backing the provider's (weakly held) task context should also outlive the
 /// registration; if it does not, queries against the table fail with a clean
@@ -1877,6 +1894,127 @@ pub unsafe extern "C" fn dfgo_error_free(err: *mut dfgo_error) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn native_handles_release_sessions_and_runtimes() {
+        for export in [false, true] {
+            for _ in 0..8 {
+                // Exercise ownership transfers through the same C ABI used by
+                // Go. Weak references observe real native object destruction.
+                unsafe {
+                    let mut db = ptr::null_mut();
+                    let mut conn = ptr::null_mut();
+                    let mut stmt = ptr::null_mut();
+                    let mut token = ptr::null_mut();
+                    let mut result = ptr::null_mut();
+                    let mut err = ptr::null_mut();
+                    assert_eq!(dfgo_database_open(ptr::null(), &mut db, &mut err), DFG_OK);
+                    let runtime = Arc::downgrade(&(*db).runtime);
+                    assert_eq!(dfgo_connection_open_shared(db, &mut conn, &mut err), DFG_OK);
+                    let session = Arc::downgrade(&(*conn).inner);
+                    assert_eq!(
+                        dfgo_prepare(conn, c"select 1".as_ptr(), &mut stmt, &mut err),
+                        DFG_OK
+                    );
+                    assert_eq!(dfgo_cancel_token_create(&mut token, &mut err), DFG_OK);
+                    assert_eq!(
+                        dfgo_statement_execute_with_params(
+                            stmt,
+                            ptr::null(),
+                            0,
+                            token,
+                            &mut result,
+                            &mut err
+                        ),
+                        DFG_OK
+                    );
+                    let mut stream = FFI_ArrowArrayStream::empty();
+                    if export {
+                        assert_eq!(
+                            dfgo_result_export_arrow_stream(result, &mut stream, &mut err),
+                            DFG_OK
+                        );
+                    }
+                    dfgo_statement_close(stmt);
+                    dfgo_connection_close(conn);
+                    dfgo_database_close(db);
+                    assert!(
+                        session.upgrade().is_some(),
+                        "result must keep its session alive"
+                    );
+                    dfgo_result_close(result);
+                    dfgo_cancel_token_close(token);
+                    if export {
+                        assert!(
+                            session.upgrade().is_some(),
+                            "exported stream owns the session"
+                        );
+                    }
+                    drop(stream);
+                    assert!(
+                        session.upgrade().is_none(),
+                        "session leaked after result release"
+                    );
+                    assert!(
+                        runtime.upgrade().is_none(),
+                        "runtime leaked after all handles closed"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn canceled_execution_releases_native_resources() {
+        unsafe {
+            let mut db = ptr::null_mut();
+            let mut conn = ptr::null_mut();
+            let mut stmt = ptr::null_mut();
+            let mut token = ptr::null_mut();
+            let mut result = ptr::null_mut();
+            let mut err = ptr::null_mut();
+            assert_eq!(dfgo_database_open(ptr::null(), &mut db, &mut err), DFG_OK);
+            let runtime = Arc::downgrade(&(*db).runtime);
+            assert_eq!(
+                dfgo_connection_open_isolated(db, &mut conn, &mut err),
+                DFG_OK
+            );
+            let session = Arc::downgrade(&(*conn).inner);
+            assert_eq!(
+                dfgo_prepare(
+                    conn,
+                    c"create view canceled as select 1".as_ptr(),
+                    &mut stmt,
+                    &mut err
+                ),
+                DFG_OK
+            );
+            assert_eq!(dfgo_cancel_token_create(&mut token, &mut err), DFG_OK);
+            dfgo_cancel_token_cancel(token);
+            assert_eq!(
+                dfgo_statement_execute_with_params(
+                    stmt,
+                    ptr::null(),
+                    0,
+                    token,
+                    &mut result,
+                    &mut err
+                ),
+                DFG_ERR
+            );
+            assert!(result.is_null());
+            assert_eq!(CStr::from_ptr(dfgo_error_kind(err)), c"cancelled");
+            let connection = &*conn;
+            assert!(!connection.inner.ctx.table_exist("canceled").unwrap());
+            dfgo_error_free(err);
+            dfgo_cancel_token_close(token);
+            dfgo_statement_close(stmt);
+            dfgo_connection_close(conn);
+            dfgo_database_close(db);
+            assert!(session.upgrade().is_none());
+            assert!(runtime.upgrade().is_none());
+        }
+    }
+
     /// Registering a foreign `FFI_TableProvider` makes it queryable by name.
     #[test]
     fn registers_and_queries_ffi_table_provider() {
@@ -1899,6 +2037,7 @@ mod tests {
         .expect("record batch");
         let mem: Arc<dyn TableProvider> =
             Arc::new(MemTable::try_new(schema, vec![vec![batch]]).expect("memtable"));
+        let provider_lifetime = Arc::downgrade(&mem);
 
         // FFI_TaskContextProvider holds a Weak, so this SessionContext must
         // outlive the exported provider for the duration of the test.
@@ -1931,6 +2070,11 @@ mod tests {
         };
         assert_eq!(rc, DFG_OK, "register returned an error");
         assert!(err.is_null(), "register set an error");
+        drop(ffi);
+        assert!(
+            provider_lifetime.upgrade().is_some(),
+            "registration owns a provider clone"
+        );
 
         // The registered provider is queryable, and a predicate filters rows.
         let rows: usize = runtime
@@ -1948,6 +2092,10 @@ mod tests {
             .sum();
         assert_eq!(rows, 2, "expected rows a=2,3");
 
+        let pending = runtime
+            .block_on(conn.inner.ctx.sql("SELECT a FROM t"))
+            .unwrap();
+
         // Deregistering removes the table, so planning against it now fails.
         let mut derr: *mut dfgo_error = ptr::null_mut();
         let drc = unsafe { dfgo_connection_deregister_table(&mut conn, name.as_ptr(), &mut derr) };
@@ -1955,6 +2103,20 @@ mod tests {
         assert!(derr.is_null(), "deregister set an error");
         let after = runtime.block_on(async { conn.inner.ctx.sql("SELECT a FROM t").await });
         assert!(after.is_err(), "table should be gone after deregister");
+        assert!(
+            provider_lifetime.upgrade().is_some(),
+            "a prepared plan outlives deregistration"
+        );
+        let batches = runtime.block_on(pending.collect()).unwrap();
+        assert_eq!(
+            batches.iter().map(|batch| batch.num_rows()).sum::<usize>(),
+            3
+        );
+        drop(batches);
+        assert!(
+            provider_lifetime.upgrade().is_none(),
+            "last plan releases the foreign provider"
+        );
     }
 
     /// A datafusion version mismatch is rejected before the provider pointer is

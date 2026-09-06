@@ -31,7 +31,7 @@ datafusion-go is a community-maintained binding in the [datafusion-contrib](http
 go get github.com/datafusion-contrib/datafusion-go
 ```
 
-Requires Go 1.24+ with cgo enabled (the default) and a C toolchain. On supported platforms — `darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`, and `windows-amd64` — there is no other setup: the driver downloads the matching `libdatafusion_go` native library from the module's GitHub release and checksum-verifies it on first use. See [Native Runtime](#native-runtime) to override resolution or disable downloads.
+Requires Go 1.25+ with cgo enabled (the default) and a C toolchain. On supported platforms — `darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`, and `windows-amd64` — there is no other setup: the driver downloads the matching `libdatafusion_go` native library from the module's GitHub release and checksum-verifies it on first use. See [Native Runtime](#native-runtime) to override resolution or disable downloads.
 
 Install from a tagged release for normal consumer use. Pseudo-versions from `@main` are development snapshots and may not have matching GitHub Release assets for the native runtime downloader; source checkouts build the library locally with `make bundle` instead.
 
@@ -185,6 +185,31 @@ connector, err := datafusion.NewConnectorWithInitContext(
 	datafusion.WithSharedSession(false),
 )
 ```
+
+Closing a `*sql.Conn` returns its physical connection to the pool. Isolated
+sessions are reset before reuse, and cached prepared statements are reprepared
+in the new session. Closing the handle does not immediately release registered
+tables or outstanding Arrow batches.
+
+DataFusion's default query memory pool is unbounded. Set a budget in the
+connector initializer so it applies before queries run and after isolated
+session resets:
+
+```go
+connector, err := datafusion.NewConnectorWithInitContext("",
+	func(ctx context.Context, exec driver.ExecerContext) error {
+		_, err := exec.ExecContext(ctx,
+			"SET datafusion.runtime.memory_limit = '512M'", nil)
+		return err
+	},
+)
+// After checking err:
+db := sql.OpenDB(connector)
+```
+
+This budget covers tracked query execution memory. Registered in-memory tables,
+Arrow batches retained by callers, and Go allocations need their own budgets.
+Large sorts and aggregations can spill or return a resource-exhaustion error.
 
 ### DSNs
 
@@ -400,8 +425,8 @@ A few contract points, all enforced or documented on `RegisterFFITableProvider`:
 
 - **Version handshake.** `providerVersion` must equal this package's `DataFusionVersion`; obtain it from the producing library, not from `DataFusionVersion`. The check runs before the provider pointer is dereferenced, so a mismatch is a clean error rather than a crash. The match is required to be exact — deliberately stricter than datafusion-ffi's major-version ABI contract, because datafusion is pre-1.0 and has broken layouts across minor releases.
 - **Ownership.** The provider pointer must be memory owned by the producing foreign library (C/Rust), not Go heap memory, since native code retains callback pointers cloned out of it past the call. Registration clones the provider (bumping its refcount), so you retain ownership of the original pointer and may free it through its producing library once the call returns.
-- **Library lifetime.** The producing library must stay loaded for as long as the table is registered — the registered table calls back into its function pointers on every scan.
-- **Deregistration is explicit.** `RegisterFFITableProvider` returns a `*RegisteredTable` handle; call `Deregister` to remove the table before the producing library tears down. The table's lifetime follows the session it was registered on: with an isolated session (`WithSharedSession(false)`) closing the `*sql.Conn` also releases it, but with a shared session (the default) it lives on the shared `SessionContext` and persists until `Deregister` or the owning `Connector` is closed. Dropping the handle never deregisters it.
+- **Library lifetime.** The producing library must outlive every registration, dependent view/query plan, reader, and returned Arrow batch. These objects may invoke foreign callbacks after deregistration. Stop new queries, deregister tables, remove dependent views, close readers, release batches, and free the original provider before unloading its library.
+- **Deregistration is explicit.** `RegisterFFITableProvider` returns a `*RegisteredTable` handle. Call `Deregister` while its `*sql.Conn` is still open to remove the catalog entry. In both session modes, closing `*sql.Conn` normally returns the physical connection to the pool and does not guarantee table release. Even closing the connector cannot release foreign objects retained by outstanding queries. Dropping the registration handle never deregisters it.
 
 ### API Overview
 

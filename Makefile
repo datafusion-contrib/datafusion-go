@@ -40,7 +40,7 @@ else ifeq ($(GOOS),windows)
 STRIP_SHARED := strip --strip-unneeded
 endif
 
-.PHONY: generate generate.check rust.build rust.test rust.lint bundle checksum.native checksums verify.checksums changelog.check stage.release.assets verify.release.assets go.lint go.vet go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
+.PHONY: generate generate.check rust.build rust.test rust.lint rust.audit bundle checksum.native checksums verify.checksums changelog.check stage.release.assets verify.release.assets go.lint go.vet go.vuln go.test.dynamic go.test.bundled go.test.race go.test.source go.test.nocgo test test.source lint consumer.smoke release.verify clean
 
 generate:
 	go run ./internal/tools/genversions
@@ -54,11 +54,14 @@ rust.build: generate.check
 	$(RUST_BUILD_ENV) cargo build --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
 
 rust.test:
-	cargo test --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
+	$(RUST_BUILD_ENV) cargo test --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
 
 rust.lint:
-	cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
 	cargo fmt --manifest-path rust/Cargo.toml -- --check
+
+rust.audit:
+	cargo audit --file rust/Cargo.lock --deny unsound
 
 bundle: rust.build
 	mkdir -p $(NATIVE_LIB_DIR)
@@ -125,12 +128,13 @@ verify.release.assets:
 	done
 
 go.lint: generate.check
-	# v2.8.0 is the newest golangci-lint that still supports go 1.24 (v2.9.0+
-	# require go 1.25); keep this in step with the go directive in go.mod
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
 
 go.vet:
 	go vet ./...
+
+go.vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 # -count=1 on every native-linked suite: Go's build cache does not hash
 # external cgo archives (golang/go#28019), so cached test results could

@@ -1,18 +1,19 @@
 [package]
 name = "datafusion-go"
-version = "0.540100.0"
+version = "0.550000.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.94"
 
 [lib]
 name = "datafusion_go"
 crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
-arrow = { version = "58", features = ["ffi"] }
-datafusion = "=54.1.0"
-datafusion-ffi = "=54.1.0"
-datafusion-sql = "=54.1.0"
+# Use DataFusion's Arrow re-export; datafusion-ffi enables its FFI feature.
+# This keeps the bridge on exactly the Arrow version used by DataFusion.
+datafusion = "=55.0.0"
+datafusion-ffi = "=55.0.0"
+datafusion-sql = "=55.0.0"
 futures = "0.3"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "sync"] }
 url = "2.5"
