@@ -219,17 +219,23 @@ func (conn *Conn) queryArrowContext(ctx context.Context, query string, args []dr
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	if err := conn.checkOpen(); err != nil {
-		return nil, nil, err
-	}
 	named, err := normalizeNamedValueSlice(args)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stmt, err := conn.conn.Prepare(query)
-	if err != nil {
-		return nil, nil, driverError(ErrorPrepare, "could not prepare DataFusion statement", err)
+	// Once prepared, the statement owns its session reference and can execute
+	// outside conn.mu.
+	var stmt *native.Statement
+	if err := conn.withNative(func(nc *native.Connection) error {
+		prepared, err := nc.Prepare(query)
+		if err != nil {
+			return driverError(ErrorPrepare, "could not prepare DataFusion statement", err)
+		}
+		stmt = prepared
+		return nil
+	}); err != nil {
+		return nil, nil, err
 	}
 	defer stmt.Close()
 
@@ -272,6 +278,18 @@ func (conn *Conn) checkOpen() error {
 		return driverError(ErrorClosed, "datafusion connection is closed", nil)
 	}
 	return nil
+}
+
+// withNative prevents Close or ResetSession from freeing the native handle
+// during fn. All access to conn.conn must hold conn.mu.
+func (conn *Conn) withNative(fn func(*native.Connection) error) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
+	if conn.closed || conn.conn == nil {
+		return driverError(ErrorClosed, "datafusion connection is closed", nil)
+	}
+	return fn(conn.conn)
 }
 
 var _ driver.Conn = (*Conn)(nil)

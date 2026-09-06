@@ -13,6 +13,8 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/arrio"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
+
+	"github.com/datafusion-contrib/datafusion-go/internal/native"
 )
 
 // ArrowReader streams Arrow record batches returned by DataFusion.
@@ -90,7 +92,9 @@ func RegisterArrowReader(ctx context.Context, sqlConn *sql.Conn, tableName strin
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return conn.conn.RegisterArrowIPC(tableName, data.Bytes())
+		return conn.withNative(func(nc *native.Connection) error {
+			return nc.RegisterArrowIPC(tableName, data.Bytes())
+		})
 	})
 }
 
@@ -114,7 +118,9 @@ func RegisterArrowReaderZeroCopy(ctx context.Context, sqlConn *sql.Conn, tableNa
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return conn.conn.RegisterArrowReaderZeroCopy(tableName, reader)
+		return conn.withNative(func(nc *native.Connection) error {
+			return nc.RegisterArrowReaderZeroCopy(tableName, reader)
+		})
 	})
 }
 
@@ -201,6 +207,20 @@ func newSerializedArrowReader(reader ArrowReader, unlock func()) ArrowReader {
 	serialized := &serializedArrowReader{ArrowReader: reader, unlock: unlock}
 	runtime.SetFinalizer(serialized, (*serializedArrowReader).finalize)
 	return serialized
+}
+
+// Keep the wrapper alive during delegated calls so its finalizer cannot close
+// an active reader. Promoted methods on the embedded interface do not do this.
+func (reader *serializedArrowReader) Read() (arrow.RecordBatch, error) {
+	rec, err := reader.ArrowReader.Read()
+	runtime.KeepAlive(reader)
+	return rec, err
+}
+
+func (reader *serializedArrowReader) Schema() *arrow.Schema {
+	schema := reader.ArrowReader.Schema()
+	runtime.KeepAlive(reader)
+	return schema
 }
 
 func (reader *serializedArrowReader) Close() error {
