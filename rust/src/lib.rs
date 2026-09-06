@@ -356,7 +356,11 @@ impl Iterator for StreamingReader {
             Some(Ok(batch)) => Some(Ok(batch)),
             Some(Err(err)) => {
                 self.done = true;
-                Some(Err(ArrowError::ExternalError(Box::new(err))))
+                Some(Err(ArrowError::ExternalError(Box::new(
+                    // Arrow's C callback puts this text in a CString and
+                    // aborts on interior NULs, including values in cast errors.
+                    std::io::Error::other(err.to_string().replace('\0', "\\0")),
+                ))))
             }
             None => {
                 self.done = true;
@@ -899,6 +903,14 @@ fn bindings_from_params(
 
         let index = usize::try_from(param.index - 1)
             .map_err(|e| FfiError::invalid_argument(e.to_string()))?;
+        // Dense bindings need at most params_len slots. Bound the allocation
+        // before resize_with uses the caller's index.
+        if index >= params_len {
+            return Err(FfiError::invalid_argument(format!(
+                "parameter index {} exceeds parameters length {params_len}",
+                param.index
+            )));
+        }
         if bindings.len() <= index {
             bindings.resize_with(index + 1, || Binding {
                 name: None,
@@ -2272,6 +2284,32 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn rejects_parameter_index_beyond_parameters_length() {
+        let param = dfgo_parameter {
+            index: i64::MAX,
+            name: ptr::null(),
+            name_len: 0,
+            type_code: PARAMETER_INT64,
+            is_null: 0,
+            int64_value: 7,
+            uint64_value: 0,
+            float64_value: 0.0,
+            data: ptr::null(),
+            data_len: 0,
+            timezone: ptr::null(),
+            timezone_len: 0,
+            precision: 0,
+            scale: 0,
+        };
+        let err = match bindings_from_params(&param, 1) {
+            Err(err) => err,
+            Ok(_) => panic!("expected an error for an oversized parameter index"),
+        };
+        assert_eq!(err.kind, ERROR_KIND_INVALID_ARGUMENT);
+        assert!(err.message.contains("exceeds"), "{}", err.message);
     }
 
     #[test]

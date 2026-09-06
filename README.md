@@ -485,6 +485,8 @@ Nested and complex Arrow values such as lists, structs, maps, unions, dictionari
 - `Close` is idempotent for connectors, connections, statements, rows, and Arrow readers.
 - Transactions are unsupported and return explicit unsupported errors. `BeginTx` still honors an already-canceled context before returning the unsupported transaction error.
 
+SQL executes with the host process's filesystem and network permissions. Isolated sessions separate catalogs; they are not a sandbox for hostile SQL or native FFI providers. Run untrusted workloads in a separate process with restricted OS permissions and resource limits.
+
 ### Native Runtime
 
 Default builds use cgo but do not link DataFusion at Go link time. At runtime, the driver loads a shared `libdatafusion_go` library, resolved in this order:
@@ -495,9 +497,11 @@ Default builds use cgo but do not link DataFusion at Go link time. At runtime, t
 
 Environment variables:
 
-- `DATAFUSION_GO_LIBRARY` — explicit path to the shared library.
+- `DATAFUSION_GO_LIBRARY` — explicit absolute path to a trusted shared library.
 - `DATAFUSION_GO_NO_DOWNLOAD=1` — disable automatic release-asset downloads.
-- `DATAFUSION_GO_DOWNLOAD_BASE` — override the release download base URL.
+- `DATAFUSION_GO_DOWNLOAD_BASE` — override the release download base with an HTTPS URL. Redirects must also use HTTPS.
+
+Automatic source and cache resolution checks the library and its ancestors for ownership and write permissions. Keep these directories private to the service account or system administrators. Explicit library paths are trusted configuration and bypass automatic permission checks. Setuid, setgid, and Linux file-capability processes must use a library linked at build time (`datafusion_use_bundled` or `datafusion_use_source`); runtime resolution is disabled for them.
 
 Prebuilt native libraries are published for `darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`, and `windows-amd64`. Windows arm64 is not currently bundled.
 

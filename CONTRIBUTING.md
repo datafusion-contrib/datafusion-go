@@ -60,6 +60,8 @@ session/runtime destruction with Rust weak references and Arrow buffer release
 with a checked C allocator, including cancellation, reset, and registration
 failures. Go's race detector supplements these allocation checks.
 
+Security regression tests cover panicking Arrow reader callbacks with a checked C allocator, GC during an active read, concurrent connection close/reset, and writable native-library paths (including macOS and Windows ACLs). On Linux, `TestSecureExecutionWithCapabilitiesWithoutProc` additionally exercises a non-root executable with a file capability after chroot removes `/proc`. That fixture requires root and `setcap`; run it in a disposable container. It skips on ordinary non-root test runs.
+
 The Rust build, test, and lint targets use the same macOS deployment settings
 so switching targets does not invalidate native dependency builds.
 

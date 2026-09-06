@@ -85,6 +85,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -95,6 +96,14 @@ import (
 )
 
 const stateOK = 0
+
+// Reject NULs before native C-string consumers silently truncate the value.
+func checkNoNULByte(value, what string) error {
+	if strings.IndexByte(value, 0) >= 0 {
+		return fmt.Errorf("datafusion-go %s contains a NUL byte", what)
+	}
+	return nil
+}
 
 type Error struct {
 	Kind    string
@@ -149,6 +158,9 @@ type resultReader struct {
 }
 
 func OpenDatabase(dsn string) (*Database, error) {
+	if err := checkNoNULByte(dsn, "DSN"); err != nil {
+		return nil, err
+	}
 	if err := ensureNativeLibraryLoaded(); err != nil {
 		return nil, err
 	}
@@ -252,6 +264,9 @@ func (conn *Connection) RegisterArrowIPC(name string, data []byte) error {
 	if conn == nil || conn.ptr == nil {
 		return errors.New("datafusion-go connection is closed")
 	}
+	if err := checkNoNULByte(name, "table name"); err != nil {
+		return err
+	}
 
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -283,6 +298,12 @@ func (conn *Connection) RegisterFFITableProvider(name string, provider unsafe.Po
 	if provider == nil {
 		return errors.New("datafusion-go FFI table provider is nil")
 	}
+	if err := checkNoNULByte(name, "table name"); err != nil {
+		return err
+	}
+	if err := checkNoNULByte(providerDataFusionVersion, "provider datafusion version"); err != nil {
+		return err
+	}
 
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -302,6 +323,9 @@ func (conn *Connection) DeregisterTable(name string) error {
 	if conn == nil || conn.ptr == nil {
 		return errors.New("datafusion-go connection is closed")
 	}
+	if err := checkNoNULByte(name, "table name"); err != nil {
+		return err
+	}
 
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -320,6 +344,9 @@ func (conn *Connection) RegisterArrowReaderZeroCopy(name string, reader array.Re
 	if reader == nil {
 		return errors.New("datafusion-go arrow reader is nil")
 	}
+	if err := checkNoNULByte(name, "table name"); err != nil {
+		return err
+	}
 
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -328,14 +355,18 @@ func (conn *Connection) RegisterArrowReaderZeroCopy(name string, reader array.Re
 	if stream == nil {
 		return errors.New("datafusion-go could not allocate Arrow stream")
 	}
-	cdata.ExportRecordReader(reader, (*cdata.CArrowArrayStream)(unsafe.Pointer(stream)))
+	// Rust consumes the callbacks; this wrapper owns the stream allocation.
+	defer C.free(unsafe.Pointer(stream))
+	// Keep caller callbacks behind an error boundary while Rust drains the
+	// reader synchronously, so a Go panic cannot skip Rust destructors.
+	safeReader, err := newPanicSafeRecordReader(reader)
+	if err != nil {
+		return err
+	}
+	cdata.ExportRecordReader(safeReader, (*cdata.CArrowArrayStream)(unsafe.Pointer(stream)))
 
 	var cerr *C.dfgo_error
-	errno := C.dfgo_connection_register_arrow_stream(conn.ptr, cname, stream, &cerr)
-	// Rust moves the stream callbacks out of this allocation and owns their
-	// release path. The allocation itself still belongs to this cgo wrapper.
-	C.free(unsafe.Pointer(stream))
-	if errno != stateOK {
+	if C.dfgo_connection_register_arrow_stream(conn.ptr, cname, stream, &cerr) != stateOK {
 		return takeError(cerr)
 	}
 	return nil
@@ -344,6 +375,9 @@ func (conn *Connection) RegisterArrowReaderZeroCopy(name string, reader array.Re
 func (conn *Connection) Prepare(query string) (*Statement, error) {
 	if conn == nil || conn.ptr == nil {
 		return nil, errors.New("datafusion-go connection is closed")
+	}
+	if err := checkNoNULByte(query, "query"); err != nil {
+		return nil, err
 	}
 
 	cquery := C.CString(query)
@@ -484,6 +518,11 @@ func statementParams(args []driver.NamedValue) ([]C.dfgo_parameter, func(), erro
 		if ordinal <= 0 {
 			cleanup()
 			return nil, nil, fmt.Errorf("parameter ordinal must be positive, got %d", ordinal)
+		}
+		// Bound native binding allocations, which are sized by ordinal.
+		if ordinal > len(args) {
+			cleanup()
+			return nil, nil, fmt.Errorf("parameter ordinal %d exceeds the number of arguments %d", ordinal, len(args))
 		}
 
 		param := &params[i]

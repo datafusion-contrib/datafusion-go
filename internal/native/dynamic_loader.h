@@ -3,11 +3,19 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+/* Available since Windows 8 / KB2533623; define for older toolchain headers. */
+#ifndef LOAD_LIBRARY_SEARCH_SYSTEM32
+#define LOAD_LIBRARY_SEARCH_SYSTEM32 0x00000800
+#endif
+#ifndef LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+#define LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR 0x00000100
+#endif
 static HMODULE dfgo_dynamic_handle = NULL;
 #else
 #include <dlfcn.h>
@@ -121,9 +129,27 @@ static int dfgo_native_load_library(const char *path) {
 	}
 
 #ifdef _WIN32
-	dfgo_dynamic_handle = LoadLibraryA(path);
+	/* Preserve UTF-8 paths and restrict dependencies to the DLL's directory
+	 * and System32. */
+	{
+		int wide_len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+		wchar_t *wide = NULL;
+		if (wide_len <= 0) {
+			dfgo_set_dynamic_error("could not load library", "path is not valid UTF-8");
+			return -1;
+		}
+		wide = (wchar_t *)malloc((size_t)wide_len * sizeof(wchar_t));
+		if (wide == NULL) {
+			dfgo_set_dynamic_error("could not load library", "out of memory");
+			return -1;
+		}
+		MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, wide_len);
+		dfgo_dynamic_handle = LoadLibraryExW(wide, NULL,
+			LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+		free(wide);
+	}
 	if (dfgo_dynamic_handle == NULL) {
-		snprintf(dfgo_dynamic_error, sizeof(dfgo_dynamic_error), "LoadLibraryA failed with error %lu", (unsigned long)GetLastError());
+		snprintf(dfgo_dynamic_error, sizeof(dfgo_dynamic_error), "LoadLibraryExW failed with error %lu", (unsigned long)GetLastError());
 		return -1;
 	}
 #else

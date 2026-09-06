@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"unsafe"
+
+	"github.com/datafusion-contrib/datafusion-go/internal/native"
 )
 
 // RegisteredTable is a handle to a table registered on a connection by
@@ -89,7 +91,9 @@ func RegisterFFITableProvider(ctx context.Context, sqlConn *sql.Conn, tableName 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return conn.conn.RegisterFFITableProvider(tableName, provider, providerDataFusionVersion)
+		return conn.withNative(func(nc *native.Connection) error {
+			return nc.RegisterFFITableProvider(tableName, provider, providerDataFusionVersion)
+		})
 	}); err != nil {
 		return nil, err
 	}
@@ -123,7 +127,9 @@ func (t *RegisteredTable) Deregister(ctx context.Context) error {
 	}
 
 	if err := withDataFusionConn(t.sqlConn, func(conn *Conn) error {
-		return conn.conn.DeregisterTable(t.name)
+		return conn.withNative(func(nc *native.Connection) error {
+			return nc.DeregisterTable(t.name)
+		})
 	}); err != nil {
 		return err
 	}
