@@ -3,7 +3,7 @@
 
 [datafusion]
 # Exact Rust `datafusion` and `datafusion-sql` crate version.
-version = "54.1.0"
+version = "55.0.0"
 
 [datafusion_go]
 # Release tags are v<major>.<encoded-datafusion-version>.<patch>.

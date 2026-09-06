@@ -2,6 +2,15 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550000.0 - 2026-09-05
+
+- Upgraded bundled Apache DataFusion to 55.0.0 and Arrow Rust to 59.3.0. Foreign table providers must be built with `datafusion-ffi` 55.0.0; the exact version handshake rejects older providers before dereferencing their pointers.
+- Fixed parameterized `CREATE TABLE` and `CREATE VIEW` statements by binding their logical plans before executing DDL, preserving existing tables when parameter validation fails.
+- Fixed cached prepared statements retaining and querying old isolated sessions, failed session initialization exposing previous session state, and native runtimes leaking after direct `Driver.Open`/`Close` calls.
+- Made Arrow reader cancellation interrupt active reads and made DDL and shared-initialization waits honor context deadlines. Added native lifetime and allocation regression tests.
+- Removed an unnecessary full IPC buffer copy during safe Arrow registration. Documented query memory budgets and the complete foreign-provider/library lifetime contract, including pooled connections and retained batches.
+- Updated vulnerable dependencies and added Go/Rust advisory scans and dependency monitoring. The module now requires Go 1.25+, recommends the patched Go 1.27.1 toolchain, and requires Rust 1.94+ for source builds.
+
 ## v0.540100.0 - 2026-07-31
 
 - Upgraded the bundled Apache DataFusion to 54.1.0. No driver API changed.
