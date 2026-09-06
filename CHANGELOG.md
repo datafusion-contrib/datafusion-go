@@ -2,6 +2,13 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550000.1 - 2026-09-06
+
+- Fixed Arrow reader callback panics leaking imported buffers, premature reader finalization during active reads, and native connection access racing with close or session reset.
+- Hardened automatic native library loading with canonical path, ownership, permission, and platform ACL checks. Explicit library paths must now be absolute; downloads and redirects require HTTPS, and native asset sizes are bounded. Restricted Windows DLL dependency searches and disabled runtime loading for privileged processes.
+- Rejected embedded NULs before C-string conversion and oversized parameter ordinals before allocation. Sanitized NULs in streamed execution errors to prevent native process aborts.
+- Added memory, concurrency, callback, and loader security regression tests, and documented process isolation requirements for untrusted SQL and native providers.
+
 ## v0.550000.0 - 2026-09-05
 
 - Upgraded bundled Apache DataFusion to 55.0.0 and Arrow Rust to 59.3.0. Foreign table providers must be built with `datafusion-ffi` 55.0.0; the exact version handshake rejects older providers before dereferencing their pointers.
