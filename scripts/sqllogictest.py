@@ -150,6 +150,16 @@ def prepare_tpch():
     extract(archive, source)
     generator = source / specification["directory"]
     windows = os.name == "nt"
+    if windows:
+        # This pinned generator uses Microsoft-only integer suffixes on Windows.
+        # Normalize the two Microsoft literals in the extracted build copy.
+        config = generator / "config.h"
+        contents = config.read_text(encoding="ascii")
+        for old, new in [("6364136223846793005uI64", "6364136223846793005ULL"), ("1uI64", "1ULL")]:
+            if contents.count(old) != 1:
+                raise ValueError(f"unexpected dbgen configuration: expected one {old} literal")
+            contents = contents.replace(old, new)
+        config.write_text(contents, encoding="ascii")
     executable = "dbgen.exe" if windows else "dbgen"
     machine = "WIN32" if windows else "LINUX"
     # dbgen's alphanumeric RNG intentionally relies on signed 32-bit wrapping.
