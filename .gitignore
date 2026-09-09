@@ -17,6 +17,8 @@ temp/
 internal/native/lib/*
 !internal/native/lib/SHA256SUMS
 rust/target/
+rust/fuzz/target/
+rust/fuzz/artifacts/
 
 # Go test, coverage, and profiling artifacts
 *.test
@@ -48,6 +50,7 @@ go.work.sum
 # Generated files commonly produced by local tooling
 *.log
 *.pid
+__pycache__/
 *.seed
 *.tmp
 *.bak

@@ -6,6 +6,10 @@ NATIVE_PLATFORM := $(GOOS)-$(GOARCH)
 NATIVE_LIB_DIR := internal/native/lib/$(NATIVE_PLATFORM)
 NATIVE_LIB := $(NATIVE_LIB_DIR)/libdatafusion_go.a
 CARGO_BUILD_TARGET ?=
+FUZZ_TIME ?= 30s
+RUST_FUZZ_SECONDS ?= 30
+RUST_FUZZ_FLAGS ?=
+RUST_ASAN_TOOLCHAIN ?= nightly-2026-06-10
 
 ifeq ($(GOOS),windows)
 NATIVE_SHARED_NAME := datafusion_go.dll
@@ -44,10 +48,12 @@ endif
 
 generate:
 	go run ./internal/tools/genversions
+	go run ./internal/tools/genabi
 	cargo update --manifest-path rust/Cargo.toml -p datafusion-go -p datafusion -p datafusion-ffi -p datafusion-sql
 
 generate.check:
 	go run ./internal/tools/genversions -check
+	go run ./internal/tools/genabi -check
 	cargo metadata --manifest-path rust/Cargo.toml --locked --format-version 1 >/dev/null
 
 rust.build: generate.check
@@ -58,7 +64,8 @@ rust.test:
 
 rust.lint:
 	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
-	cargo fmt --manifest-path rust/Cargo.toml -- --check
+	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/fuzz/Cargo.toml --all-targets -- -D warnings
+	cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 
 rust.audit:
 	cargo audit --file rust/Cargo.lock --deny unsound
@@ -129,6 +136,7 @@ verify.release.assets:
 
 go.lint: generate.check
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run --build-tags=datafusion_test_coverage
 
 go.vet:
 	go vet ./...
@@ -196,3 +204,39 @@ release.verify: verify.release.assets
 clean:
 	cargo clean --manifest-path rust/Cargo.toml
 	go clean ./...
+
+# Fast feedback after make bundle; release gates above remain unchanged.
+.PHONY: test.quick test.install test.sqlite test.sequences test.fuzz rust.fuzz rust.test.asan test.native.asan test.native.coverage test.coverage test.extended
+test.quick: generate.check
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -short -count=1 ./...
+
+test.install:
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -count=1 -run '^TestLibraryProcesses$$' ./internal/native
+
+test.sqlite:
+	python3 scripts/test_sqlite.py
+
+test.sequences:
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) DFGO_TEST_STEPS=$${DFGO_TEST_STEPS:-2000} go test -race -count=1 -run 'TestLifecycleSequences|TestRegistrationFailureAtEveryBatch' .
+
+test.fuzz:
+	DATAFUSION_GO_LIBRARY=$(CURDIR)/$(NATIVE_SHARED) go test -run '^$$' -fuzz '^FuzzQueryBindings$$' -fuzztime=$(FUZZ_TIME) -parallel=2 .
+	go test -run '^$$' -fuzz '^FuzzParseSemver$$' -fuzztime=$(FUZZ_TIME) -parallel=2 ./internal/tools/genversions
+
+rust.fuzz:
+	mkdir -p rust/target/fuzz-corpus/prepare
+	$(RUST_BUILD_ENV) CARGO_PROFILE_DEV_DEBUG=0 sh -c 'cd rust && cargo +$(RUST_ASAN_TOOLCHAIN) fuzz run $(RUST_FUZZ_FLAGS) prepare target/fuzz-corpus/prepare fuzz/corpus/prepare -- -max_total_time=$(RUST_FUZZ_SECONDS) -max_len=8192'
+
+rust.test.asan:
+	$(RUST_BUILD_ENV) RUST_ASAN_TOOLCHAIN=$(RUST_ASAN_TOOLCHAIN) sh scripts/test_rust_asan.sh
+
+test.native.asan: rust.test.asan
+	python3 scripts/test_native.py asan $(NATIVE_SHARED)
+
+test.native.coverage:
+	python3 scripts/test_native.py coverage $(NATIVE_SHARED)
+
+test.coverage:
+	$(RUST_BUILD_ENV) sh scripts/test_coverage.sh $(NATIVE_SHARED_NAME) $(NATIVE_SHARED)
+
+test.extended: test.sqlite test.install test.sequences test.fuzz rust.fuzz test.native.asan test.coverage

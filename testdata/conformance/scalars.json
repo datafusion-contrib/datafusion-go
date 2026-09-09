@@ -1,0 +1,67 @@
+[
+  {
+    "name": "scalar_values",
+    "sql": "select cast(42 as bigint) as i, cast(1.5 as double) as f, 'hello' as s, true as b",
+    "columns": [
+      {"name":"i","type":"int64","nullable":false,"sql_type":"INT64"},
+      {"name":"f","type":"float64","nullable":false,"sql_type":"FLOAT64"},
+      {"name":"s","type":"utf8","nullable":false,"sql_type":"UTF8"},
+      {"name":"b","type":"bool","nullable":false,"sql_type":"BOOL"}
+    ],
+    "rows": [["42","1.5","hello","true"]]
+  },
+  {
+    "name": "typed_nulls",
+    "sql": "select cast(null as bigint) as i, cast(null as varchar) as s, cast(null as boolean) as b",
+    "columns": [
+      {"name":"i","type":"int64","nullable":true},
+      {"name":"s","type":"string_view","nullable":true},
+      {"name":"b","type":"bool","nullable":true}
+    ],
+    "rows": [[null,null,null]],
+    "sqlite": true
+  },
+  {
+    "name": "empty_result_schema",
+    "sql": "select cast(1 as bigint) as n, 'empty' as label where false",
+    "columns": [
+      {"name":"n","type":"int64","nullable":false},
+      {"name":"label","type":"utf8","nullable":false}
+    ],
+    "rows": [],
+    "sqlite": true
+  },
+  {
+    "name": "signed_limits",
+    "sql": "select cast('-9223372036854775808' as bigint) as low, cast('9223372036854775807' as bigint) as high",
+    "columns": [
+      {"name":"low","type":"int64","nullable":false},
+      {"name":"high","type":"int64","nullable":false}
+    ],
+    "rows": [["-9223372036854775808","9223372036854775807"]],
+    "sqlite": true
+  },
+  {
+    "name": "decimal_scale",
+    "sql": "select cast('123.40' as decimal(10,2)) as amount",
+    "columns": [{"name":"amount","type":"decimal128(10,2)","nullable":false,"sql_type":"DECIMAL(10,2)","precision":10,"scale":2}],
+    "rows": [["123.4"]]
+  },
+  {
+    "name": "unicode_and_empty_strings",
+    "sql": "select '雪 ☃' as unicode_value, '' as empty_value, '?' as literal",
+    "columns": [
+      {"name":"unicode_value","type":"utf8","nullable":false},
+      {"name":"empty_value","type":"utf8","nullable":false},
+      {"name":"literal","type":"utf8","nullable":false}
+    ],
+    "rows": [["雪 ☃","","?"]],
+    "sqlite": true
+  },
+  {
+    "name": "date_value",
+    "sql": "select date '2024-02-29' as day",
+    "columns": [{"name":"day","type":"date32","nullable":false,"sql_type":"DATE32[day]"}],
+    "rows": [["2024-02-29"]]
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "name": "question_parameters",
+    "sql": "select cast(? as bigint) + cast(? as bigint) as total, '?' as literal -- ? stays a comment",
+    "native_sql": "select cast($1 as bigint) + cast($2 as bigint) as total, '?' as literal -- ? stays a comment",
+    "parameters": [{"type":"int64","value":"40"},{"type":"int64","value":"2"}],
+    "columns": [{"name":"total","type":"int64","nullable":false},{"name":"literal","type":"utf8","nullable":false}],
+    "rows": [["42","?"]],
+    "sqlite": true
+  },
+  {
+    "name": "named_parameters",
+    "sql": "select cast($value as bigint) + cast($value as bigint) as doubled, cast($label as varchar) as label",
+    "parameters": [{"name":"label","type":"string","value":"named"},{"name":"value","type":"int64","value":"21"}],
+    "columns": [{"name":"doubled","type":"int64","nullable":false},{"name":"label","type":"string_view","nullable":false}],
+    "rows": [["42","named"]],
+    "sqlite": true
+  },
+  {
+    "name": "nullable_parameter",
+    "sql": "select cast($1 as bigint) as value",
+    "parameters": [{"type":"null_int64"}],
+    "columns": [{"name":"value","type":"int64","nullable":true}],
+    "rows": [[null]],
+    "sqlite": true
+  },
+  {
+    "name": "aggregate_and_order",
+    "sql": "select name, sum(value) as total from (values ('b', cast(2 as bigint)), ('a', cast(3 as bigint)), ('a', cast(4 as bigint))) as t(name,value) group by name order by name",
+    "columns": [{"name":"name","type":"utf8","nullable":false},{"name":"total","type":"int64","nullable":true}],
+    "rows": [["a","7"],["b","2"]]
+  },
+  {
+    "name": "view_setup",
+    "setup": ["create view corpus_values as select cast(42 as bigint) as value"],
+    "sql": "select value from corpus_values",
+    "columns": [{"name":"value","type":"int64","nullable":false}],
+    "rows": [["42"]],
+    "sqlite": true
+  },
+  {
+    "name": "missing_table",
+    "sql": "select * from corpus_missing_table",
+    "error": "corpus_missing_table",
+    "sqlite": true
+  },
+  {
+    "name": "missing_column",
+    "sql": "select corpus_missing_column from (select 1 as value) as t",
+    "error": "corpus_missing_column",
+    "sqlite": true
+  }
+]

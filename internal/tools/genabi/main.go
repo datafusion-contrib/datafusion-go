@@ -1,0 +1,246 @@
+// Command genabi derives loader declarations and contract tests from the C ABI.
+// It accepts the small declaration grammar used by datafusion_go.h and fails
+// on additions it cannot translate, so an ABI extension requires explicit review.
+package main
+
+import (
+	"bytes"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+type declaration struct{ ctype, name string }
+type function struct {
+	result string
+	name   string
+	args   []declaration
+}
+type contract struct {
+	functions []function
+	fields    []declaration
+}
+
+var declarator = regexp.MustCompile(`^(.+?[ *])([a-zA-Z_][a-zA-Z_0-9]*)$`)
+var prototype = regexp.MustCompile(`^(.+?[ *])(dfgo_[a-z_]+)\((.*)\);$`)
+
+func main() {
+	check := flag.Bool("check", false, "check generated ABI files without writing")
+	flag.Parse()
+	if err := run(*check); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run(check bool) error {
+	header, err := os.ReadFile("rust/include/datafusion_go.h")
+	if err != nil {
+		return err
+	}
+	abi, err := parse(string(header))
+	if err != nil {
+		return err
+	}
+	for _, output := range []struct{ path, content string }{
+		{"internal/native/abi_generated.h", abi.loader()},
+		{"rust/src/abi/contract_generated.rs", abi.rust()},
+		{"rust/tests/abi_layout.c", abi.layout()},
+	} {
+		current, err := os.ReadFile(output.path)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if bytes.Equal(current, []byte(output.content)) {
+			continue
+		}
+		if check {
+			return fmt.Errorf("%s is stale; run make generate", output.path)
+		}
+		if err := os.MkdirAll(filepath.Dir(output.path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(output.path, []byte(output.content), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parse(header string) (contract, error) {
+	var abi contract
+	_, body, ok := strings.Cut(header, "#ifndef DFGO_NO_FUNCTION_PROTOTYPES\n")
+	if !ok {
+		return abi, fmt.Errorf("missing function prototype block")
+	}
+	body, _, ok = strings.Cut(body, "#endif")
+	if !ok {
+		return abi, fmt.Errorf("unterminated function prototype block")
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		m := prototype.FindStringSubmatch(line)
+		if m == nil || seen[m[2]] {
+			return abi, fmt.Errorf("unsupported or duplicate prototype: %s", line)
+		}
+		seen[m[2]] = true
+		fn := function{result: strings.TrimSpace(m[1]), name: m[2]}
+		if _, err := rustType(fn.result); err != nil {
+			return abi, err
+		}
+		if m[3] != "void" {
+			for _, arg := range strings.Split(m[3], ",") {
+				d, err := parseDeclaration(strings.TrimSpace(arg))
+				if err != nil {
+					return abi, err
+				}
+				fn.args = append(fn.args, d)
+			}
+		}
+		abi.functions = append(abi.functions, fn)
+	}
+	_, body, ok = strings.Cut(header, "typedef struct dfgo_parameter {\n")
+	if !ok {
+		return abi, fmt.Errorf("missing dfgo_parameter")
+	}
+	body, _, ok = strings.Cut(body, "} dfgo_parameter;")
+	if !ok {
+		return abi, fmt.Errorf("unterminated dfgo_parameter")
+	}
+	seen = map[string]bool{}
+	for _, field := range strings.Split(strings.TrimSpace(body), "\n") {
+		d, err := parseDeclaration(strings.TrimSuffix(strings.TrimSpace(field), ";"))
+		if err != nil {
+			return abi, err
+		}
+		if seen[d.name] {
+			return abi, fmt.Errorf("duplicate field %s", d.name)
+		}
+		seen[d.name] = true
+		abi.fields = append(abi.fields, d)
+	}
+	if len(abi.functions) == 0 || len(abi.fields) == 0 {
+		return abi, fmt.Errorf("empty ABI contract")
+	}
+	return abi, nil
+}
+
+func parseDeclaration(s string) (declaration, error) {
+	m := declarator.FindStringSubmatch(s)
+	if m == nil {
+		return declaration{}, fmt.Errorf("unsupported declaration %q", s)
+	}
+	d := declaration{strings.TrimSpace(m[1]), m[2]}
+	_, err := rustType(d.ctype)
+	return d, err
+}
+
+func rustType(s string) (string, error) {
+	pointers := strings.Count(s, "*")
+	s = strings.TrimSpace(strings.ReplaceAll(s, "*", ""))
+	immutable := strings.HasPrefix(s, "const ")
+	s = strings.TrimPrefix(s, "const ")
+	types := map[string]string{
+		"void": "()", "int": "std::ffi::c_int", "char": "std::ffi::c_char",
+		"int8_t": "i8", "uint8_t": "u8", "int32_t": "i32",
+		"int64_t": "i64", "uint64_t": "u64", "double": "f64",
+		"struct ArrowArrayStream": "datafusion::arrow::ffi_stream::FFI_ArrowArrayStream",
+	}
+	r, ok := types[s]
+	if strings.HasPrefix(s, "dfgo_") {
+		switch s {
+		case "dfgo_database", "dfgo_connection", "dfgo_statement", "dfgo_result_stream", "dfgo_cancel_token", "dfgo_error", "dfgo_parameter":
+			r, ok = "super::"+s, true
+		}
+	}
+	if !ok || (immutable && pointers == 0) {
+		return "", fmt.Errorf("unsupported C type %q", s)
+	}
+	if s == "void" && pointers > 0 {
+		r = "std::ffi::c_void"
+	}
+	for i := 0; i < pointers; i++ {
+		if i == 0 && immutable {
+			r = "*const " + r
+		} else {
+			r = "*mut " + r
+		}
+	}
+	return r, nil
+}
+
+const generated = "// Code generated by internal/tools/genabi; DO NOT EDIT.\n"
+
+func (abi contract) loader() string {
+	var b strings.Builder
+	b.WriteString(generated + "\n#ifndef DFGO_ABI_GENERATED_H\n#define DFGO_ABI_GENERATED_H\n\n#define DFGO_FUNCTIONS(X) \\\n")
+	for i, fn := range abi.functions {
+		var typed, names []string
+		for _, arg := range fn.args {
+			typed = append(typed, arg.ctype+" "+arg.name)
+			names = append(names, arg.name)
+		}
+		if len(typed) == 0 {
+			typed = []string{"void"}
+		}
+		ret := "return"
+		if fn.result == "void" {
+			ret = ""
+		}
+		fmt.Fprintf(&b, "  X(%s, %s, (%s), (%s), %s)", fn.result, fn.name, strings.Join(typed, ", "), strings.Join(names, ", "), ret)
+		if i < len(abi.functions)-1 {
+			b.WriteString(" \\")
+		}
+		b.WriteByte('\n')
+	}
+	b.WriteString("\n#endif\n")
+	return b.String()
+}
+
+func (abi contract) rust() string {
+	var b strings.Builder
+	b.WriteString(generated + "\n// Signature assignments are compile-time checks against the C declarations.\n")
+	for _, fn := range abi.functions {
+		var args []string
+		for _, arg := range fn.args {
+			r, _ := rustType(arg.ctype)
+			args = append(args, r)
+		}
+		r, _ := rustType(fn.result)
+		fmt.Fprintf(&b, "#[rustfmt::skip]\nconst _: unsafe extern \"C\" fn(%s) -> %s = super::%s;\n", strings.Join(args, ", "), r, fn.name)
+	}
+	b.WriteString("\nconst _: fn(&super::dfgo_parameter) = |p| {\n")
+	for _, field := range abi.fields {
+		r, _ := rustType(field.ctype)
+		fmt.Fprintf(&b, "    let _: %s = p.%s;\n", r, field.name)
+	}
+	b.WriteString("};\n\n#[rustfmt::skip]\npub(super) fn rust_layout() -> Vec<usize> {\n    use std::mem::{align_of, offset_of, size_of};\n    use super::dfgo_parameter;\n    use datafusion::arrow::{ffi::{FFI_ArrowArray, FFI_ArrowSchema}, ffi_stream::FFI_ArrowArrayStream};\n    vec![\n")
+	for _, typ := range []string{"dfgo_parameter", "FFI_ArrowSchema", "FFI_ArrowArray", "FFI_ArrowArrayStream"} {
+		fmt.Fprintf(&b, "        size_of::<%s>(), align_of::<%s>(),\n", typ, typ)
+	}
+	for _, field := range abi.fields {
+		fmt.Fprintf(&b, "        offset_of!(dfgo_parameter, %s),\n", field.name)
+	}
+	b.WriteString("    ]\n}\n")
+	return b.String()
+}
+
+func (abi contract) layout() string {
+	var b strings.Builder
+	b.WriteString(generated + "\n#include <stddef.h>\n#include <stdio.h>\n#include \"datafusion_go.h\"\n\nint main(void) {\n")
+	for _, typ := range []string{"dfgo_parameter", "struct ArrowSchema", "struct ArrowArray", "struct ArrowArrayStream"} {
+		fmt.Fprintf(&b, "  printf(\"%%zu %%zu \", sizeof(%s), _Alignof(%s));\n", typ, typ)
+	}
+	for _, field := range abi.fields {
+		fmt.Fprintf(&b, "  printf(\"%%zu \", offsetof(dfgo_parameter, %s));\n", field.name)
+	}
+	b.WriteString("  putchar('\\n');\n  return 0;\n}\n")
+	return b.String()
+}

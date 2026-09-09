@@ -1,0 +1,52 @@
+[
+  {
+    "name": "narrow_integer_schema",
+    "sql": "select cast(-128 as tinyint) as a, cast(32767 as smallint) as b, cast(-2147483648 as integer) as c",
+    "columns": [
+      {"name":"a","type":"int8","nullable":false,"sql_type":"INT8"},
+      {"name":"b","type":"int16","nullable":false,"sql_type":"INT16"},
+      {"name":"c","type":"int32","nullable":false,"sql_type":"INT32"}
+    ],
+    "rows": [["-128","32767","-2147483648"]],
+    "sqlite": true
+  },
+  {
+    "name": "scalar_parameter_families",
+    "sql": "select cast($1 as varchar) as u, cast($2 as double) as f, cast($3 as boolean) as b, encode($4, 'hex') as bytes",
+    "parameters": [
+      {"type":"uint64","value":"18446744073709551615"},
+      {"type":"float64","value":"1.5"},
+      {"type":"bool","value":"true"},
+      {"type":"binary","value":"006162ff"}
+    ],
+    "columns": [
+      {"name":"u","type":"string_view","nullable":false},
+      {"name":"f","type":"float64","nullable":false},
+      {"name":"b","type":"bool","nullable":false},
+      {"name":"bytes","type":"utf8","nullable":false}
+    ],
+    "rows": [["18446744073709551615","1.5","true","006162ff"]]
+  },
+  {
+    "name": "unicode_placeholder_locations",
+    "sql": "select '雪?' as literal, cast(? as bigint) as a, -- ? ignored\n cast(? as bigint) as b /* Ω ? */",
+    "native_sql": "select '雪?' as literal, cast($1 as bigint) as a, -- ? ignored\n cast($2 as bigint) as b /* Ω ? */",
+    "parameters": [{"type":"int64","value":"11"},{"type":"int64","value":"22"}],
+    "columns": [
+      {"name":"literal","type":"utf8","nullable":false},
+      {"name":"a","type":"int64","nullable":false},
+      {"name":"b","type":"int64","nullable":false}
+    ],
+    "rows": [["雪?","11","22"]],
+    "sqlite": true
+  },
+  {
+    "name": "join_and_null_filter",
+    "sql": "select a.id, b.label from (values (1), (2), (3)) as a(id) left join (values (1, 'one'), (3, 'three')) as b(id, label) on a.id = b.id order by a.id",
+    "columns": [
+      {"name":"id","type":"int64","nullable":false},
+      {"name":"label","type":"utf8","nullable":true}
+    ],
+    "rows": [["1","one"],["2",null],["3","three"]]
+  }
+]

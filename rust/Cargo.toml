@@ -17,3 +17,14 @@ datafusion-sql = "=55.0.0"
 futures = "0.3"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "sync"] }
 url = "2.5"
+
+[dev-dependencies]
+serde_json = "1"
+
+[workspace]
+members = ["fuzz"]
+default-members = ["."]
+resolver = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
