@@ -42,20 +42,7 @@ func TestLibraryProcesses(t *testing.T) {
 	if _, err := os.Stat(library); err != nil {
 		t.Fatalf("build the host library with make bundle: %v", err)
 	}
-	exe := filepath.Join(t.TempDir(), "native-install.test")
-	if runtime.GOOS == "windows" {
-		exe += ".exe"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	args := []string{"test", "-c", "-trimpath", "-o", exe}
-	if os.Getenv("DFGO_TEST_COVERAGE_DIR") != "" {
-		args = append(args, "-covermode=atomic", "-coverpkg=.")
-	}
-	cmd := exec.CommandContext(ctx, "go", append(args, ".")...)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build installed-consumer test: %v\n%s", err, output)
-	}
+	exe := buildLibraryProcess(t, filepath.Join(root, "internal/native"), true)
 	for _, mode := range []string{"explicit", "download", "cache", "corrupt-cache", "interrupted", "offline", "no-download", "missing-manifest", "bad-checksum", "missing-file", "abi-mismatch", "datafusion-mismatch"} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := library
@@ -68,12 +55,86 @@ func TestLibraryProcesses(t *testing.T) {
 	// The untrimmed executable can find the source library. It still runs in a
 	// fresh process with an empty explicit override and an unavailable network.
 	t.Run("source", func(t *testing.T) {
-		current, err := os.Executable()
+		// Compile from a private source fixture: CI workspaces can live on a
+		// volume whose owner the loader correctly does not trust (e.g. D:\).
+		source := libraryProcessDir(t)
+		paths := []string{"go.mod", "go.sum", "rust/include/datafusion_go.h", "internal/native/lib/SHA256SUMS"}
+		entries, err := os.ReadDir(filepath.Join(root, "internal/native"))
 		if err != nil {
 			t.Fatal(err)
 		}
+		for _, entry := range entries {
+			if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), ".h")) {
+				paths = append(paths, filepath.Join("internal/native", entry.Name()))
+			}
+		}
+		for _, path := range paths {
+			copyLibraryFixture(t, filepath.Join(root, path), filepath.Join(source, path))
+		}
+		copyLibraryFixture(t, library, filepath.Join(source, "internal/native/lib", nativePlatform(), name))
+		current := buildLibraryProcess(t, filepath.Join(source, "internal/native"), false)
 		runLibraryProcess(t, current, "source", library)
 	})
+}
+
+func buildLibraryProcess(t *testing.T, dir string, trimpath bool) string {
+	t.Helper()
+	exe := filepath.Join(t.TempDir(), "native-install.test")
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	args := []string{"test", "-c", "-o", exe}
+	if trimpath {
+		args = append(args, "-trimpath")
+	}
+	if os.Getenv("DFGO_TEST_COVERAGE_DIR") != "" {
+		args = append(args, "-covermode=atomic", "-coverpkg=.")
+	}
+	cmd := exec.CommandContext(ctx, "go", append(args, ".")...)
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build installed-consumer test: %v\n%s", err, output)
+	}
+	return exe
+}
+
+func libraryProcessDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return t.TempDir()
+	}
+	// Use the same trusted profile tree as a normal installation. Windows CI
+	// can place its default temporary directory on an untrusted data volume.
+	base, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := os.MkdirTemp(base, "datafusion-go-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	return dir
+}
+
+func copyLibraryFixture(t *testing.T, source, dest string) {
+	t.Helper()
+	data, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dest, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func runLibraryProcess(t *testing.T, exe, mode, fixture string) {
@@ -93,7 +154,7 @@ func runLibraryProcess(t *testing.T, exe, mode, fixture string) {
 	t.Setenv("DFGO_TEST_LIBRARY_FIXTURE", fixture)
 	// Windows keeps loaded DLLs locked until the child exits. The parent owns
 	// the cache directory so its cleanup runs after that process has stopped.
-	t.Setenv("DFGO_TEST_LIBRARY_CACHE", t.TempDir())
+	t.Setenv("DFGO_TEST_LIBRARY_CACHE", libraryProcessDir(t))
 	t.Setenv(nativeLibraryEnv, "")
 	t.Setenv(nativeNoDownloadEnv, "")
 	t.Setenv(nativeDownloadBaseEnv, "https://unavailable.invalid")
