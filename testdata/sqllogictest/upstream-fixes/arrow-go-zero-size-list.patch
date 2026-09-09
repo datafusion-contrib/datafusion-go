@@ -1,0 +1,147 @@
+diff --git a/arrow/array/validate.go b/arrow/array/validate.go
+index 2a50412..c1605d4 100644
+--- a/arrow/array/validate.go
++++ b/arrow/array/validate.go
+@@ -403,10 +403,10 @@ func validateFixedSizeListArray(a *FixedSizeList) error {
+ 	}
+ 	childLength := int64(a.data.offset) + int64(a.data.length)
+ 	itemCount := int64(dt.Len())
+-	if itemCount <= 0 {
++	if itemCount < 0 {
+ 		return fmt.Errorf("arrow/array: fixed-size list has invalid item count %d", itemCount)
+ 	}
+-	if childLength > int64(a.data.childData[0].Len())/itemCount {
++	if itemCount > 0 && childLength > int64(a.data.childData[0].Len())/itemCount {
+ 		return fmt.Errorf("arrow/array: fixed-size list child length %d is too small for offset %d and length %d",
+ 			a.data.childData[0].Len(), a.data.offset, a.data.length)
+ 	}
+diff --git a/arrow/cdata/cdata.go b/arrow/cdata/cdata.go
+index 161440e..de17b0e 100644
+--- a/arrow/cdata/cdata.go
++++ b/arrow/cdata/cdata.go
+@@ -329,8 +329,8 @@ func importSchema(schema *CArrowSchema) (ret arrow.Field, err error) {
+ 			if err != nil {
+ 				return ret, fmt.Errorf("%w: invalid fixed-size list format %q: %v", arrow.ErrInvalid, f, err)
+ 			}
+-			if listSize <= 0 || int64(listSize) > 1<<31-1 {
+-				return ret, fmt.Errorf("%w: fixed-size list size must be in the range [1, %d]: %d", arrow.ErrInvalid, 1<<31-1, listSize)
++			if listSize < 0 || int64(listSize) > 1<<31-1 {
++				return ret, fmt.Errorf("%w: fixed-size list size must be in the range [0, %d]: %d", arrow.ErrInvalid, 1<<31-1, listSize)
+ 			}
+ 
+ 			dt = arrow.FixedSizeListOfField(int32(listSize), childFields[0])
+diff --git a/arrow/cdata/cdata_test.go b/arrow/cdata/cdata_test.go
+index 164a837..dcc2851 100644
+--- a/arrow/cdata/cdata_test.go
++++ b/arrow/cdata/cdata_test.go
+@@ -119,7 +119,7 @@ func TestImportSchemaRejectsMalformedFormats(t *testing.T) {
+ }
+ 
+ func TestImportSchemaRejectsInvalidNestedFormats(t *testing.T) {
+-	for _, format := range []string{"+vx", "+vlx", "+vLx", "+lx", "+Lx", "+w:0", "+w:-1", "+w:2147483648"} {
++	for _, format := range []string{"+vx", "+vlx", "+vLx", "+lx", "+Lx", "+w:-1", "+w:2147483648"} {
+ 		t.Run(format, func(t *testing.T) {
+ 			schemas := testNested([]string{format, "i"}, []string{"", "item"}, []bool{true})
+ 			defer freeMallocedSchemas(schemas)
+@@ -1074,6 +1074,38 @@ func TestEmptyListExport(t *testing.T) {
+ 	assert.NotNil(t, out.children)
+ }
+ 
++func TestZeroSizeFixedSizeListRoundTrip(t *testing.T) {
++	for _, element := range []arrow.DataType{arrow.Null, arrow.PrimitiveTypes.Int64, arrow.ListOf(arrow.BinaryTypes.String)} {
++		t.Run(element.String(), func(t *testing.T) {
++			allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
++			defer allocator.AssertSize(t, 0)
++			builder := array.NewFixedSizeListBuilder(allocator, 0, element)
++			defer builder.Release()
++			builder.AppendEmptyValue()
++			builder.AppendNull()
++			builder.AppendEmptyValues(2)
++			original := builder.NewListArray()
++			defer original.Release()
++			require.NoError(t, original.ValidateFull())
++			sliced := array.NewSlice(original, 1, 4)
++			defer sliced.Release()
++			var data CArrowArray
++			var schema CArrowSchema
++			ExportArrowArray(sliced, &data, &schema)
++			defer ReleaseCArrowArray(&data)
++			defer ReleaseCArrowSchema(&schema)
++			_, imported, err := ImportCArray(&data, &schema)
++			require.NoError(t, err)
++			defer imported.Release()
++			require.NoError(t, imported.(*array.FixedSizeList).ValidateFull())
++			assert.True(t, array.Equal(sliced, imported))
++			assert.Equal(t, 3, imported.Len())
++			assert.Equal(t, 1, imported.NullN())
++			assert.EqualValues(t, 0, imported.DataType().(*arrow.FixedSizeListType).Len())
++		})
++	}
++}
++
+ func TestEmptyDictExport(t *testing.T) {
+ 	bldr := array.NewBuilder(memory.DefaultAllocator, &arrow.DictionaryType{IndexType: arrow.PrimitiveTypes.Int8, ValueType: arrow.BinaryTypes.String, Ordered: true})
+ 	defer bldr.Release()
+diff --git a/arrow/datatype_nested.go b/arrow/datatype_nested.go
+index cf8ca37..1f104e7 100644
+--- a/arrow/datatype_nested.go
++++ b/arrow/datatype_nested.go
+@@ -182,7 +182,7 @@ func FixedSizeListOfField(n int32, f Field) *FixedSizeListType {
+ 	if f.Type == nil {
+ 		panic("arrow: nil DataType")
+ 	}
+-	if n <= 0 {
++	if n < 0 {
+ 		panic("arrow: invalid size")
+ 	}
+ 	return &FixedSizeListType{n: n, elem: f}
+@@ -192,13 +192,13 @@ func FixedSizeListOfField(n int32, f Field) *FixedSizeListType {
+ // For example, if t represents int32, FixedSizeListOf(10, t) represents [10]int32.
+ //
+ // FixedSizeListOf panics if t is nil or invalid.
+-// FixedSizeListOf panics if n is <= 0.
++// FixedSizeListOf panics if n is negative.
+ // NullableElem defaults to true
+ func FixedSizeListOf(n int32, t DataType) *FixedSizeListType {
+ 	if t == nil {
+ 		panic("arrow: nil DataType")
+ 	}
+-	if n <= 0 {
++	if n < 0 {
+ 		panic("arrow: invalid size")
+ 	}
+ 	return &FixedSizeListType{n: n, elem: Field{Name: "item", Type: t, Nullable: true}}
+@@ -210,7 +210,7 @@ func FixedSizeListOfNonNullable(n int32, t DataType) *FixedSizeListType {
+ 	if t == nil {
+ 		panic("arrow: nil DataType")
+ 	}
+-	if n <= 0 {
++	if n < 0 {
+ 		panic("arrow: invalid size")
+ 	}
+ 	return &FixedSizeListType{n: n, elem: Field{Name: "item", Type: t, Nullable: false}}
+diff --git a/arrow/datatype_nested_test.go b/arrow/datatype_nested_test.go
+index 1845d17..3af1d40 100644
+--- a/arrow/datatype_nested_test.go
++++ b/arrow/datatype_nested_test.go
+@@ -81,6 +81,20 @@ func TestListOf(t *testing.T) {
+ 	}
+ }
+ 
++func TestZeroSizeFixedSizeListType(t *testing.T) {
++	field := Field{Name: "values", Type: Null, Nullable: true}
++	for _, dt := range []*FixedSizeListType{
++		FixedSizeListOf(0, Null), FixedSizeListOfField(0, field), FixedSizeListOfNonNullable(0, Null),
++	} {
++		assert.Zero(t, dt.Len())
++		assert.Equal(t, Null, dt.Elem())
++	}
++	assert.Equal(t, field, FixedSizeListOfField(0, field).ElemField())
++	assert.Panics(t, func() { FixedSizeListOf(-1, Null) })
++	assert.Panics(t, func() { FixedSizeListOfField(-1, field) })
++	assert.Panics(t, func() { FixedSizeListOfNonNullable(-1, Null) })
++}
++
+ func TestStructOf(t *testing.T) {
+ 	for _, tc := range []struct {
+ 		fields []Field

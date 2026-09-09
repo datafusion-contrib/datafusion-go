@@ -1,0 +1,2036 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# This file is intended to be run with tables already defined
+# with standard values, but different types in string columns
+# (String, StringView, etc.)
+
+# --------------------------------------
+# Show the input data
+# --------------------------------------
+
+# select
+query TTTT
+SELECT ascii_1, ascii_2, unicode_1, unicode_2 FROM test_basic_operator
+----
+Andrew X datafusion📊🔥 🔥
+Xiangpeng Xiangpeng datafusion数据融合 datafusion数据融合
+Raphael R datafusionДатаФусион аФус
+under_score un_____core un iść core chrząszcz na łące w 東京都
+percent p%t pan Tadeusz ma iść w kąt Pan Tadeusz ma frunąć stąd w kąt
+(empty) % (empty) (empty)
+(empty) %% (empty) (empty)
+% \% (empty) (empty)
+_ \_ (empty) (empty)
+NULL % NULL NULL
+NULL R NULL 🔥
+
+# --------------------------------------
+# test type coercion (compare to int)
+#
+# Comparing a string column to an integer literal is allowed but will fail
+# at runtime if the string column contains any values that can't be cast
+# to integers.
+# --------------------------------------
+
+statement error Arrow error: Cast error: Cannot cast string 'Andrew' to value of Int64 type
+select ascii_1 = 1 as col1, 1 = ascii_1 as col2 from test_basic_operator;
+
+statement error Arrow error: Cast error: Cannot cast string 'Andrew' to value of Int64 type
+select ascii_1 <> 1 as col1, 1 <> ascii_1 as col2 from test_basic_operator;
+
+# Coercion to date/time
+query BBB
+select ts = '2024-08-09T12:13:14'::timestamp, d = '2024-08-08'::date, t = '12:13:14'::time from test_datetime;
+----
+true false true
+false false false
+NULL NULL NULL
+
+# --------------------------------------
+# column comparison as filters
+# --------------------------------------
+
+query TT
+select ascii_1, ascii_2 from test_basic_operator where ascii_1 = ascii_2
+----
+Xiangpeng Xiangpeng
+
+query TT
+select ascii_1, ascii_2 from test_basic_operator where ascii_1 <> ascii_2
+----
+Andrew X
+Raphael R
+under_score un_____core
+percent p%t
+(empty) %
+(empty) %%
+% \%
+_ \_
+
+query TT
+select unicode_1, unicode_2 from test_basic_operator where unicode_1 = unicode_2
+----
+datafusion数据融合 datafusion数据融合
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+
+query TT
+select unicode_1, unicode_2 from test_basic_operator where unicode_1 <> unicode_2
+----
+datafusion📊🔥 🔥
+datafusionДатаФусион аФус
+un iść core chrząszcz na łące w 東京都
+pan Tadeusz ma iść w kąt Pan Tadeusz ma frunąć stąd w kąt
+
+query TT
+select ascii_1, unicode_1 from test_basic_operator where ascii_1 = unicode_1
+----
+(empty) (empty)
+(empty) (empty)
+
+query TT
+select ascii_1, unicode_1 from test_basic_operator where ascii_1 <> unicode_1
+----
+Andrew datafusion📊🔥
+Xiangpeng datafusion数据融合
+Raphael datafusionДатаФусион
+under_score un iść core
+percent pan Tadeusz ma iść w kąt
+% (empty)
+_ (empty)
+
+# --------------------------------------
+# column comparison
+# --------------------------------------
+query TTTTBBBBBB
+select
+    ascii_1, ascii_2, unicode_1, unicode_2,
+    ascii_1 = ascii_2,
+    ascii_1 <> ascii_2,
+    unicode_1 = unicode_2,
+    unicode_1 <> unicode_2,
+    ascii_1 = unicode_1,
+    ascii_1 <> unicode_1
+from test_basic_operator;
+----
+Andrew X datafusion📊🔥 🔥 false true false true false true
+Xiangpeng Xiangpeng datafusion数据融合 datafusion数据融合 true false true false false true
+Raphael R datafusionДатаФусион аФус false true false true false true
+under_score un_____core un iść core chrząszcz na łące w 東京都 false true false true false true
+percent p%t pan Tadeusz ma iść w kąt Pan Tadeusz ma frunąć stąd w kąt false true false true false true
+(empty) % (empty) (empty) false true true false true false
+(empty) %% (empty) (empty) false true true false true false
+% \% (empty) (empty) false true true false false true
+_ \_ (empty) (empty) false true true false false true
+NULL % NULL NULL NULL NULL NULL NULL NULL NULL
+NULL R NULL 🔥 NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# column to StringView scalar comparison
+# --------------------------------------
+query TTBBBB
+select
+    ascii_1, unicode_1,
+    ascii_1 = arrow_cast('Andrew', 'Utf8View'),
+    ascii_1 <> arrow_cast('Andrew', 'Utf8View'),
+    unicode_1 = arrow_cast('datafusion数据融合', 'Utf8View'),
+    unicode_1 <> arrow_cast('datafusion数据融合', 'Utf8View')
+from test_basic_operator;
+----
+Andrew datafusion📊🔥 true false false true
+Xiangpeng datafusion数据融合 false true true false
+Raphael datafusionДатаФусион false true false true
+under_score un iść core false true false true
+percent pan Tadeusz ma iść w kąt false true false true
+(empty) (empty) false true false true
+(empty) (empty) false true false true
+% (empty) false true false true
+_ (empty) false true false true
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# column to String scalar
+# --------------------------------------
+query TTBBBB
+select
+    ascii_1, unicode_1,
+    ascii_1 = arrow_cast('Andrew', 'Utf8'),
+    ascii_1 <> arrow_cast('Andrew', 'Utf8'),
+    unicode_1 = arrow_cast('datafusion数据融合', 'Utf8'),
+    unicode_1 <> arrow_cast('datafusion数据融合', 'Utf8')
+from test_basic_operator;
+----
+Andrew datafusion📊🔥 true false false true
+Xiangpeng datafusion数据融合 false true true false
+Raphael datafusionДатаФусион false true false true
+under_score un iść core false true false true
+percent pan Tadeusz ma iść w kąt false true false true
+(empty) (empty) false true false true
+(empty) (empty) false true false true
+% (empty) false true false true
+_ (empty) false true false true
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# column to LargeString scalar
+# --------------------------------------
+query TTBBBB
+select
+    ascii_1, unicode_1,
+    ascii_1 = arrow_cast('Andrew', 'LargeUtf8'),
+    ascii_1 <> arrow_cast('Andrew', 'LargeUtf8'),
+    unicode_1 = arrow_cast('datafusion数据融合', 'LargeUtf8'),
+    unicode_1 <> arrow_cast('datafusion数据融合', 'LargeUtf8')
+from test_basic_operator;
+----
+Andrew datafusion📊🔥 true false false true
+Xiangpeng datafusion数据融合 false true true false
+Raphael datafusionДатаФусион false true false true
+under_score un iść core false true false true
+percent pan Tadeusz ma iść w kąt false true false true
+(empty) (empty) false true false true
+(empty) (empty) false true false true
+% (empty) false true false true
+_ (empty) false true false true
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# dynamic LIKE as filter
+# --------------------------------------
+
+query TTT rowsort
+SELECT ascii_1, 'is LIKE', ascii_2 FROM test_basic_operator WHERE ascii_1 LIKE ascii_2
+UNION ALL
+SELECT ascii_1, 'is NOT LIKE', ascii_2 FROM test_basic_operator WHERE ascii_1 NOT LIKE ascii_2
+UNION ALL
+SELECT unicode_1, 'is LIKE', ascii_2 FROM test_basic_operator WHERE unicode_1 LIKE ascii_2
+UNION ALL
+SELECT unicode_1, 'is NOT LIKE', ascii_2 FROM test_basic_operator WHERE unicode_1 NOT LIKE ascii_2
+UNION ALL
+SELECT unicode_2, 'is LIKE', ascii_2 FROM test_basic_operator WHERE unicode_2 LIKE ascii_2
+UNION ALL
+SELECT unicode_2, 'is NOT LIKE', ascii_2 FROM test_basic_operator WHERE unicode_2 NOT LIKE ascii_2
+----
+% is LIKE \%
+(empty) is LIKE %
+(empty) is LIKE %
+(empty) is LIKE %
+(empty) is LIKE %%
+(empty) is LIKE %%
+(empty) is LIKE %%
+(empty) is NOT LIKE \%
+(empty) is NOT LIKE \%
+(empty) is NOT LIKE \_
+(empty) is NOT LIKE \_
+Andrew is NOT LIKE X
+Pan Tadeusz ma frunąć stąd w kąt is NOT LIKE p%t
+Raphael is NOT LIKE R
+Xiangpeng is LIKE Xiangpeng
+_ is LIKE \_
+chrząszcz na łące w 東京都 is NOT LIKE un_____core
+datafusionДатаФусион is NOT LIKE R
+datafusion数据融合 is NOT LIKE Xiangpeng
+datafusion数据融合 is NOT LIKE Xiangpeng
+datafusion📊🔥 is NOT LIKE X
+pan Tadeusz ma iść w kąt is LIKE p%t
+percent is LIKE p%t
+un iść core is LIKE un_____core
+under_score is LIKE un_____core
+аФус is NOT LIKE R
+🔥 is NOT LIKE R
+🔥 is NOT LIKE X
+
+# --------------------------------------
+# dynamic LIKE as projection
+# --------------------------------------
+
+query TTTTBBBB rowsort
+SELECT
+    ascii_1, ascii_2, unicode_1, unicode_2,
+    (ascii_1 LIKE ascii_2) AS ascii_1_like_ascii_2,
+    (ascii_2 LIKE ascii_1) AS ascii_2_like_ascii_1,
+    (unicode_1 LIKE ascii_2) AS unicode_1_like_ascii_2,
+    (unicode_2 LIKE ascii_2) AS unicode_2_like_ascii_2
+FROM test_basic_operator
+----
+% \% (empty) (empty) true true false false
+(empty) % (empty) (empty) true false true true
+(empty) %% (empty) (empty) true false true true
+Andrew X datafusion📊🔥 🔥 false false false false
+NULL % NULL NULL NULL NULL NULL NULL
+NULL R NULL 🔥 NULL NULL NULL false
+Raphael R datafusionДатаФусион аФус false false false false
+Xiangpeng Xiangpeng datafusion数据融合 datafusion数据融合 true true false false
+_ \_ (empty) (empty) true false false false
+percent p%t pan Tadeusz ma iść w kąt Pan Tadeusz ma frunąć stąd w kąt true false true false
+under_score un_____core un iść core chrząszcz na łące w 東京都 true false true false
+
+# --------------------------------------
+# dynamic ILIKE as filter
+# --------------------------------------
+
+query TTT rowsort
+SELECT ascii_1, 'is ILIKE', ascii_2 FROM test_basic_operator WHERE ascii_1 ILIKE ascii_2
+UNION ALL
+SELECT ascii_1, 'is NOT ILIKE', ascii_2 FROM test_basic_operator WHERE ascii_1 NOT ILIKE ascii_2
+UNION ALL
+SELECT unicode_1, 'is ILIKE', ascii_2 FROM test_basic_operator WHERE unicode_1 ILIKE ascii_2
+UNION ALL
+SELECT unicode_1, 'is NOT ILIKE', ascii_2 FROM test_basic_operator WHERE unicode_1 NOT ILIKE ascii_2
+UNION ALL
+SELECT unicode_2, 'is ILIKE', ascii_2 FROM test_basic_operator WHERE unicode_2 ILIKE ascii_2
+UNION ALL
+SELECT unicode_2, 'is NOT ILIKE', ascii_2 FROM test_basic_operator WHERE unicode_2 NOT ILIKE ascii_2
+----
+% is ILIKE \%
+(empty) is ILIKE %
+(empty) is ILIKE %
+(empty) is ILIKE %
+(empty) is ILIKE %%
+(empty) is ILIKE %%
+(empty) is ILIKE %%
+(empty) is NOT ILIKE \%
+(empty) is NOT ILIKE \%
+(empty) is NOT ILIKE \_
+(empty) is NOT ILIKE \_
+Andrew is NOT ILIKE X
+Pan Tadeusz ma frunąć stąd w kąt is ILIKE p%t
+Raphael is NOT ILIKE R
+Xiangpeng is ILIKE Xiangpeng
+_ is ILIKE \_
+chrząszcz na łące w 東京都 is NOT ILIKE un_____core
+datafusionДатаФусион is NOT ILIKE R
+datafusion数据融合 is NOT ILIKE Xiangpeng
+datafusion数据融合 is NOT ILIKE Xiangpeng
+datafusion📊🔥 is NOT ILIKE X
+pan Tadeusz ma iść w kąt is ILIKE p%t
+percent is ILIKE p%t
+un iść core is ILIKE un_____core
+under_score is ILIKE un_____core
+аФус is NOT ILIKE R
+🔥 is NOT ILIKE R
+🔥 is NOT ILIKE X
+
+# --------------------------------------
+# dynamic ILIKE as projection
+# --------------------------------------
+query TTTTBBBB rowsort
+SELECT
+    ascii_1, ascii_2, unicode_1, unicode_2,
+    (ascii_1 ILIKE ascii_2) AS ascii_1_ilike_ascii_2,
+    (ascii_2 ILIKE ascii_1) AS ascii_2_ilike_ascii_1,
+    (unicode_1 ILIKE ascii_2) AS unicode_1_ilike_ascii_2,
+    (unicode_2 ILIKE ascii_2) AS unicode_2_ilike_ascii_2
+FROM test_basic_operator
+----
+% \% (empty) (empty) true true false false
+(empty) % (empty) (empty) true false true true
+(empty) %% (empty) (empty) true false true true
+Andrew X datafusion📊🔥 🔥 false false false false
+NULL % NULL NULL NULL NULL NULL NULL
+NULL R NULL 🔥 NULL NULL NULL false
+Raphael R datafusionДатаФусион аФус false false false false
+Xiangpeng Xiangpeng datafusion数据融合 datafusion数据融合 true true false false
+_ \_ (empty) (empty) true false false false
+percent p%t pan Tadeusz ma iść w kąt Pan Tadeusz ma frunąć stąd w kąt true false true true
+under_score un_____core un iść core chrząszcz na łące w 東京都 true false true false
+
+
+# --------------------------------------
+# substr function
+# --------------------------------------
+
+query TTTTTTTTTTTTTT
+select
+    substr(c1, 1),
+    substr(c1, 3),
+    substr(c1, 100),
+    substr(c1, -1),
+    substr(c1, 0, 0),
+    substr(c1, -1, 2),
+    substr(c1, -2, 10),
+    substr(c1, -100, 200),
+    substr(c1, -10, 10),
+    substr(c1, -100, 10),
+    substr(c1, 1, 100),
+    substr(c1, 5, 3),
+    substr(c1, 100, 200),
+    substr(c1, 8, 0)
+from test_substr;
+----
+foo o (empty) foo (empty) (empty) foo foo (empty) (empty) foo (empty) (empty) (empty)
+hello🌏世界 llo🌏世界 (empty) hello🌏世界 (empty) (empty) hello🌏世 hello🌏世界 (empty) (empty) hello🌏世界 o🌏世 (empty) (empty)
+💩 (empty) (empty) 💩 (empty) (empty) 💩 💩 (empty) (empty) 💩 (empty) (empty) (empty)
+ThisIsAVeryLongASCIIString isIsAVeryLongASCIIString (empty) ThisIsAVeryLongASCIIString (empty) (empty) ThisIsA ThisIsAVeryLongASCIIString (empty) (empty) ThisIsAVeryLongASCIIString IsA (empty) (empty)
+(empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty) (empty)
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTT
+SELECT
+  SUBSTR(ascii_1, 1, 3) as c1,
+  SUBSTR(ascii_2, 1, 3) as c2,
+  SUBSTR(unicode_1, 1, 3) as c3,
+  SUBSTR(unicode_2, 1, 3) as c4
+FROM test_basic_operator;
+----
+And X dat 🔥
+Xia Xia dat dat
+Rap R dat аФу
+und un_ un  chr
+per p%t pan Pan
+(empty) % (empty) (empty)
+(empty) %% (empty) (empty)
+% \% (empty) (empty)
+_ \_ (empty) (empty)
+NULL % NULL NULL
+NULL R NULL 🔥
+
+# --------------------------------------
+# test distinct aggregate
+# --------------------------------------
+query II
+SELECT
+    COUNT(DISTINCT ascii_1),
+    COUNT(DISTINCT unicode_1)
+FROM
+    test_basic_operator
+----
+8 6
+
+query II
+SELECT
+    COUNT(DISTINCT ascii_1),
+    COUNT(DISTINCT unicode_1)
+FROM
+    test_basic_operator
+GROUP BY ascii_2;
+----
+1 1
+1 1
+1 1
+1 1
+1 1
+1 1
+1 1
+1 1
+1 1
+
+query II rowsort
+SELECT
+    COUNT(DISTINCT ascii_1),
+    COUNT(DISTINCT unicode_1)
+FROM
+    test_basic_operator
+GROUP BY unicode_2;
+----
+0 0
+1 1
+1 1
+1 1
+1 1
+1 1
+3 1
+
+# --------------------------------------
+# STARTS_WITH function
+# --------------------------------------
+
+query BBBB
+SELECT
+    STARTS_WITH(ascii_1, ascii_2),
+    STARTS_WITH(unicode_1, unicode_2),
+    STARTS_WITH(ascii_1, unicode_2),
+    STARTS_WITH(unicode_1, ascii_2)
+FROM test_basic_operator
+----
+false false false false
+true true false false
+true false false false
+false false false false
+false false false false
+false true true false
+false true true false
+false true true false
+false true true false
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query BBBB
+SELECT
+    STARTS_WITH(ascii_1, 'And'),
+    STARTS_WITH(ascii_2, 'And'),
+    STARTS_WITH(unicode_1, 'data'),
+    STARTS_WITH(unicode_2, 'data')
+FROM test_basic_operator
+----
+true false true false
+false false true true
+false false true false
+false false false false
+false false false false
+false false false false
+false false false false
+false false false false
+false false false false
+NULL false NULL NULL
+NULL false NULL false
+
+# --------------------------------------
+# Test TRANSLATE
+# --------------------------------------
+
+query T
+SELECT
+  TRANSLATE(ascii_1, 'foo', 'bar') as c
+FROM test_basic_operator;
+----
+Andrew
+Xiangpeng
+Raphael
+under_scare
+percent
+(empty)
+(empty)
+%
+_
+NULL
+NULL
+
+query T
+SELECT
+  TRANSLATE(unicode_1, 'foo', 'bar') as c
+FROM test_basic_operator;
+----
+databusian📊🔥
+databusian数据融合
+databusianДатаФусион
+un iść care
+pan Tadeusz ma iść w kąt
+(empty)
+(empty)
+(empty)
+(empty)
+NULL
+NULL
+
+# --------------------------------------
+# Test REGEXP_REPLACE
+# --------------------------------------
+
+# Should run REGEXP_REPLACE with Scalar value for string
+query T
+SELECT
+  REGEXP_REPLACE(ascii_1, 'e', 'f') AS k
+FROM test_basic_operator;
+----
+Andrfw
+Xiangpfng
+Raphafl
+undfr_score
+pfrcent
+(empty)
+(empty)
+%
+_
+NULL
+NULL
+
+# Should run REGEXP_REPLACE with Scalar value for string with flag
+query T
+SELECT
+  REGEXP_REPLACE(ascii_1, 'e', 'f', 'i') AS k
+FROM test_basic_operator;
+----
+Andrfw
+Xiangpfng
+Raphafl
+undfr_score
+pfrcent
+(empty)
+(empty)
+%
+_
+NULL
+NULL
+
+# Should run REGEXP_REPLACE with ScalarArray value for string
+query T
+SELECT
+  REGEXP_REPLACE(ascii_1, lower(ascii_1), 'bar') AS k
+FROM test_basic_operator;
+----
+Andrew
+Xiangpeng
+Raphael
+bar
+bar
+bar
+bar
+bar
+bar
+NULL
+NULL
+
+# Should run REGEXP_REPLACE with ScalarArray value for string with flag
+query T
+SELECT
+  REGEXP_REPLACE(ascii_1, lower(ascii_1), 'bar', 'g') AS k
+FROM test_basic_operator;
+----
+Andrew
+Xiangpeng
+Raphael
+bar
+bar
+bar
+bar
+bar
+bar
+NULL
+NULL
+
+# --------------------------------------
+# Test Initcap
+# --------------------------------------
+statement ok
+CREATE TABLE test_lowercase AS SELECT
+  lower(ascii_1) as ascii_1_lower,
+  lower(unicode_1) as unicode_1_lower
+FROM test_basic_operator;
+
+query TT
+SELECT
+  INITCAP(ascii_1_lower) as c1,
+  INITCAP(unicode_1_lower) as c2
+FROM test_lowercase;
+----
+Andrew Datafusion📊🔥
+Xiangpeng Datafusion数据融合
+Raphael Datafusionдатафусион
+Under_Score Un Iść Core
+Percent Pan Tadeusz Ma Iść W Kąt
+(empty) (empty)
+(empty) (empty)
+% (empty)
+_ (empty)
+NULL NULL
+NULL NULL
+
+statement ok
+drop table test_lowercase;
+
+# --------------------------------------
+# Test ASCII
+# --------------------------------------
+
+query IIII
+SELECT
+  arrow_cast(ASCII(ascii_1), 'Int32') as c1,
+  arrow_cast(ASCII(ascii_2), 'Int32') as c2,
+  arrow_cast(ASCII(unicode_1), 'Int32') as c3,
+  arrow_cast(ASCII(unicode_2), 'Int32') as c4
+FROM test_basic_operator;
+----
+65 88 100 128293
+88 88 100 100
+82 82 100 1072
+117 117 117 99
+112 112 112 80
+0 37 0 0
+0 37 0 0
+37 92 0 0
+95 92 0 0
+NULL 37 NULL NULL
+NULL 82 NULL 128293
+
+# --------------------------------------
+# Test BTRIM
+# --------------------------------------
+
+# Test BTRIM outputs
+query TTTTTT
+SELECT
+  BTRIM(ascii_1, 'foo'),
+  BTRIM(ascii_1, 'A'),
+  BTRIM(ascii_1, NULL),
+  BTRIM(unicode_1),
+  BTRIM(unicode_1, '🔥'),
+  BTRIM(unicode_1, NULL)
+FROM test_basic_operator;
+----
+Andrew ndrew NULL datafusion📊🔥 datafusion📊 NULL
+Xiangpeng Xiangpeng NULL datafusion数据融合 datafusion数据融合 NULL
+Raphael Raphael NULL datafusionДатаФусион datafusionДатаФусион NULL
+under_score under_score NULL un iść core un iść core NULL
+percent percent NULL pan Tadeusz ma iść w kąt pan Tadeusz ma iść w kąt NULL
+(empty) (empty) NULL (empty) (empty) NULL
+(empty) (empty) NULL (empty) (empty) NULL
+% % NULL (empty) (empty) NULL
+_ _ NULL (empty) (empty) NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LTRIM
+# --------------------------------------
+
+# Test LTRIM outputs
+query TTTTTT
+SELECT
+  LTRIM(ascii_1, 'foo'),
+  LTRIM(ascii_1, ascii_2),
+  LTRIM(ascii_1, NULL),
+  LTRIM(unicode_1),
+  LTRIM(unicode_1, NULL),
+  LTRIM(unicode_1, '🔥')
+FROM test_basic_operator;
+----
+Andrew Andrew NULL datafusion📊🔥 NULL datafusion📊🔥
+Xiangpeng (empty) NULL datafusion数据融合 NULL datafusion数据融合
+Raphael aphael NULL datafusionДатаФусион NULL datafusionДатаФусион
+under_score der_score NULL un iść core NULL un iść core
+percent ercent NULL pan Tadeusz ma iść w kąt NULL pan Tadeusz ma iść w kąt
+(empty) (empty) NULL (empty) NULL (empty)
+(empty) (empty) NULL (empty) NULL (empty)
+% (empty) NULL (empty) NULL (empty)
+_ (empty) NULL (empty) NULL (empty)
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test RTRIM
+# --------------------------------------
+
+# Test RTRIM outputs
+query TTTTT
+SELECT
+  RTRIM(ascii_1, 'rew'),
+  RTRIM(ascii_1, ascii_2),
+  RTRIM(ascii_1),
+  RTRIM(unicode_1, NULL),
+  RTRIM(unicode_1, '🔥')
+FROM test_basic_operator;
+----
+And Andrew Andrew NULL datafusion📊
+Xiangpeng (empty) Xiangpeng NULL datafusion数据融合
+Raphael Raphael Raphael NULL datafusionДатаФусион
+under_sco under_s under_score NULL un iść core
+percent percen percent NULL pan Tadeusz ma iść w kąt
+(empty) (empty) (empty) NULL (empty)
+(empty) (empty) (empty) NULL (empty)
+% (empty) % NULL (empty)
+_ (empty) _ NULL (empty)
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test CONTAINS
+# --------------------------------------
+
+query BBBBBB
+SELECT
+  CONTAINS(ascii_1, 'foo') as c1,
+  CONTAINS(ascii_1, ascii_2) as c2,
+  CONTAINS(ascii_1, NULL) as c3,
+  CONTAINS(unicode_1, unicode_2) as c4,
+  CONTAINS(unicode_1, NULL) as c5,
+  CONTAINS(unicode_1, '🔥') as c6
+FROM test_basic_operator;
+----
+false false NULL true NULL true
+false true NULL true NULL false
+false true NULL true NULL false
+false false NULL false NULL false
+false false NULL false NULL false
+false false NULL true NULL false
+false false NULL true NULL false
+false false NULL true NULL false
+false false NULL true NULL false
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LOWER
+# --------------------------------------
+
+query TT
+SELECT LOWER(ascii_1) as c1, LOWER(unicode_1) as c2 FROM test_basic_operator;
+----
+andrew datafusion📊🔥
+xiangpeng datafusion数据融合
+raphael datafusionдатафусион
+under_score un iść core
+percent pan tadeusz ma iść w kąt
+(empty) (empty)
+(empty) (empty)
+% (empty)
+_ (empty)
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test UPPER
+# --------------------------------------
+
+query TT
+SELECT UPPER(ascii_1) as c1, UPPER(unicode_1) as c2 FROM test_basic_operator;
+----
+ANDREW DATAFUSION📊🔥
+XIANGPENG DATAFUSION数据融合
+RAPHAEL DATAFUSIONДАТАФУСИОН
+UNDER_SCORE UN IŚĆ CORE
+PERCENT PAN TADEUSZ MA IŚĆ W KĄT
+(empty) (empty)
+(empty) (empty)
+% (empty)
+_ (empty)
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test Concat
+# --------------------------------------
+
+query TTTTTTTTTTTT
+SELECT
+    concat(ascii_1, ':Data'),
+    concat(ascii_1, ascii_2),
+    concat(ascii_1, NULL),
+    concat(ascii_1, unicode_1),
+    concat(ascii_1, unicode_2),
+    concat(unicode_1, ascii_1),
+    concat(unicode_1, unicode_2),
+    concat(unicode_1, NULL),
+    concat(unicode_1, '🔥'),
+    concat(NULL, '🔥'),
+    concat(NULL, NULL),
+    concat(ascii_1, ',', unicode_1)
+FROM test_basic_operator;
+----
+Andrew:Data AndrewX Andrew Andrewdatafusion📊🔥 Andrew🔥 datafusion📊🔥Andrew datafusion📊🔥🔥 datafusion📊🔥 datafusion📊🔥🔥 🔥 (empty) Andrew,datafusion📊🔥
+Xiangpeng:Data XiangpengXiangpeng Xiangpeng Xiangpengdatafusion数据融合 Xiangpengdatafusion数据融合 datafusion数据融合Xiangpeng datafusion数据融合datafusion数据融合 datafusion数据融合 datafusion数据融合🔥 🔥 (empty) Xiangpeng,datafusion数据融合
+Raphael:Data RaphaelR Raphael RaphaeldatafusionДатаФусион RaphaelаФус datafusionДатаФусионRaphael datafusionДатаФусионаФус datafusionДатаФусион datafusionДатаФусион🔥 🔥 (empty) Raphael,datafusionДатаФусион
+under_score:Data under_scoreun_____core under_score under_scoreun iść core under_scorechrząszcz na łące w 東京都 un iść coreunder_score un iść corechrząszcz na łące w 東京都 un iść core un iść core🔥 🔥 (empty) under_score,un iść core
+percent:Data percentp%t percent percentpan Tadeusz ma iść w kąt percentPan Tadeusz ma frunąć stąd w kąt pan Tadeusz ma iść w kątpercent pan Tadeusz ma iść w kątPan Tadeusz ma frunąć stąd w kąt pan Tadeusz ma iść w kąt pan Tadeusz ma iść w kąt🔥 🔥 (empty) percent,pan Tadeusz ma iść w kąt
+:Data % (empty) (empty) (empty) (empty) (empty) (empty) 🔥 🔥 (empty) ,
+:Data %% (empty) (empty) (empty) (empty) (empty) (empty) 🔥 🔥 (empty) ,
+%:Data %\% % % % % (empty) (empty) 🔥 🔥 (empty) %,
+_:Data _\_ _ _ _ _ (empty) (empty) 🔥 🔥 (empty) _,
+:Data % (empty) (empty) (empty) (empty) (empty) (empty) 🔥 🔥 (empty) ,
+:Data R (empty) (empty) 🔥 (empty) 🔥 (empty) 🔥 🔥 (empty) ,
+
+# --------------------------------------
+# Test OVERLAY
+# --------------------------------------
+
+query TTTTTT
+SELECT
+    OVERLAY(ascii_1 PLACING 'foo' FROM 2 ),
+    OVERLAY(unicode_1 PLACING 'foo' FROM 2),
+    OVERLAY(ascii_1 PLACING '🔥' FROM 2),
+    OVERLAY(unicode_1 PLACING '🔥' FROM 2),
+    OVERLAY(ascii_1 PLACING NULL FROM 2),
+    OVERLAY(unicode_1 PLACING NULL FROM 2)
+FROM test_basic_operator;
+----
+Afooew dfoofusion📊🔥 A🔥drew d🔥tafusion📊🔥 NULL NULL
+Xfoogpeng dfoofusion数据融合 X🔥angpeng d🔥tafusion数据融合 NULL NULL
+Rfooael dfoofusionДатаФусион R🔥phael d🔥tafusionДатаФусион NULL NULL
+ufoor_score ufoość core u🔥der_score u🔥 iść core NULL NULL
+pfooent pfooTadeusz ma iść w kąt p🔥rcent p🔥n Tadeusz ma iść w kąt NULL NULL
+foo foo 🔥 🔥 NULL NULL
+foo foo 🔥 🔥 NULL NULL
+%foo foo %🔥 🔥 NULL NULL
+_foo foo _🔥 🔥 NULL NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test REPLACE
+# --------------------------------------
+
+query TTTTTT
+SELECT
+  REPLACE(ascii_1, 'foo', 'bar'),
+  REPLACE(ascii_1, ascii_2, 'bar'),
+  REPLACE(ascii_1, NULL, 'bar'),
+  REPLACE(unicode_1, unicode_2, 'bar'),
+  REPLACE(unicode_1, NULL, 'bar'),
+  REPLACE(unicode_1, '🔥', 'bar')
+FROM test_basic_operator;
+----
+Andrew Andrew NULL datafusion📊bar NULL datafusion📊bar
+Xiangpeng bar NULL bar NULL datafusion数据融合
+Raphael baraphael NULL datafusionДатbarион NULL datafusionДатаФусион
+under_score under_score NULL un iść core NULL un iść core
+percent percent NULL pan Tadeusz ma iść w kąt NULL pan Tadeusz ma iść w kąt
+(empty) (empty) NULL (empty) NULL (empty)
+(empty) (empty) NULL (empty) NULL (empty)
+% % NULL (empty) NULL (empty)
+_ _ NULL (empty) NULL (empty)
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test RIGHT
+# --------------------------------------
+# Test outputs of RIGHT
+query TTTTTT
+SELECT
+  RIGHT(ascii_1, 3),
+  RIGHT(ascii_1, 0),
+  RIGHT(ascii_1, -3),
+  RIGHT(unicode_1, 3),
+  RIGHT(unicode_1, 0),
+  RIGHT(unicode_1, -3)
+FROM test_basic_operator;
+----
+rew (empty) rew n📊🔥 (empty) afusion📊🔥
+eng (empty) ngpeng 据融合 (empty) afusion数据融合
+ael (empty) hael ион (empty) afusionДатаФусион
+ore (empty) er_score ore (empty) iść core
+ent (empty) cent kąt (empty)  Tadeusz ma iść w kąt
+(empty) (empty) (empty) (empty) (empty) (empty)
+(empty) (empty) (empty) (empty) (empty) (empty)
+% (empty) (empty) (empty) (empty) (empty)
+_ (empty) (empty) (empty) (empty) (empty)
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LEFT
+# --------------------------------------
+
+# Test outputs of LEFT
+query TTTTTT
+SELECT
+  LEFT(ascii_1, 3),
+  LEFT(ascii_1, 0),
+  LEFT(ascii_1, -3),
+  LEFT(unicode_1, 3),
+  LEFT(unicode_1, 0),
+  LEFT(unicode_1, -3)
+FROM test_basic_operator;
+----
+And (empty) And dat (empty) datafusio
+Xia (empty) Xiangp dat (empty) datafusion数
+Rap (empty) Raph dat (empty) datafusionДатаФус
+und (empty) under_sc un  (empty) un iść c
+per (empty) perc pan (empty) pan Tadeusz ma iść w 
+(empty) (empty) (empty) (empty) (empty) (empty)
+(empty) (empty) (empty) (empty) (empty) (empty)
+% (empty) (empty) (empty) (empty) (empty)
+_ (empty) (empty) (empty) (empty) (empty)
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test SUBSTR_INDEX
+# --------------------------------------
+
+query TTTT
+SELECT
+  SUBSTR_INDEX(ascii_1, 'a', 1),
+  SUBSTR_INDEX(ascii_1, 'a', 2),
+  SUBSTR_INDEX(unicode_1, 'а', 1),
+  SUBSTR_INDEX(unicode_1, 'а', 2)
+FROM test_basic_operator;
+----
+Andrew Andrew datafusion📊🔥 datafusion📊🔥
+Xi Xiangpeng datafusion数据融合 datafusion数据融合
+R Raph datafusionД datafusionДат
+under_score under_score un iść core un iść core
+percent percent pan Tadeusz ma iść w kąt pan Tadeusz ma iść w kąt
+(empty) (empty) (empty) (empty)
+(empty) (empty) (empty) (empty)
+% % (empty) (empty)
+_ _ (empty) (empty)
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# --------------------------------------
+# Test FIND_IN_SET
+# --------------------------------------
+
+# array on the left and a literal on the right
+query I
+SELECT find_in_set(ascii_1, 'Andrew,Xiangpeng') FROM test_basic_operator
+----
+1
+2
+0
+0
+0
+0
+0
+0
+0
+NULL
+NULL
+
+# literal on the left and an array on the right
+query I
+SELECT find_in_set('🔥', unicode_2) FROM test_basic_operator
+----
+1
+0
+0
+0
+0
+0
+0
+0
+0
+NULL
+1
+
+# arrays on both sides
+query I
+SELECT find_in_set(unicode_2, unicode_1) FROM test_basic_operator
+----
+0
+1
+0
+0
+0
+1
+1
+1
+1
+NULL
+NULL
+
+# Explicit casts are needed to exercise the LargeUtf8 scalar/array paths;
+# otherwise string coercion chooses a different common physical type.
+query II
+SELECT
+  find_in_set(arrow_cast(ascii_1, 'LargeUtf8'), arrow_cast('Andrew,Xiangpeng', 'LargeUtf8')),
+  find_in_set(arrow_cast('🔥', 'LargeUtf8'), arrow_cast(unicode_2, 'LargeUtf8'))
+FROM test_basic_operator
+----
+1 1
+2 0
+0 0
+0 0
+0 0
+0 0
+0 0
+0 0
+0 0
+NULL NULL
+NULL 1
+
+# null literals paired with arrays
+query II
+SELECT find_in_set(ascii_1, NULL), find_in_set(NULL, ascii_2)
+FROM test_basic_operator
+LIMIT 1
+----
+NULL NULL
+
+query IIIIII
+SELECT
+  FIND_IN_SET(ascii_1, 'a,b,c,d'),
+  FIND_IN_SET(ascii_1, 'Andrew,Xiangpeng,Raphael'),
+  FIND_IN_SET(unicode_1, 'a,b,c,d'),
+  FIND_IN_SET(unicode_1, 'datafusion📊🔥,datafusion数据融合,datafusionДатаФусион'),
+  FIND_IN_SET(NULL, unicode_1),
+  FIND_IN_SET(unicode_1, NULL)
+FROM test_basic_operator;
+----
+0 1 0 1 NULL NULL
+0 2 0 2 NULL NULL
+0 3 0 3 NULL NULL
+0 0 0 0 NULL NULL
+0 0 0 0 NULL NULL
+0 0 0 0 NULL NULL
+0 0 0 0 NULL NULL
+0 0 0 0 NULL NULL
+0 0 0 0 NULL NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test || operator
+# --------------------------------------
+
+# || constants
+# expect all results to be the same for each row as they all have the same values
+query TTTT
+SELECT
+    ascii_1 || 'foo',
+    ascii_1 || '🔥',
+    unicode_1 || 'foo',
+    unicode_1 || '🔥'
+FROM test_basic_operator;
+----
+Andrewfoo Andrew🔥 datafusion📊🔥foo datafusion📊🔥🔥
+Xiangpengfoo Xiangpeng🔥 datafusion数据融合foo datafusion数据融合🔥
+Raphaelfoo Raphael🔥 datafusionДатаФусионfoo datafusionДатаФусион🔥
+under_scorefoo under_score🔥 un iść corefoo un iść core🔥
+percentfoo percent🔥 pan Tadeusz ma iść w kątfoo pan Tadeusz ma iść w kąt🔥
+foo 🔥 foo 🔥
+foo 🔥 foo 🔥
+%foo %🔥 foo 🔥
+_foo _🔥 foo 🔥
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# || same type (column1 has null, so also tests NULL || NULL)
+# expect all results to be the same for each row as they all have the same values
+query TTTT
+SELECT
+    ascii_1 || ascii_2,
+    ascii_1 || unicode_2,
+    unicode_1 || ascii_2,
+    unicode_1 || unicode_2
+FROM test_basic_operator;
+----
+AndrewX Andrew🔥 datafusion📊🔥X datafusion📊🔥🔥
+XiangpengXiangpeng Xiangpengdatafusion数据融合 datafusion数据融合Xiangpeng datafusion数据融合datafusion数据融合
+RaphaelR RaphaelаФус datafusionДатаФусионR datafusionДатаФусионаФус
+under_scoreun_____core under_scorechrząszcz na łące w 東京都 un iść coreun_____core un iść corechrząszcz na łące w 東京都
+percentp%t percentPan Tadeusz ma frunąć stąd w kąt pan Tadeusz ma iść w kątp%t pan Tadeusz ma iść w kątPan Tadeusz ma frunąć stąd w kąt
+% (empty) % (empty)
+%% (empty) %% (empty)
+%\% % \% (empty)
+_\_ _ \_ (empty)
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# --------------------------------------
+# Test ~ operator
+# --------------------------------------
+
+query BB
+SELECT
+  ascii_1 ~ 'an',
+  unicode_1 ~ 'таФ'
+FROM test_basic_operator;
+----
+false false
+true false
+false true
+false false
+false false
+false false
+false false
+false false
+false false
+NULL NULL
+NULL NULL
+
+query BB
+SELECT
+  ascii_1 ~* '^a.{3}e',
+  unicode_1 ~* '^d.*Фу'
+FROM test_basic_operator;
+----
+true false
+false false
+false true
+false false
+false false
+false false
+false false
+false false
+false false
+NULL NULL
+NULL NULL
+
+query BB
+SELECT
+  ascii_1 !~~ 'xia_g%g',
+  unicode_1 !~~ 'datafusion数据融合'
+FROM test_basic_operator;
+----
+true true
+true false
+true true
+true true
+true true
+true true
+true true
+true true
+true true
+NULL NULL
+NULL NULL
+
+query BB
+SELECT
+  ascii_1 !~~* 'xia_g%g',
+  unicode_1 !~~* 'datafusion数据融合'
+FROM test_basic_operator;
+----
+true true
+false false
+true true
+true true
+true true
+true true
+true true
+true true
+true true
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test || operator
+# --------------------------------------
+
+query TTTTT
+select
+    ascii_1 || ' nice',
+    ascii_1 || ' and ' || ascii_2,
+    unicode_1 || ' cool',
+    unicode_1 || ' and ' || unicode_2,
+    ascii_1 || ' 🔥 ' || unicode_1
+from test_basic_operator;
+----
+Andrew nice Andrew and X datafusion📊🔥 cool datafusion📊🔥 and 🔥 Andrew 🔥 datafusion📊🔥
+Xiangpeng nice Xiangpeng and Xiangpeng datafusion数据融合 cool datafusion数据融合 and datafusion数据融合 Xiangpeng 🔥 datafusion数据融合
+Raphael nice Raphael and R datafusionДатаФусион cool datafusionДатаФусион and аФус Raphael 🔥 datafusionДатаФусион
+under_score nice under_score and un_____core un iść core cool un iść core and chrząszcz na łące w 東京都 under_score 🔥 un iść core
+percent nice percent and p%t pan Tadeusz ma iść w kąt cool pan Tadeusz ma iść w kąt and Pan Tadeusz ma frunąć stąd w kąt percent 🔥 pan Tadeusz ma iść w kąt
+ nice  and %  cool  and   🔥 
+ nice  and %%  cool  and   🔥 
+% nice % and \%  cool  and  % 🔥 
+_ nice _ and \_  cool  and  _ 🔥 
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LIKE / ILIKE
+# --------------------------------------
+
+# Test pattern with wildcard characters
+query TTBBBB
+select ascii_1, unicode_1,
+       ascii_1 like 'An%' as ascii_like,
+       unicode_1 like '%ion数据%' as unicode_like,
+       ascii_1 ilike 'An%' as ascii_ilike,
+       unicode_1 ilike '%ion数据%' as unicode_ilik
+from test_basic_operator;
+----
+Andrew datafusion📊🔥 true false true false
+Xiangpeng datafusion数据融合 false true false true
+Raphael datafusionДатаФусион false false false false
+under_score un iść core false false false false
+percent pan Tadeusz ma iść w kąt false false false false
+(empty) (empty) false false false false
+(empty) (empty) false false false false
+% (empty) false false false false
+_ (empty) false false false false
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+
+query TTBBBB
+SELECT ascii_1, unicode_1,
+      ascii_1 LIKE '%' AS ascii_1_like_percent,
+      unicode_1 LIKE '%' AS unicode_1_like_percent,
+      ascii_1 LIKE '%%' AS ascii_1_like_percent_percent,
+      unicode_1 LIKE '%%' AS unicode_1_like_percent_percent
+FROM test_basic_operator
+----
+Andrew datafusion📊🔥 true true true true
+Xiangpeng datafusion数据融合 true true true true
+Raphael datafusionДатаФусион true true true true
+under_score un iść core true true true true
+percent pan Tadeusz ma iść w kąt true true true true
+(empty) (empty) true true true true
+(empty) (empty) true true true true
+% (empty) true true true true
+_ (empty) true true true true
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+query TTBBBB
+SELECT ascii_1, unicode_1,
+      ascii_1 NOT LIKE '%' AS ascii_1_not_like_percent,
+      unicode_1 NOT LIKE '%' AS unicode_1_not_like_percent,
+      ascii_1 NOT LIKE '%%' AS ascii_1_not_like_percent_percent,
+      unicode_1 NOT LIKE '%%' AS unicode_1_not_like_percent_percent
+FROM test_basic_operator
+----
+Andrew datafusion📊🔥 false false false false
+Xiangpeng datafusion数据融合 false false false false
+Raphael datafusionДатаФусион false false false false
+under_score un iść core false false false false
+percent pan Tadeusz ma iść w kąt false false false false
+(empty) (empty) false false false false
+(empty) (empty) false false false false
+% (empty) false false false false
+_ (empty) false false false false
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+query T
+SELECT ascii_1 FROM test_basic_operator WHERE ascii_1 LIKE '%'
+----
+Andrew
+Xiangpeng
+Raphael
+under_score
+percent
+(empty)
+(empty)
+%
+_
+
+query T
+SELECT ascii_1 FROM test_basic_operator WHERE ascii_1 NOT LIKE '%'
+----
+
+# Test pattern without wildcard characters
+query TTBBBB
+select ascii_1, unicode_1,
+       ascii_1 like 'An' as ascii_like,
+       unicode_1 like 'ion数据' as unicode_like,
+       ascii_1 ilike 'An' as ascii_ilike,
+       unicode_1 ilike 'ion数据' as unicode_ilik
+from test_basic_operator;
+----
+Andrew datafusion📊🔥 false false false false
+Xiangpeng datafusion数据融合 false false false false
+Raphael datafusionДатаФусион false false false false
+under_score un iść core false false false false
+percent pan Tadeusz ma iść w kąt false false false false
+(empty) (empty) false false false false
+(empty) (empty) false false false false
+% (empty) false false false false
+_ (empty) false false false false
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test CHARACTER_LENGTH
+# --------------------------------------
+
+query II
+SELECT
+  arrow_cast(CHARACTER_LENGTH(ascii_1), 'Int64'),
+  arrow_cast(CHARACTER_LENGTH(unicode_1), 'Int64')
+FROM
+    test_basic_operator
+----
+6 12
+9 14
+7 20
+11 11
+7 24
+0 0
+0 0
+1 0
+1 0
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test BIT_LENGTH
+# --------------------------------------
+
+query IIII
+select
+  arrow_cast(bit_length(ascii_1), 'Int64'),
+  arrow_cast(bit_length(ascii_2), 'Int64'),
+  arrow_cast(bit_length(unicode_1), 'Int64'),
+  arrow_cast(bit_length(unicode_2), 'Int64')
+from test_basic_operator;
+----
+48 8 144 32
+72 72 176 176
+56 8 240 64
+88 88 104 256
+56 24 216 288
+0 8 0 0
+0 16 0 0
+8 16 0 0
+8 16 0 0
+NULL 8 NULL NULL
+NULL 8 NULL 32
+
+
+# --------------------------------------
+# Test Start_With
+# --------------------------------------
+
+query BBBB
+SELECT
+  STARTS_WITH(ascii_1, 'And'),
+  STARTS_WITH(unicode_1, 'data'),
+  STARTS_WITH(ascii_1, NULL),
+  STARTS_WITH(unicode_1, NULL)
+FROM test_basic_operator;
+----
+true true NULL NULL
+false true NULL NULL
+false true NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# --------------------------------------
+# Test ENDS_WITH
+# --------------------------------------
+
+query BBBB
+SELECT
+  ENDS_WITH(ascii_1, 'w'),
+  ENDS_WITH(unicode_1, 'ион'),
+  ENDS_WITH(ascii_1, NULL),
+  ENDS_WITH(unicode_1, NULL)
+FROM test_basic_operator;
+----
+true false NULL NULL
+false false NULL NULL
+false true NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+false false NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LEVENSHTEIN
+# --------------------------------------
+
+query IIII
+SELECT
+  LEVENSHTEIN(ascii_1, 'Andrew'),
+  LEVENSHTEIN(unicode_1, 'datafusion数据融合'),
+  LEVENSHTEIN(ascii_1, NULL),
+  LEVENSHTEIN(unicode_1, NULL)
+FROM test_basic_operator;
+----
+0 4 NULL NULL
+7 0 NULL NULL
+6 10 NULL NULL
+8 13 NULL NULL
+6 19 NULL NULL
+6 14 NULL NULL
+6 14 NULL NULL
+6 14 NULL NULL
+6 14 NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+# --------------------------------------
+# Test LPAD
+# --------------------------------------
+
+query TTTT
+SELECT
+  LPAD(ascii_1, 20, 'x'),
+  LPAD(ascii_1, 20, NULL),
+  LPAD(unicode_1, 20, '🔥'),
+  LPAD(unicode_1, 20, NULL)
+FROM test_basic_operator;
+----
+xxxxxxxxxxxxxxAndrew NULL 🔥🔥🔥🔥🔥🔥🔥🔥datafusion📊🔥 NULL
+xxxxxxxxxxxXiangpeng NULL 🔥🔥🔥🔥🔥🔥datafusion数据融合 NULL
+xxxxxxxxxxxxxRaphael NULL datafusionДатаФусион NULL
+xxxxxxxxxunder_score NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥un iść core NULL
+xxxxxxxxxxxxxpercent NULL pan Tadeusz ma iść w NULL
+xxxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+xxxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+xxxxxxxxxxxxxxxxxxx% NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+xxxxxxxxxxxxxxxxxxx_ NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query TTT
+SELECT
+  LPAD(ascii_1, 20),
+  LPAD(unicode_1, 20),
+  '|'
+FROM test_basic_operator;
+----
+              Andrew         datafusion📊🔥 |
+           Xiangpeng       datafusion数据融合 |
+             Raphael datafusionДатаФусион |
+         under_score          un iść core |
+             percent pan Tadeusz ma iść w |
+                                          |
+                                          |
+                   %                      |
+                   _                      |
+NULL NULL |
+NULL NULL |
+
+# --------------------------------------
+# Test RPAD
+# --------------------------------------
+
+query TTTT
+SELECT
+  RPAD(ascii_1, 20, 'x'),
+  RPAD(ascii_1, 20, NULL),
+  RPAD(unicode_1, 20, '🔥'),
+  RPAD(unicode_1, 20, NULL)
+FROM test_basic_operator;
+----
+Andrewxxxxxxxxxxxxxx NULL datafusion📊🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+Xiangpengxxxxxxxxxxx NULL datafusion数据融合🔥🔥🔥🔥🔥🔥 NULL
+Raphaelxxxxxxxxxxxxx NULL datafusionДатаФусион NULL
+under_scorexxxxxxxxx NULL un iść core🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+percentxxxxxxxxxxxxx NULL pan Tadeusz ma iść w NULL
+xxxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+xxxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+%xxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+_xxxxxxxxxxxxxxxxxxx NULL 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query TT
+SELECT
+  RPAD(ascii_1, 20),
+  RPAD(unicode_1, 20)
+FROM test_basic_operator;
+----
+Andrew               datafusion📊🔥        
+Xiangpeng            datafusion数据融合      
+Raphael              datafusionДатаФусион
+under_score          un iść core         
+percent              pan Tadeusz ma iść w
+                                         
+                                         
+%                                        
+_                                        
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test REGEXP_LIKE
+# --------------------------------------
+
+query BBBBBBBB
+SELECT
+  -- without flags
+  REGEXP_LIKE(ascii_1, 'an'),
+  REGEXP_LIKE(unicode_1, 'таФ'),
+  REGEXP_LIKE(ascii_1, NULL),
+  REGEXP_LIKE(unicode_1, NULL),
+  -- with flags
+  REGEXP_LIKE(ascii_1, 'AN', 'i'),
+  REGEXP_LIKE(unicode_1, 'ТаФ', 'i'),
+  REGEXP_LIKE(ascii_1, NULL, 'i'),
+  REGEXP_LIKE(unicode_1, NULL, 'i')
+  FROM test_basic_operator;
+----
+false false NULL NULL true false NULL NULL
+true false NULL NULL true false NULL NULL
+false true NULL NULL false true NULL NULL
+false false NULL NULL false false NULL NULL
+false false NULL NULL false false NULL NULL
+false false NULL NULL false false NULL NULL
+false false NULL NULL false false NULL NULL
+false false NULL NULL false false NULL NULL
+false false NULL NULL false false NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test REGEXP_MATCH
+# --------------------------------------
+
+query ????????
+SELECT
+  -- without flags
+  REGEXP_MATCH(ascii_1, 'an'),
+  REGEXP_MATCH(unicode_1, 'ТаФ'),
+  REGEXP_MATCH(ascii_1, NULL),
+  REGEXP_MATCH(unicode_1, NULL),
+  -- with flags
+  REGEXP_MATCH(ascii_1, 'AN', 'i'),
+  REGEXP_MATCH(unicode_1, 'таФ', 'i'),
+  REGEXP_MATCH(ascii_1, NULL, 'i'),
+  REGEXP_MATCH(unicode_1, NULL, 'i')
+FROM test_basic_operator;
+----
+NULL NULL NULL NULL [An] NULL NULL NULL
+[an] NULL NULL NULL [an] NULL NULL NULL
+NULL NULL NULL NULL NULL [таФ] NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test REPEAT
+# --------------------------------------
+
+query TT
+SELECT
+  REPEAT(ascii_1, 3),
+  REPEAT(unicode_1, 3)
+FROM test_basic_operator;
+----
+AndrewAndrewAndrew datafusion📊🔥datafusion📊🔥datafusion📊🔥
+XiangpengXiangpengXiangpeng datafusion数据融合datafusion数据融合datafusion数据融合
+RaphaelRaphaelRaphael datafusionДатаФусионdatafusionДатаФусионdatafusionДатаФусион
+under_scoreunder_scoreunder_score un iść coreun iść coreun iść core
+percentpercentpercent pan Tadeusz ma iść w kątpan Tadeusz ma iść w kątpan Tadeusz ma iść w kąt
+(empty) (empty)
+(empty) (empty)
+%%% (empty)
+___ (empty)
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test SPLIT_PART
+# --------------------------------------
+
+query TTTTTT
+SELECT
+  SPLIT_PART(ascii_1, 'e', 1),
+  SPLIT_PART(ascii_1, 'e', 2),
+  SPLIT_PART(ascii_1, NULL, 1),
+  SPLIT_PART(unicode_1, 'и', 1),
+  SPLIT_PART(unicode_1, 'и', 2),
+  SPLIT_PART(unicode_1, NULL, 1)
+FROM test_basic_operator;
+----
+Andr w NULL datafusion📊🔥 (empty) NULL
+Xiangp ng NULL datafusion数据融合 (empty) NULL
+Rapha l NULL datafusionДатаФус он NULL
+und r_scor NULL un iść core (empty) NULL
+p rc NULL pan Tadeusz ma iść w kąt (empty) NULL
+(empty) (empty) NULL (empty) (empty) NULL
+(empty) (empty) NULL (empty) (empty) NULL
+% (empty) NULL (empty) (empty) NULL
+_ (empty) NULL (empty) (empty) NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test REVERSE
+# --------------------------------------
+
+query TT
+SELECT
+  REVERSE(ascii_1),
+  REVERSE(unicode_1)
+FROM test_basic_operator;
+----
+werdnA 🔥📊noisufatad
+gnepgnaiX 合融据数noisufatad
+leahpaR ноисуФатаДnoisufatad
+erocs_rednu eroc ćśi nu
+tnecrep tąk w ćśi am zsuedaT nap
+(empty) (empty)
+(empty) (empty)
+% (empty)
+_ (empty)
+NULL NULL
+NULL NULL
+
+# --------------------------------------
+# Test STRPOS
+# --------------------------------------
+
+query IIIIII
+SELECT
+  STRPOS(ascii_1, 'e'),
+  STRPOS(ascii_1, 'ang'),
+  STRPOS(ascii_1, NULL),
+  STRPOS(unicode_1, 'и'),
+  STRPOS(unicode_1, 'ион'),
+  STRPOS(unicode_1, NULL)
+FROM test_basic_operator;
+----
+5 0 NULL 0 0 NULL
+7 3 NULL 0 0 NULL
+6 0 NULL 18 18 NULL
+4 0 NULL 0 0 NULL
+2 0 NULL 0 0 NULL
+0 0 NULL 0 0 NULL
+0 0 NULL 0 0 NULL
+0 0 NULL 0 0 NULL
+0 0 NULL 0 0 NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test SUBSTR_INDEX
+# --------------------------------------
+
+query TTTTTT
+SELECT
+  SUBSTR_INDEX(ascii_1, 'e', 1),
+  SUBSTR_INDEX(ascii_1, 'ang', 1),
+  SUBSTR_INDEX(ascii_1, NULL, 1),
+  SUBSTR_INDEX(unicode_1, 'и', 1),
+  SUBSTR_INDEX(unicode_1, '据融', 1),
+  SUBSTR_INDEX(unicode_1, NULL, 1)
+FROM test_basic_operator;
+----
+Andr Andrew NULL datafusion📊🔥 datafusion📊🔥 NULL
+Xiangp Xi NULL datafusion数据融合 datafusion数 NULL
+Rapha Raphael NULL datafusionДатаФус datafusionДатаФусион NULL
+und under_score NULL un iść core un iść core NULL
+p percent NULL pan Tadeusz ma iść w kąt pan Tadeusz ma iść w kąt NULL
+(empty) (empty) NULL (empty) (empty) NULL
+(empty) (empty) NULL (empty) (empty) NULL
+% % NULL (empty) (empty) NULL
+_ _ NULL (empty) (empty) NULL
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+# --------------------------------------
+# Test md5
+# --------------------------------------
+
+query T
+select md5(ascii_1) from test_basic_operator;
+----
+8aae3a73a9a43ee6b04dfd986fe9d136
+76515af83bcb9d6336fe42dba18e716d
+84fc7720d5e7bf07115d91762843b8ad
+e0c4c75d58916b22a41b6ea9bc46231f
+354f047ba64552895b016bbdd60ab174
+d41d8cd98f00b204e9800998ecf8427e
+d41d8cd98f00b204e9800998ecf8427e
+0bcef9c45bd8a48eda1b26eb0c61c869
+b14a7b8059d9c055954c92674ce60032
+NULL
+NULL
+
+# --------------------------------------
+# Test sha244
+# --------------------------------------
+
+query ?
+select sha224(ascii_1) from test_basic_operator;
+----
+abd8be3961e5dbe324bc67f9a0211d5f7d81e556baadaff6218e4bfa
+87a20c95932524a54a0263a621fe791a5d5fbc0e40242b59732d6bf5
+8dd0c8021fe87bbc1c0701bd3130e27a639dcd93083c3f1989ffdf26
+8f6caa44143a080541f083bb762107ce12224b271bfa8b36ece002ab
+951336d101e034714ba1ca0535688f0300613e235814ed938cd25115
+d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
+d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
+fda2a4d4c5fb67cfd7fc817f59b543ae42f650aa4abd79934ca5ac55
+d365e3c7512c311d0df0528a850e6c827cbe508d13235fa91b545389
+NULL
+NULL
+
+# --------------------------------------
+# Test sha256
+# --------------------------------------
+
+query ?
+select sha256(ascii_1) from test_basic_operator;
+----
+c10873196eb1124ed74461c20a67094e395f2310f6305607b9694ee6b1ee8b43
+ec792d2e89af0d5b05c88ee1e5fe041ce2db94f84c3aabac4f7cfe20f00cd032
+053e9c5f1a29bea66ff896d7a8f217bf380b8e3973e7f13c1acbe14ef7fc947e
+d8071166bbe6131a0acaf86019eeeca31c87ee4fda23b80eda0d094dbffee521
+fd86717aca41c558c78c19ab2b50691179a57ba5200bc7e3317be70efd4043ad
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+bbf3f11cb5b43e700273a78d12de55e4a7eab741ed2abf13787a4d2dc832b8ec
+d2e2adf7177b7a8afddbc12d1634cf23ea1a71020f6a1308070a16400fb68fde
+NULL
+NULL
+
+# --------------------------------------
+# Test sha384
+# --------------------------------------
+
+query ?
+select sha384(ascii_1) from test_basic_operator;
+----
+33a2a749758403660d131256e08647f52e4efba74840e7ad55c77012ade611ec0dc815ab3fa777e98710d43f3345222b
+7b525a4147696421c6119df0e983ee3d9ebcfa13b3e1dce2fb308f91863e236fde55b56b89936908999332f5a453845c
+359ee4b366b1965e9ceb0bd529edcdc08c33b0348aa4cc2cf4114c7f18069d53f6a798482626393c46ed340995c34b4e
+fe417fcff1b9b8cdbc4fba45fedcd882ccbeef438497647052809fd73f43bcf1a6214f543a91e7183d56c6ae8e7cb30e
+7791b34dcc841235a8a074052bc12aa7090c0d72f09ec41b1521a67fa09b026a9c02d159b42428d7b528aa5ff7598fd4
+38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b
+38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b
+bba987e661a4158451c5e9870fe91f483064574a0d7485caef40f48d7846579859c7dddebd418cbc99ccaa1ebd3619ea
+586b0fd9f8ec935c69a7dceb5560742f368962833023906d30fe1cf49c96ea6d22cea8c2b63cd18e7af08fbf9e47c3f9
+NULL
+NULL
+
+
+# --------------------------------------
+# Test sha512
+# --------------------------------------
+
+query ?
+select sha512(ascii_1) from test_basic_operator;
+----
+93262eb44d649a02a83b78889fd813ce819759daabcee2ac433f1ea7feef44f521ac0eba5b5359d47c7a7146afbe064b55134a63ac713c0fcc4c48e11eed7109
+f02c73afb1e433d6cc7e9137bb4ed40791e8c6e7877ae26e7a1edc4ce98a945a61bdf883d985adbc03d74d67ac18d4981529be5f4f53a35ff7fcd3e9814592d7
+2f25e277902f07a4c5cdb54485487b50bae3acdd615cd5551f71f4e3d97077fbccfbf0c85f88d6766d132069a343b732c6e81080a2c3ed59caff0c6947f4c57a
+cafc51edc3a949179a74a805be8d0c7991bfc849b01f773f4bcd5e7dbe51b6d71d65921d8025d375d501af6a1c1026ab76cd7f4811b91bb4544f7dcbb710fa1f
+2f845edf0e9c9728fae627d4678dc8c35c9a7f22809d355aa5ddf96d9ca3539973ac7ff96bfc6720ce6a973f93b716e265ad719ee38a85e44d9316ac1b6c89a4
+cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
+cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
+91972aa34055bca20ddb643b9f817a547e5d4ad49b7ff16a7f828a8d72c4cb4a5679cff4da00f9fb6b2833de7eb3480b3b4a7c7c7b85a39028de55acaf2d8812
+bbbe7f2559c7953d281fba7f25258063dbc8a55c5b9fdfcd334ecd64a8d7d8980c6f6ee0457bf496bcff747991f741446f1814222678dfa7457f1ad3a6f848b3
+NULL
+NULL
+
+# --------------------------------------
+# Test DIGEST
+# --------------------------------------
+
+query ?
+select DIGEST(ascii_1, 'sha256') from test_basic_operator;
+----
+c10873196eb1124ed74461c20a67094e395f2310f6305607b9694ee6b1ee8b43
+ec792d2e89af0d5b05c88ee1e5fe041ce2db94f84c3aabac4f7cfe20f00cd032
+053e9c5f1a29bea66ff896d7a8f217bf380b8e3973e7f13c1acbe14ef7fc947e
+d8071166bbe6131a0acaf86019eeeca31c87ee4fda23b80eda0d094dbffee521
+fd86717aca41c558c78c19ab2b50691179a57ba5200bc7e3317be70efd4043ad
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+bbf3f11cb5b43e700273a78d12de55e4a7eab741ed2abf13787a4d2dc832b8ec
+d2e2adf7177b7a8afddbc12d1634cf23ea1a71020f6a1308070a16400fb68fde
+NULL
+NULL
+
+# --------------------------------------
+# Test left() and right()
+# --------------------------------------
+
+# left with positive n on ASCII column
+query T
+SELECT left(ascii_1, 3) FROM test_basic_operator
+----
+And
+Xia
+Rap
+und
+per
+(empty)
+(empty)
+%
+_
+NULL
+NULL
+
+# left with positive n on unicode column
+query T
+SELECT left(unicode_1, 12) FROM test_basic_operator
+----
+datafusion📊🔥
+datafusion数据
+datafusionДа
+un iść core
+pan Tadeusz
+(empty)
+(empty)
+(empty)
+(empty)
+NULL
+NULL
+
+# left with negative n
+query T
+SELECT left(ascii_1, -3) FROM test_basic_operator
+----
+And
+Xiangp
+Raph
+under_sc
+perc
+(empty)
+(empty)
+(empty)
+(empty)
+NULL
+NULL
+
+# right with positive n on ASCII column
+query T
+SELECT right(ascii_1, 3) FROM test_basic_operator
+----
+rew
+eng
+ael
+ore
+ent
+(empty)
+(empty)
+%
+_
+NULL
+NULL
+
+# right with positive n on unicode column
+query T
+SELECT right(unicode_1, 3) FROM test_basic_operator
+----
+n📊🔥
+据融合
+ион
+ore
+kąt
+(empty)
+(empty)
+(empty)
+(empty)
+NULL
+NULL
+
+# right with negative n
+query T
+SELECT right(ascii_1, -3) FROM test_basic_operator
+----
+rew
+ngpeng
+hael
+er_score
+cent
+(empty)
+(empty)
+(empty)
+(empty)
+NULL
+NULL
+
+# left and right with n=0
+query TT
+SELECT left(ascii_1, 0), right(ascii_1, 0) FROM test_basic_operator
+----
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+(empty) (empty)
+NULL NULL
+NULL NULL
+
+# left and right preserve the input string type
+query TTTTTT
+SELECT
+  arrow_typeof(left(arrow_cast(ascii_1, 'Utf8'), 3)),
+  arrow_typeof(right(arrow_cast(ascii_1, 'Utf8'), 3)),
+  arrow_typeof(left(arrow_cast(ascii_1, 'LargeUtf8'), 3)),
+  arrow_typeof(right(arrow_cast(ascii_1, 'LargeUtf8'), 3)),
+  arrow_typeof(left(arrow_cast(ascii_1, 'Utf8View'), 3)),
+  arrow_typeof(right(arrow_cast(ascii_1, 'Utf8View'), 3))
+FROM test_basic_operator LIMIT 1
+----
+Utf8 Utf8 LargeUtf8 LargeUtf8 Utf8View Utf8View
+
+# substr preserves the input string type
+query TTT
+SELECT
+  arrow_typeof(substr(arrow_cast(ascii_1, 'Utf8'), 1, 3)),
+  arrow_typeof(substr(arrow_cast(ascii_1, 'LargeUtf8'), 1, 3)),
+  arrow_typeof(substr(arrow_cast(ascii_1, 'Utf8View'), 1, 3))
+FROM test_basic_operator LIMIT 1
+----
+Utf8 LargeUtf8 Utf8View
+
+# --------------------------------------
+# Test repeat() against array inputs with various null patterns. The scalar
+# paths are covered in `string_literal.slt`; these tests exercise the array
+# execution path of repeat() including the bulk null-buffer computation.
+# --------------------------------------
+
+# array string + array count, neither side has nulls
+query T
+SELECT repeat(ascii_2, 2) FROM test_basic_operator
+----
+XX
+XiangpengXiangpeng
+RR
+un_____coreun_____core
+p%tp%t
+%%
+%%%%
+\%\%
+\_\_
+%%
+RR
+
+# array string + array count, only the string side has nulls
+query T
+SELECT repeat(ascii_1, 2) FROM test_basic_operator
+----
+AndrewAndrew
+XiangpengXiangpeng
+RaphaelRaphael
+under_scoreunder_score
+percentpercent
+(empty)
+(empty)
+%%
+__
+NULL
+NULL
+
+# array string + array count, only the count side has nulls
+query T
+SELECT repeat(ascii_2, CASE WHEN length(ascii_2) = 2 THEN NULL ELSE 2 END) FROM test_basic_operator
+----
+XX
+XiangpengXiangpeng
+RR
+un_____coreun_____core
+p%tp%t
+%%
+NULL
+NULL
+NULL
+%%
+RR
+
+# array string + array count, nulls interleaved on both sides (the string
+# side is null at rows 9-10; the count side is null at rows 6-8)
+query T
+SELECT repeat(ascii_1, CASE WHEN length(ascii_2) = 2 THEN NULL ELSE 2 END) FROM test_basic_operator
+----
+AndrewAndrew
+XiangpengXiangpeng
+RaphaelRaphael
+under_scoreunder_score
+percentpercent
+(empty)
+NULL
+NULL
+NULL
+NULL
+NULL

@@ -1,0 +1,1648 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+
+# unicode expressions
+
+query T
+SELECT left('abcde', -2)
+----
+abc
+
+query T
+SELECT left(arrow_cast('abcde', 'Dictionary(Int32, Utf8)'), -2)
+----
+abc
+
+query T
+SELECT left('abcde', -200)
+----
+(empty)
+
+query T
+SELECT left('abcde', 0)
+----
+(empty)
+
+query T
+SELECT left('abcde', 2)
+----
+ab
+
+query T
+SELECT left('abcde', 200)
+----
+abcde
+
+query T
+SELECT left('abcde', CAST(NULL AS INT))
+----
+NULL
+
+query T
+SELECT left(NULL, 2)
+----
+NULL
+
+query T
+SELECT left(NULL, CAST(NULL AS INT))
+----
+NULL
+
+query I
+SELECT length('')
+----
+0
+
+query ?
+SELECT length(arrow_cast('', 'Dictionary(Int32, Utf8)'))
+----
+0
+
+query I
+SELECT length('chars')
+----
+5
+
+query I
+SELECT length('josé')
+----
+4
+
+query ?
+SELECT length(arrow_cast('josé', 'Dictionary(Int32, Utf8)'))
+----
+4
+
+query I
+SELECT length(NULL)
+----
+NULL
+
+query T
+SELECT right('abcde', -2)
+----
+cde
+
+query T
+SELECT right(arrow_cast('abcde', 'Dictionary(Int32, Utf8)'), 1)
+----
+e
+
+query T
+SELECT right('abcde', -200)
+----
+(empty)
+
+query T
+SELECT right('abcde', 0)
+----
+(empty)
+
+query T
+SELECT right('abcde', 2)
+----
+de
+
+query T
+SELECT right('abcde', 200)
+----
+abcde
+
+query T
+SELECT right('abcde', CAST(NULL AS INT))
+----
+NULL
+
+query T
+SELECT right(NULL, 2)
+----
+NULL
+
+query T
+SELECT right(NULL, CAST(NULL AS INT))
+----
+NULL
+
+query T
+SELECT substr('alphabet', -3)
+----
+alphabet
+
+query T
+SELECT substr('alphabet', 0)
+----
+alphabet
+
+query T
+SELECT substr('alphabet', 1)
+----
+alphabet
+
+query T
+SELECT substr('alphabet', 2)
+----
+lphabet
+
+query T
+SELECT substr('alphabet', 3)
+----
+phabet
+
+query T
+SELECT substr('alphabet', 30)
+----
+(empty)
+
+query T
+SELECT substr('alphabet', CAST(NULL AS int))
+----
+NULL
+
+query T
+SELECT substr('alphabet', 3, 2)
+----
+ph
+
+query T
+SELECT substr('alphabet', 3, 20)
+----
+phabet
+
+query T
+SELECT substr('alphabet', CAST(NULL AS int), 20)
+----
+NULL
+
+query T
+SELECT substr('alphabet', 3, CAST(NULL AS int))
+----
+NULL
+
+query T
+SELECT substr(NULL, 1, 2)
+----
+NULL
+
+query T
+SELECT substr('alphabet', 1, NULL)
+----
+NULL
+
+query T
+SELECT substr('alphabet', NULL, 2)
+----
+NULL
+
+statement error Function 'substr' failed to match any signature
+SELECT substr(1, 3)
+
+statement error Function 'substr' failed to match any signature
+SELECT substr(1, 3, 4)
+
+query T
+SELECT translate('12345', '143', 'ax')
+----
+a2x5
+
+query T
+SELECT translate(arrow_cast('12345', 'Dictionary(Int32, Utf8)'), '143', 'ax')
+----
+a2x5
+
+query T
+SELECT translate(NULL, '143', 'ax')
+----
+NULL
+
+query T
+SELECT translate('12345', NULL, 'ax')
+----
+NULL
+
+query T
+SELECT translate('12345', '143', NULL)
+----
+NULL
+
+query T
+SELECT translate(arrow_cast('12345', 'LargeUtf8'), '143', 'ax')
+----
+a2x5
+
+statement ok
+CREATE TABLE test(
+  c1 VARCHAR
+) as VALUES
+(''),
+('a'),
+('aa'),
+('aaa');
+
+# generic query length
+query I rowsort
+SELECT length(c1) FROM test
+----
+0
+1
+2
+3
+
+statement ok
+drop table test
+
+#
+# Testing error message for wrong function name
+#
+
+statement ok
+CREATE TABLE test(
+  v1 Int,
+  v2 Int
+) as VALUES
+(1, 10),
+(2, 20),
+(3, 30);
+
+# Scalar function
+statement error Did you mean 'arrow_typeof'?
+SELECT arrowtypeof(v1) from test;
+
+# Scalar function
+statement error Did you mean 'to_timestamp_seconds'?
+SELECT to_TIMESTAMPS_second(v2) from test;
+
+# Aggregate function
+query error
+SELECT counter(*) from test;
+----
+DataFusion error: Error during planning: Invalid function 'counter'.
+Did you mean 'count'?
+
+
+# Aggregate function
+statement error Did you mean 'stddev'?
+SELECT STDEV(v1) from test;
+
+# Aggregate function
+statement error
+SELECT COVARIA(1,1);
+----
+DataFusion error: Error during planning: Invalid function 'covaria'.
+Did you mean 'covar'?
+
+
+# Window function
+statement error
+SELECT v1, v2, SUMM(v2) OVER(ORDER BY v1) from test;
+
+# Window function
+statement error Did you mean 'row_number'?
+SELECT v1, v2, ROWNUMBER() OVER(ORDER BY v1) from test;
+
+statement ok
+drop table test
+
+# Scalar function struct
+statement ok
+create table simple_struct_test (
+    c1 boolean,
+    c2 INT,
+    c3 FLOAT,
+    c4 DOUBLE,
+    a VARCHAR,
+    b TEXT
+) as select *
+from (values
+  (true, 1,3.1,3.14,'str','text')
+);
+
+query ?
+SELECT struct(c1,c2,c3,c4,a,b) from simple_struct_test
+----
+{c0: true, c1: 1, c2: 3.1, c3: 3.14, c4: str, c5: text}
+
+statement ok
+drop table simple_struct_test
+
+# create aggregate_test_100 table for functions test
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+
+# sqrt_f32_vs_f64
+query R
+SELECT avg(sqrt(c11)) FROM aggregate_test_100
+----
+0.658440848589
+
+query R
+SELECT avg(CAST(sqrt(c11) AS double)) FROM aggregate_test_100
+----
+0.658440848589
+
+query R
+SELECT avg(sqrt(CAST(c11 AS double))) FROM aggregate_test_100
+----
+0.658440848342
+
+statement ok
+drop table aggregate_test_100
+
+
+# case_sensitive_identifiers_functions
+statement ok
+create table t as values (
+    arrow_cast(2, 'Int8'),
+    arrow_cast(2, 'Int16'),
+    arrow_cast(2, 'Int32'),
+    arrow_cast(2, 'Int64'),
+    arrow_cast(2, 'UInt8'),
+    arrow_cast(2, 'UInt16'),
+    arrow_cast(2, 'UInt32'),
+    arrow_cast(2, 'UInt64'),
+    arrow_cast(2, 'Float32'),
+    arrow_cast(2, 'Float64')
+)
+;
+
+query R
+SELECT sqrt(column1) FROM t
+----
+1.414213562373
+
+query R
+SELECT SQRT(column1) FROM t
+----
+1.414213562373
+
+statement error Error during planning: Invalid function 'SQRT'
+SELECT "SQRT"(column1) FROM t
+
+query R
+SELECT "sqrt"(column1) FROM t
+----
+1.414213562373
+
+# case_builtin_math_expression
+query RRRRRRRRRR
+SELECT sqrt(column1),sqrt(column2),sqrt(column3),sqrt(column4),sqrt(column5),sqrt(column6),sqrt(column7),sqrt(column8),sqrt(column9),sqrt(column10) FROM t
+----
+1.414213562373 1.414213562373 1.414213562373 1.414213562373 1.414213562373 1.414213562373 1.414213562373 1.414213562373 1.4142135 1.414213562373
+
+statement ok
+drop table t
+
+
+query T
+SELECT upper('foo')
+----
+FOO
+
+query T
+SELECT upper(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+FOO
+
+query T
+SELECT upper(arrow_cast(arrow_cast('foo', 'Dictionary(Int32, Utf8)'), 'Dictionary(Int32, Utf8View)'))
+----
+FOO
+
+query T
+SELECT upper('árvore ação αβγ')
+----
+ÁRVORE AÇÃO ΑΒΓ
+
+query T
+SELECT upper(arrow_cast('árvore ação αβγ', 'Dictionary(Int32, Utf8)'))
+----
+ÁRVORE AÇÃO ΑΒΓ
+
+query T
+SELECT arrow_typeof(upper('foo'))
+----
+Utf8
+
+query T
+SELECT arrow_typeof(upper(arrow_cast('foo', 'LargeUtf8')))
+----
+LargeUtf8
+
+query T
+SELECT arrow_typeof(upper(arrow_cast('foo', 'Utf8View')))
+----
+Utf8View
+
+query T
+SELECT arrow_typeof(upper(arrow_cast(arrow_cast('foo', 'Dictionary(Int32, Utf8)'), 'Dictionary(Int32, Utf8View)')))
+----
+Dictionary(Int32, Utf8View)
+
+statement ok
+CREATE TABLE upper_dictionary_test AS
+SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS c1 FROM (VALUES
+('foo'),
+(NULL),
+('Bar'));
+
+query TT
+SELECT upper(c1), arrow_typeof(upper(c1)) FROM upper_dictionary_test
+----
+FOO Dictionary(Int32, Utf8)
+NULL Dictionary(Int32, Utf8)
+BAR Dictionary(Int32, Utf8)
+
+statement ok
+DROP TABLE upper_dictionary_test
+
+query T
+SELECT btrim('   foo  ')
+----
+foo
+
+query TT
+SELECT btrim(arrow_cast('   foo  ', 'Dictionary(Int32, Utf8)')),
+       arrow_typeof(btrim(arrow_cast('   foo  ', 'Dictionary(Int32, Utf8)')))
+----
+foo Dictionary(Int32, Utf8)
+
+query T
+SELECT initcap('foo')
+----
+Foo
+
+query T
+SELECT initcap(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+Foo
+
+query TTTT
+SELECT initcap(arrow_cast('foo BAR', 'Dictionary(Int32, LargeUtf8)')),
+       arrow_typeof(initcap(arrow_cast('foo BAR', 'Dictionary(Int32, LargeUtf8)'))),
+       initcap(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )),
+       arrow_typeof(initcap(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )))
+----
+Foo Bar Dictionary(Int32, LargeUtf8) Foo Bar Dictionary(Int32, Utf8View)
+
+query ?T
+SELECT initcap(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(initcap(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+Foo Bar Dictionary(Int32, Dictionary(UInt32, Utf8))
+
+statement ok
+CREATE TABLE unicode_dictionary_test AS
+SELECT column1 AS id,
+       arrow_cast(column2, 'Dictionary(Int32, Utf8)') AS dict_col,
+       arrow_cast(
+           arrow_cast(column2, 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       ) AS nested_dict_col
+FROM (VALUES
+(1, 'foo BAR'),
+(2, 'éclair CAFÉ'),
+(3, NULL));
+
+query T?TT
+SELECT initcap(dict_col), initcap(nested_dict_col),
+       arrow_typeof(initcap(dict_col)),
+       arrow_typeof(initcap(nested_dict_col))
+FROM unicode_dictionary_test
+ORDER BY id
+----
+Foo Bar Foo Bar Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+Éclair Café Éclair Café Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+NULL NULL Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+
+query TTTT
+SELECT reverse(arrow_cast('foo BAR', 'Dictionary(Int32, LargeUtf8)')),
+       arrow_typeof(reverse(arrow_cast('foo BAR', 'Dictionary(Int32, LargeUtf8)'))),
+       reverse(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )),
+       arrow_typeof(reverse(arrow_cast(
+           arrow_cast('foo BAR', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )))
+----
+RAB oof Dictionary(Int32, LargeUtf8) RAB oof Dictionary(Int32, Utf8View)
+
+query T?TT
+SELECT reverse(dict_col), reverse(nested_dict_col),
+       arrow_typeof(reverse(dict_col)),
+       arrow_typeof(reverse(nested_dict_col))
+FROM unicode_dictionary_test
+ORDER BY id
+----
+RAB oof RAB oof Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+ÉFAC rialcé ÉFAC rialcé Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+NULL NULL Dictionary(Int32, Utf8) Dictionary(Int32, Dictionary(UInt32, Utf8))
+
+statement ok
+DROP TABLE unicode_dictionary_test
+
+query ?
+SELECT ascii(arrow_cast('é', 'Dictionary(Int32, Utf8)'))
+----
+233
+
+query T
+SELECT arrow_typeof(ascii(arrow_cast('é', 'Dictionary(Int32, Utf8)')))
+----
+Dictionary(Int32, Int32)
+
+query ?T
+SELECT ascii(arrow_cast(
+           arrow_cast('💯', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(ascii(arrow_cast(
+           arrow_cast('💯', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+128175 Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query I
+SELECT instr('foobarbar', 'bar')
+----
+4
+
+query I
+SELECT instr('foobarbar', 'aa')
+----
+0
+
+query I
+SELECT instr('foobarbar', '')
+----
+1
+
+query T
+SELECT lower('FOObar')
+----
+foobar
+
+query T
+SELECT lower(arrow_cast('FOObar', 'Dictionary(Int32, Utf8)'))
+----
+foobar
+
+query T
+SELECT lower(arrow_cast(arrow_cast('FOObar', 'Dictionary(Int32, Utf8)'), 'Dictionary(Int32, Utf8View)'))
+----
+foobar
+
+query T
+SELECT lower('ÁRVORE AÇÃO ΑΒΓ')
+----
+árvore ação αβγ
+
+query T
+SELECT lower(arrow_cast('ÁRVORE AÇÃO ΑΒΓ', 'Dictionary(Int32, Utf8)'))
+----
+árvore ação αβγ
+
+query T
+SELECT arrow_typeof(lower('FOObar'))
+----
+Utf8
+
+query T
+SELECT arrow_typeof(lower(arrow_cast('FOObar', 'LargeUtf8')))
+----
+LargeUtf8
+
+query T
+SELECT arrow_typeof(lower(arrow_cast('FOObar', 'Utf8View')))
+----
+Utf8View
+
+query T
+SELECT arrow_typeof(lower(arrow_cast(arrow_cast('FOObar', 'Dictionary(Int32, Utf8)'), 'Dictionary(Int32, Utf8View)')))
+----
+Dictionary(Int32, Utf8View)
+
+statement ok
+CREATE TABLE lower_dictionary_test AS
+SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS c1 FROM (VALUES
+('FOO'),
+(NULL),
+('Bar'));
+
+query TT
+SELECT lower(c1), arrow_typeof(lower(c1)) FROM lower_dictionary_test
+----
+foo Dictionary(Int32, Utf8)
+NULL Dictionary(Int32, Utf8)
+bar Dictionary(Int32, Utf8)
+
+statement ok
+DROP TABLE lower_dictionary_test
+
+query T
+SELECT ltrim('   foo')
+----
+foo
+
+query TT
+SELECT ltrim(arrow_cast('    foo', 'Dictionary(Int32, Utf8)')),
+       arrow_typeof(ltrim(arrow_cast('    foo', 'Dictionary(Int32, Utf8)')))
+----
+foo Dictionary(Int32, Utf8)
+
+query T
+SELECT md5('foo')
+----
+acbd18db4cc2f85cedef654fccc4a4d8
+
+query T
+SELECT md5(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+acbd18db4cc2f85cedef654fccc4a4d8
+
+
+query T
+SELECT rtrim(' foo  ')
+----
+ foo
+
+query TT
+SELECT rtrim(arrow_cast(' foo  ', 'Dictionary(Int32, Utf8)')),
+       arrow_typeof(rtrim(arrow_cast(' foo  ', 'Dictionary(Int32, Utf8)')))
+----
+ foo Dictionary(Int32, Utf8)
+
+query T
+SELECT trim('  foo  ')
+----
+foo
+
+query TT
+SELECT trim(arrow_cast('  foo  ', 'Dictionary(Int32, Utf8)')),
+       arrow_typeof(trim(arrow_cast('  foo  ', 'Dictionary(Int32, Utf8)')))
+----
+foo Dictionary(Int32, Utf8)
+
+query TTTT?T
+SELECT btrim(arrow_cast('  foo  ', 'Dictionary(Int32, LargeUtf8)')),
+       arrow_typeof(btrim(arrow_cast('  foo  ', 'Dictionary(Int32, LargeUtf8)'))),
+       ltrim(arrow_cast(
+           arrow_cast('  bar', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )),
+       arrow_typeof(ltrim(arrow_cast(
+           arrow_cast('  bar', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       ))),
+       rtrim(arrow_cast(
+           arrow_cast('baz  ', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(rtrim(arrow_cast(
+           arrow_cast('baz  ', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+foo Dictionary(Int32, LargeUtf8) bar Dictionary(Int32, Utf8View) baz Dictionary(Int32, Dictionary(UInt32, Utf8))
+
+statement ok
+CREATE TABLE trim_dictionary_test AS
+SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS both,
+       arrow_cast(column2, 'Dictionary(Int32, Utf8)') AS leading,
+       arrow_cast(column3, 'Dictionary(Int32, Utf8)') AS trailing
+FROM (VALUES
+('  foo  ', '  bar', 'baz  '),
+(NULL, NULL, NULL));
+
+query TTTTTT
+SELECT btrim(both), arrow_typeof(btrim(both)),
+       ltrim(leading), arrow_typeof(ltrim(leading)),
+       rtrim(trailing), arrow_typeof(rtrim(trailing))
+FROM trim_dictionary_test
+----
+foo Dictionary(Int32, Utf8) bar Dictionary(Int32, Utf8) baz Dictionary(Int32, Utf8)
+NULL Dictionary(Int32, Utf8) NULL Dictionary(Int32, Utf8) NULL Dictionary(Int32, Utf8)
+
+statement ok
+DROP TABLE trim_dictionary_test
+
+query TTTTTT
+SELECT btrim(arrow_cast('__foo__', 'Dictionary(Int32, Utf8)'), '_'),
+       arrow_typeof(btrim(arrow_cast('__foo__', 'Dictionary(Int32, Utf8)'), '_')),
+       ltrim(arrow_cast('__bar', 'Dictionary(Int32, Utf8)'), '_'),
+       arrow_typeof(ltrim(arrow_cast('__bar', 'Dictionary(Int32, Utf8)'), '_')),
+       rtrim(arrow_cast('baz__', 'Dictionary(Int32, Utf8)'), '_'),
+       arrow_typeof(rtrim(arrow_cast('baz__', 'Dictionary(Int32, Utf8)'), '_'))
+----
+foo Utf8 bar Utf8 baz Utf8
+
+# Verify that trim, ltrim, and rtrim only strip spaces by default,
+# not other whitespace characters (tabs, newlines, etc.)
+query III
+SELECT length(trim(chr(9) || 'foo' || chr(10))),
+       length(ltrim(chr(9) || 'foo')),
+       length(rtrim('foo' || chr(10)))
+----
+5 4 4
+
+query I
+SELECT bit_length('foo')
+----
+24
+
+query ?
+SELECT bit_length(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+24
+
+query T
+SELECT arrow_typeof(bit_length(arrow_cast('foo', 'Dictionary(Int32, Utf8)')))
+----
+Dictionary(Int32, Int32)
+
+query ?T
+SELECT bit_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(bit_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+16 Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query I
+SELECT character_length('foo')
+----
+3
+
+query ?
+SELECT character_length(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+3
+
+query ?T
+SELECT character_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(character_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+1 Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query ?T?T
+SELECT character_length(arrow_cast('foo', 'Dictionary(Int32, LargeUtf8)')),
+       arrow_typeof(character_length(
+           arrow_cast('foo', 'Dictionary(Int32, LargeUtf8)')
+       )),
+       character_length(arrow_cast(
+           arrow_cast('foo', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )),
+       arrow_typeof(character_length(arrow_cast(
+           arrow_cast('foo', 'Dictionary(Int32, Utf8)'),
+           'Dictionary(Int32, Utf8View)'
+       )))
+----
+3 Dictionary(Int32, Int64) 3 Dictionary(Int32, Int32)
+
+query I
+SELECT octet_length('foo')
+----
+3
+
+query ?
+SELECT octet_length(arrow_cast('foo', 'Dictionary(Int32, Utf8)'))
+----
+3
+
+query T
+SELECT arrow_typeof(octet_length(arrow_cast('foo', 'Dictionary(Int32, Utf8)')))
+----
+Dictionary(Int32, Int32)
+
+query ?T
+SELECT octet_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )),
+       arrow_typeof(octet_length(arrow_cast(
+           arrow_cast('é', 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       )))
+----
+2 Dictionary(Int32, Dictionary(UInt32, Int32))
+
+statement ok
+CREATE TABLE string_length_dictionary_test AS
+SELECT column1 AS id,
+       arrow_cast(column2, 'Dictionary(Int32, Utf8)') AS dict_col,
+       arrow_cast(
+           arrow_cast(column2, 'Dictionary(UInt32, Utf8)'),
+           'Dictionary(Int32, Dictionary(UInt32, Utf8))'
+       ) AS nested_dict_col
+FROM (VALUES
+(1, 'foo'),
+(2, 'é'),
+(3, NULL));
+
+query ??TT
+SELECT bit_length(dict_col), bit_length(nested_dict_col),
+       arrow_typeof(bit_length(dict_col)),
+       arrow_typeof(bit_length(nested_dict_col))
+FROM string_length_dictionary_test
+ORDER BY id
+----
+24 24 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+16 16 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+NULL NULL Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query ??TT
+SELECT octet_length(dict_col), octet_length(nested_dict_col),
+       arrow_typeof(octet_length(dict_col)),
+       arrow_typeof(octet_length(nested_dict_col))
+FROM string_length_dictionary_test
+ORDER BY id
+----
+3 3 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+2 2 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+NULL NULL Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query ??TT
+SELECT character_length(dict_col), character_length(nested_dict_col),
+       arrow_typeof(character_length(dict_col)),
+       arrow_typeof(character_length(nested_dict_col))
+FROM string_length_dictionary_test
+ORDER BY id
+----
+3 3 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+1 1 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+NULL NULL Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+
+query ??TT
+SELECT ascii(dict_col), ascii(nested_dict_col),
+       arrow_typeof(ascii(dict_col)),
+       arrow_typeof(ascii(nested_dict_col))
+FROM string_length_dictionary_test
+ORDER BY id
+----
+102 102 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+233 233 Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+NULL NULL Dictionary(Int32, Int32) Dictionary(Int32, Dictionary(UInt32, Int32))
+
+statement ok
+DROP TABLE string_length_dictionary_test
+
+query I
+SELECT strpos('helloworld', 'world')
+----
+6
+
+query I
+SELECT strpos(arrow_cast('helloworld', 'Dictionary(Int32, Utf8)'), 'world')
+----
+6
+
+query I
+SELECT strpos('helloworld', NULL)
+----
+NULL
+
+query I
+SELECT strpos(arrow_cast('helloworld', 'Dictionary(Int32, Utf8)'), NULL)
+----
+NULL
+
+statement ok
+CREATE TABLE products (
+product_id INT PRIMARY KEY,
+product_name VARCHAR(100),
+price DECIMAL(10, 2))
+
+statement ok
+INSERT INTO products (product_id, product_name, price) VALUES
+(1, 'OldBrand Product 1', 19.99),
+(2, 'OldBrand Product 2', 29.99),
+(3, 'OldBrand Product 3', 39.99),
+(4, 'OldBrand Product 4', 49.99)
+
+query ITR
+SELECT * REPLACE (price*2 AS price) FROM products
+----
+1 OldBrand Product 1 39.98
+2 OldBrand Product 2 59.98
+3 OldBrand Product 3 79.98
+4 OldBrand Product 4 99.98
+
+# types are conserved
+query ITR
+SELECT * REPLACE (product_id/2 AS product_id) FROM products
+----
+0 OldBrand Product 1 19.99
+1 OldBrand Product 2 29.99
+1 OldBrand Product 3 39.99
+2 OldBrand Product 4 49.99
+
+# multiple replace statements with qualified wildcard
+query ITR
+SELECT products.* REPLACE (price*2 AS price, product_id+1000 AS product_id) FROM products
+----
+1001 OldBrand Product 1 39.98
+1002 OldBrand Product 2 59.98
+1003 OldBrand Product 3 79.98
+1004 OldBrand Product 4 99.98
+
+# overlay tests
+statement ok
+CREATE TABLE over_test(
+  str TEXT,
+  characters TEXT,
+  pos INT,
+  len INT
+) as VALUES
+  ('123', 'abc', 4, 5),
+  ('abcdefg', 'qwertyasdfg', 1, 7),
+  ('xyz', 'ijk', 1, 2),
+  ('Txxxxas', 'hom', 2, 4),
+  (NULL, 'hom', 2, 4),
+  ('Txxxxas', 'hom', NULL, 4),
+  ('Txxxxas', 'hom', 2, NULL),
+  ('Txxxxas', NULL, 2, 4)
+;
+
+# If the start position is past the end, OVERLAY appends the replacement.
+query T
+SELECT overlay(str placing characters from pos for len) from over_test
+----
+123abc
+qwertyasdfg
+ijkz
+Thomas
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT overlay(str placing characters from pos) from over_test
+----
+123abc
+qwertyasdfg
+ijk
+Thomxas
+NULL
+NULL
+Thomxas
+NULL
+
+# overlay tests with utf8view
+query T
+SELECT overlay(arrow_cast(str, 'Utf8View') placing arrow_cast(characters, 'Utf8View') from pos for len) from over_test
+----
+123abc
+qwertyasdfg
+ijkz
+Thomas
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT overlay(arrow_cast(str, 'Utf8View') placing arrow_cast(characters, 'Utf8View') from pos) from over_test
+----
+123abc
+qwertyasdfg
+ijk
+Thomxas
+NULL
+NULL
+Thomxas
+NULL
+
+# overlay uses character positions for non-ASCII input.
+statement ok
+CREATE TABLE over_unicode_test(
+  str TEXT,
+  characters TEXT,
+  pos INT,
+  len INT
+) as VALUES
+  ('aébc', 'X', 3, 1),
+  ('aébc', 'ZZ', 2, 2),
+  ('αβγδ', 'XY', 3, 2)
+;
+
+query T
+SELECT overlay(str placing characters from pos for len) FROM over_unicode_test
+----
+aéXc
+aZZc
+αβXY
+
+# Same non-ASCII cases with Utf8View inputs.
+query T
+SELECT overlay(arrow_cast(str, 'Utf8View') placing arrow_cast(characters, 'Utf8View') from pos for len) FROM over_unicode_test
+----
+aéXc
+aZZc
+αβXY
+
+# Same non-ASCII cases with LargeUtf8 inputs.
+query T
+SELECT overlay(arrow_cast(str, 'LargeUtf8') placing arrow_cast(characters, 'LargeUtf8') from pos for len) FROM over_unicode_test
+----
+aéXc
+aZZc
+αβXY
+
+statement ok
+DROP TABLE over_unicode_test
+
+# overlay edge cases that match PostgreSQL behavior.
+
+# Start past the end appends the replacement.
+query T
+SELECT overlay('abc' placing 'X' from 5 for 1)
+----
+abcX
+
+# Start positions must be positive.
+statement error overlay start position must be at least 1: 0
+SELECT overlay('abc' placing 'X' from 0 for 1)
+
+statement error overlay start position must be at least 1: -1
+SELECT overlay('abc' placing 'X' from -1 for 1)
+
+# Negative count keeps the suffix from before the start position.
+query T
+SELECT overlay('abc' placing 'XY' from 2 for -1)
+----
+aXYabc
+
+# Count 0 inserts without deleting input characters.
+query T
+SELECT overlay('abc' placing 'XY' from 2 for 0)
+----
+aXYbc
+
+# Count larger than the remaining input replaces through the end.
+query T
+SELECT overlay('abc' placing 'XY' from 2 for 100)
+----
+aXY
+
+# Empty replacement deletes the selected input characters.
+query T
+SELECT overlay('abc' placing '' from 2 for 1)
+----
+ac
+
+# Verify that multiple calls to volatile functions like `random()` are not combined / optimized away
+query B
+SELECT r FROM (SELECT r1 == r2 r, r1, r2 FROM (SELECT random()+1 r1, random()+1 r2) WHERE r1 > 0 AND r2 > 0)
+----
+false
+
+# Verify that rand() is accepted as an alias for random()
+query TB
+SELECT arrow_typeof(rand()), rand() >= 0 AND rand() < 1
+----
+Float64 true
+
+#######
+# verify that random() returns a different value for each row
+#######
+statement ok
+create table t as values (1), (2);
+
+statement ok
+create table rand_table as select random() as r from t;
+
+# should have 2 distinct values (not 1)
+query I
+select count(distinct r) from rand_table;
+----
+2
+
+statement ok
+drop table rand_table
+
+statement ok
+drop table t
+
+
+#######
+# verify that uuid() returns a different value for each row
+#######
+statement ok
+create table t as values (1), (2);
+
+statement ok
+create table uuid_table as select uuid() as u from t;
+
+# should have 2 distinct values (not 1)
+query I
+select count(distinct u) from uuid_table;
+----
+2
+
+# must be valid uuidv4 format
+query B
+SELECT REGEXP_LIKE(uuid(),
+       '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+       AS is_valid;
+----
+true
+
+statement ok
+drop table uuid_table
+
+statement ok
+drop table t
+
+
+# test for contains
+
+query B
+select contains('alphabet', 'pha');
+----
+true
+
+query B
+select contains('alphabet', 'dddd');
+----
+false
+
+query B
+select contains('', '');
+----
+true
+
+
+## Demonstrate how to test for trailing whitespace
+
+# Note no trailing whitespace
+query T
+select substr('Andrew Lamb', 1, 7)
+----
+Andrew
+
+# Note two spaces between `Andrew` and `|`
+query TT
+select substr('Andrew Lamb', 1, 7), '|'
+----
+Andrew  |
+
+# Note only one space between `Andrew` and `|`
+query TT
+select substr('Andrew Lamb', 1, 6), '|'
+----
+Andrew |
+
+
+# test for greatest
+statement ok
+CREATE TABLE t1 (a int, b int, c int) as VALUES
+(4, NULL, NULL),
+(1, 2, 3),
+(3, 1, 2),
+(1, NULL, -1),
+(NULL, NULL, NULL),
+(3, 0, -1);
+
+query I
+SELECT greatest(a, b, c) FROM t1
+----
+4
+3
+3
+1
+NULL
+3
+
+statement ok
+drop table t1
+
+query I
+SELECT greatest(1)
+----
+1
+
+query I
+SELECT greatest(1, 2)
+----
+2
+
+query I
+SELECT greatest(3, 1)
+----
+3
+
+query ?
+SELECT greatest(NULL)
+----
+NULL
+
+query I
+SELECT greatest(1, NULL, -1)
+----
+1
+
+query I
+SELECT greatest((3), (0), (-1));
+----
+3
+
+query ?
+SELECT greatest([4, 3], [4, 2], [4, 4]);
+----
+[4, 4]
+
+query ?
+SELECT greatest([2, 3], [1, 4], [5, 0]);
+----
+[5, 0]
+
+query I
+SELECT greatest(1::int, 2::text)
+----
+2
+
+query R
+SELECT greatest(-1, 1, 2.3, 123456789, 3 + 5, -(-4))
+----
+123456789
+
+query R
+SELECT greatest(-1.123, 1.21313, 2.3, 123456789.321, 3 + 5.3213, -(-4.3213), abs(-9))
+----
+123456789.321
+
+query R
+SELECT greatest(-1, 1, 2.3, 123456789, 3 + 5, -(-4), abs(-9.0))
+----
+123456789
+
+
+query error Function 'greatest' user-defined coercion failed with: Error during planning: greatest was called without any arguments. It requires at least 1.
+SELECT greatest()
+
+query I
+SELECT greatest(4, 5, 7, 1, 2)
+----
+7
+
+query I
+SELECT greatest(4, NULL, 7, 1, 2)
+----
+7
+
+query I
+SELECT greatest(NULL, NULL, 7, NULL, 2)
+----
+7
+
+query I
+SELECT greatest(NULL, NULL, NULL, NULL, 2)
+----
+2
+
+query I
+SELECT greatest(2, NULL, NULL, NULL, NULL)
+----
+2
+
+query ?
+SELECT greatest(NULL, NULL, NULL)
+----
+NULL
+
+query I
+SELECT greatest(2, '4')
+----
+4
+
+query T
+SELECT greatest('foo', 'bar', 'foobar')
+----
+foobar
+
+query R
+SELECT greatest(1, 1.2)
+----
+1.2
+
+statement ok
+CREATE TABLE foo (a int)
+
+statement ok
+INSERT INTO foo (a) VALUES (1)
+
+# Test homogenous functions that can't be constant folded.
+query I
+SELECT greatest(NULL, a, 5, NULL) FROM foo
+----
+5
+
+query I
+SELECT greatest(NULL, NULL, NULL, a, -1) FROM foo
+----
+1
+
+statement ok
+drop table foo
+
+query R
+select greatest(arrow_cast('NAN','Float64'), arrow_cast('NAN','Float64'))
+----
+NaN
+
+query R
+select greatest(arrow_cast('NAN','Float64'), arrow_cast('NAN','Float32'))
+----
+NaN
+
+query R
+select greatest(arrow_cast('NAN','Float64'), '+Inf'::Double)
+----
+NaN
+
+query R
+select greatest(arrow_cast('NAN','Float64'), NULL)
+----
+NaN
+
+query R
+select greatest(NULL, '+Inf'::Double)
+----
+Infinity
+
+query R
+select greatest(NULL, '-Inf'::Double)
+----
+-Infinity
+
+statement ok
+CREATE TABLE t1 (a double, b double, c double) as VALUES
+(1, arrow_cast('NAN', 'Float64'), '+Inf'::Double),
+(NULL, arrow_cast('NAN','Float64'), '+Inf'::Double),
+(1, '+Inf'::Double, NULL);
+
+query R
+SELECT greatest(a, b, c) FROM t1
+----
+NaN
+NaN
+Infinity
+
+statement ok
+drop table t1
+
+# test for least
+statement ok
+CREATE TABLE t1 (a int, b int, c int) as VALUES
+(4, NULL, NULL),
+(1, 2, 3),
+(3, 1, 2),
+(1, NULL, -1),
+(NULL, NULL, NULL),
+(3, 0, -1);
+
+query I
+SELECT least(a, b, c) FROM t1
+----
+4
+1
+1
+-1
+NULL
+-1
+
+statement ok
+drop table t1
+
+query I
+SELECT least(1)
+----
+1
+
+query I
+SELECT least(1, 2)
+----
+1
+
+query I
+SELECT least(3, 1)
+----
+1
+
+query ?
+SELECT least(NULL)
+----
+NULL
+
+query I
+SELECT least(1, NULL, -1)
+----
+-1
+
+query I
+SELECT least((3), (0), (-1));
+----
+-1
+
+query ?
+SELECT least([4, 3], [4, 2], [4, 4]);
+----
+[4, 2]
+
+query ?
+SELECT least([2, 3], [1, 4], [5, 0]);
+----
+[1, 4]
+
+query I
+SELECT least(1::int, 2::text)
+----
+1
+
+query R
+SELECT least(-1, 1, 2.3, 123456789, 3 + 5, -(-4))
+----
+-1
+
+query R
+SELECT least(-1.123, 1.21313, 2.3, 123456789.321, 3 + 5.3213, -(-4.3213), abs(-9))
+----
+-1.123
+
+query R
+SELECT least(-1, 1, 2.3, 123456789, 3 + 5, -(-4), abs(-9.0))
+----
+-1
+
+
+query error Function 'least' user-defined coercion failed with: Error during planning: least was called without any arguments. It requires at least 1.
+SELECT least()
+
+query I
+SELECT least(4, 5, 7, 1, 2)
+----
+1
+
+query I
+SELECT least(4, NULL, 7, 1, 2)
+----
+1
+
+query I
+SELECT least(NULL, NULL, 7, NULL, 2)
+----
+2
+
+query I
+SELECT least(NULL, NULL, NULL, NULL, 2)
+----
+2
+
+query I
+SELECT least(2, NULL, NULL, NULL, NULL)
+----
+2
+
+query ?
+SELECT least(NULL, NULL, NULL)
+----
+NULL
+
+query I
+SELECT least(2, '4')
+----
+2
+
+query T
+SELECT least('foo', 'bar', 'foobar')
+----
+bar
+
+query R
+SELECT least(1, 1.2)
+----
+1
+
+statement ok
+CREATE TABLE foo (a int)
+
+statement ok
+INSERT INTO foo (a) VALUES (1)
+
+# Test homogenous functions that can't be constant folded.
+query I
+SELECT least(NULL, a, 5, NULL) FROM foo
+----
+1
+
+query I
+SELECT least(NULL, NULL, NULL, a, -1) FROM foo
+----
+-1
+
+statement ok
+drop table foo
+
+query R
+select least(arrow_cast('NAN','Float64'), arrow_cast('NAN','Float64'))
+----
+NaN
+
+query R
+select least(arrow_cast('NAN','Float64'), arrow_cast('NAN','Float32'))
+----
+NaN
+
+query R
+select least(arrow_cast('NAN','Float64'), '+Inf'::Double)
+----
+Infinity
+
+query R
+select least(arrow_cast('NAN','Float64'), NULL)
+----
+NaN
+
+query R
+select least(NULL, '+Inf'::Double)
+----
+Infinity
+
+query R
+select least(NULL, '-Inf'::Double)
+----
+-Infinity
+
+statement ok
+CREATE TABLE t1 (a double, b double, c double) as VALUES
+(1, arrow_cast('NAN', 'Float64'), '+Inf'::Double),
+(NULL, arrow_cast('NAN','Float64'), '+Inf'::Double),
+(1, '+Inf'::Double, NULL);
+
+query R
+SELECT least(a, b, c) FROM t1
+----
+1
+Infinity
+1
+
+statement ok
+drop table t1

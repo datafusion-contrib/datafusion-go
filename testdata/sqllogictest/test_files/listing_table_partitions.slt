@@ -1,0 +1,142 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+query I
+copy (values('foo'), ('bar'))
+to 'test_files/scratch/listing_table_partitions/single_part/a=1/file1.parquet';
+----
+2
+
+query I
+copy (values('baz'))
+to 'test_files/scratch/listing_table_partitions/single_part/a=1/file2.parquet';
+----
+1
+
+statement count 0
+create external table single_part
+stored as parquet location 'test_files/scratch/listing_table_partitions/single_part/';
+
+query TT
+select * from single_part order by (column1);
+----
+bar 1
+baz 1
+foo 1
+
+query I
+copy (values('foo'), ('bar')) to 'test_files/scratch/listing_table_partitions/multi_part/a=1/b=100/file1.parquet';
+----
+2
+
+query I
+copy (values('baz')) to 'test_files/scratch/listing_table_partitions/multi_part/a=1/b=200/file1.parquet';
+----
+1
+
+statement count 0
+create external table multi_part
+stored as parquet location 'test_files/scratch/listing_table_partitions/multi_part/';
+
+query TTT
+select * from multi_part where b=200; 
+----
+baz 1 200
+
+statement count 0
+set datafusion.execution.listing_table_factory_infer_partitions = false;
+
+statement count 0
+create external table infer_disabled
+stored as parquet location 'test_files/scratch/listing_table_partitions/multi_part/';
+
+query T
+select * from infer_disabled order by (column1);
+----
+bar
+baz
+foo
+
+statement count 0
+set datafusion.execution.listing_table_factory_infer_partitions = true;
+
+# Test: files outside partition structure are skipped
+# This simulates a table that transitioned from non-partitioned to
+# hive-partitioned storage, leaving a stale file in the root directory.
+
+# Create partitioned files first
+query I
+copy (values(1, 'alice'), (2, 'bob'))
+to 'test_files/scratch/listing_table_partitions/root_file_skipped/year=2024/data.parquet';
+----
+2
+
+query I
+copy (values(3, 'charlie'))
+to 'test_files/scratch/listing_table_partitions/root_file_skipped/year=2025/data.parquet';
+----
+1
+
+# Create the table before adding the stale root file, so partition
+# inference succeeds (it only runs at CREATE TABLE time).
+statement count 0
+create external table root_file_test
+stored as parquet
+location 'test_files/scratch/listing_table_partitions/root_file_skipped/';
+
+# Now add a stale root-level file (outside any partition directory).
+# This simulates a file left over from before partitioning was added.
+query I
+copy (values(99, 'stale'))
+to 'test_files/scratch/listing_table_partitions/root_file_skipped/stale.parquet';
+----
+1
+
+# The root file should be skipped — only partitioned files are included
+query IT
+select column1, column2 from root_file_test order by column1;
+----
+1 alice
+2 bob
+3 charlie
+
+# Partition column should be accessible
+query ITT
+select column1, column2, year from root_file_test order by column1;
+----
+1 alice 2024
+2 bob 2024
+3 charlie 2025
+
+# Partition filter should work
+query ITT
+select column1, column2, year from root_file_test where year = '2025';
+----
+3 charlie 2025
+
+# COUNT should not include the root file's rows
+query I
+select count(*) from root_file_test;
+----
+3
+
+# GROUP BY partition column should work
+query TI
+select year, count(*) from root_file_test group by year order by year;
+----
+2024 2
+2025 1

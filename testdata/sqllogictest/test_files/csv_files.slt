@@ -1,0 +1,573 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# create_external_table_with_quote_escape
+statement ok
+CREATE EXTERNAL TABLE csv_with_quote (
+c1 VARCHAR,
+c2 VARCHAR
+) STORED AS CSV
+LOCATION '../core/tests/data/quote.csv'
+OPTIONS ('format.quote' '~',
+         'format.delimiter' ',',
+         'format.has_header' 'true');
+
+statement ok
+CREATE EXTERNAL TABLE csv_with_escape (
+c1 VARCHAR,
+c2 VARCHAR
+) STORED AS CSV
+OPTIONS ('format.escape' '\',
+         'format.delimiter' ',',
+         'format.has_header' 'true')
+LOCATION '../core/tests/data/escape.csv';
+
+query TT
+select * from csv_with_quote;
+----
+id0 value0
+id1 value1
+id2 value2
+id3 value3
+id4 value4
+id5 value5
+id6 value6
+id7 value7
+id8 value8
+id9 value9
+
+# Ensure that local files can not be read by default (a potential security issue)
+# (url table is only supported when DynamicFileCatalog is enabled)
+statement error DataFusion error: Error during planning: table 'datafusion.public.../core/tests/data/quote.csv' not found
+select * from '../core/tests/data/quote.csv';
+
+query TT
+select * from csv_with_escape;
+----
+id0 value"0
+id1 value"1
+id2 value"2
+id3 value"3
+id4 value"4
+id5 value"5
+id6 value"6
+id7 value"7
+id8 value"8
+id9 value"9
+
+statement ok
+CREATE EXTERNAL TABLE csv_with_escape_2 (
+c1 VARCHAR,
+c2 VARCHAR
+) STORED AS CSV
+OPTIONS ('format.escape' '"',
+        'format.delimiter' ',',
+        'format.has_header' 'true')
+LOCATION '../core/tests/data/escape.csv';
+
+# TODO: Validate this with better data.
+query TT
+select * from csv_with_escape_2;
+----
+id0 value\0"
+id1 value\1"
+id2 value\2"
+id3 value\3"
+id4 value\4"
+id5 value\5"
+id6 value\6"
+id7 value\7"
+id8 value\8"
+id9 value\9"
+
+
+# Read partitioned csv
+statement ok
+CREATE TABLE src_table_1 (
+  int_col INT,
+  string_col TEXT,
+  bigint_col BIGINT,
+  partition_col INT
+) AS VALUES
+(1, 'aaa', 100, 1),
+(2, 'bbb', 200, 1),
+(3, 'ccc', 300, 1),
+(4, 'ddd', 400, 1);
+
+statement ok
+CREATE TABLE src_table_2 (
+  int_col INT,
+  string_col TEXT,
+  bigint_col BIGINT,
+  partition_col INT
+) AS VALUES
+(5, 'eee', 500, 2),
+(6, 'fff', 600, 2),
+(7, 'ggg', 700, 2),
+(8, 'hhh', 800, 2);
+
+query I
+COPY  src_table_1 TO 'test_files/scratch/csv_files/csv_partitions/1.csv'
+STORED AS CSV OPTIONS ('format.has_header' 'false');
+----
+4
+
+
+query I
+COPY  src_table_2 TO 'test_files/scratch/csv_files/csv_partitions/2.csv'
+STORED AS CSV OPTIONS ('format.has_header' 'false');
+----
+4
+
+statement ok
+CREATE EXTERNAL TABLE partitioned_table (
+  int_col INT,
+  string_col TEXT,
+  bigint_col BIGINT,
+  partition_col INT
+)
+STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/csv_partitions'
+OPTIONS ('format.has_header' 'false');
+
+query ITII
+SELECT * FROM partitioned_table ORDER BY int_col;
+----
+1 aaa 100 1
+2 bbb 200 1
+3 ccc 300 1
+4 ddd 400 1
+5 eee 500 2
+6 fff 600 2
+7 ggg 700 2
+8 hhh 800 2
+
+query TT
+EXPLAIN SELECT * FROM partitioned_table ORDER BY int_col;
+----
+logical_plan
+01)Sort: partitioned_table.int_col ASC NULLS LAST
+02)--TableScan: partitioned_table projection=[int_col, string_col, bigint_col, partition_col]
+physical_plan
+01)SortPreservingMergeExec: [int_col@0 ASC NULLS LAST]
+02)--SortExec: expr=[int_col@0 ASC NULLS LAST], preserve_partitioning=[true]
+03)----DataSourceExec: file_groups={2 groups: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/csv_files/csv_partitions/1.csv], [WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/csv_files/csv_partitions/2.csv]]}, projection=[int_col, string_col, bigint_col, partition_col], file_type=csv, has_header=false
+
+
+# ensure that correct quote character is used when writing to csv
+statement ok
+CREATE TABLE table_with_necessary_quoting (
+  int_col INT,
+  string_col TEXT
+) AS VALUES
+(1, 'e|e|e'),
+(2, 'f|f|f'),
+(3, 'g|g|g'),
+(4, 'h|h|h');
+
+# quote is required because `|` is delimiter and part of the data
+query I
+COPY table_with_necessary_quoting TO 'test_files/scratch/csv_files/table_with_necessary_quoting.csv'
+STORED AS csv
+OPTIONS ('format.quote' '~',
+         'format.delimiter' '|',
+         'format.has_header' 'true');
+----
+4
+
+# read the stored csv file with quote character
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_necessary_quoting (
+c1 VARCHAR,
+c2 VARCHAR
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/table_with_necessary_quoting.csv'
+OPTIONS ('format.quote' '~',
+         'format.delimiter' '|',
+         'format.has_header' 'true');
+
+query TT
+select * from stored_table_with_necessary_quoting;
+----
+1 e|e|e
+2 f|f|f
+3 g|g|g
+4 h|h|h
+
+# Read CSV file with comments
+statement ok
+COPY (VALUES
+  ('column1,column2'),
+  ('#second line is a comment'),
+  ('2,3'))
+TO 'test_files/scratch/csv_files/file_with_comments.csv'
+OPTIONS ('format.delimiter' '|', 'format.has_header' 'false');
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_comments (
+  c1 VARCHAR,
+  c2 VARCHAR
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/file_with_comments.csv'
+OPTIONS ('format.comment' '#',
+         'format.delimiter' ',',
+         'format.has_header' 'false');
+
+query TT
+SELECT * from stored_table_with_comments;
+----
+column1 column2
+2 3
+
+# read csv with double quote
+statement ok
+CREATE EXTERNAL TABLE csv_with_double_quote (
+c1 VARCHAR,
+c2 VARCHAR
+) STORED AS CSV
+OPTIONS ('format.delimiter' ',',
+         'format.has_header' 'true',
+         'format.double_quote' 'true')
+LOCATION '../core/tests/data/double_quote.csv';
+
+query TT
+select * from csv_with_double_quote
+----
+id0 "value0"
+id1 "value1"
+id2 "value2"
+id3 "value3"
+
+# ensure that double quote option is used when writing to csv
+query I
+COPY csv_with_double_quote TO 'test_files/scratch/csv_files/table_with_double_quotes.csv'
+STORED AS csv
+OPTIONS ('format.double_quote' 'true');
+----
+4
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_double_quotes (
+col1 TEXT,
+col2 TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/table_with_double_quotes.csv'
+OPTIONS ('format.double_quote' 'true');
+
+query TT
+select * from stored_table_with_double_quotes;
+----
+id0 "value0"
+id1 "value1"
+id2 "value2"
+id3 "value3"
+
+# ensure when double quote option is disabled that quotes are escaped instead
+query I
+COPY csv_with_double_quote TO 'test_files/scratch/csv_files/table_with_escaped_quotes.csv'
+STORED AS csv
+OPTIONS ('format.double_quote' 'false', 'format.escape' '#');
+----
+4
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_escaped_quotes (
+col1 TEXT,
+col2 TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/table_with_escaped_quotes.csv'
+OPTIONS ('format.double_quote' 'false', 'format.escape' '#');
+
+query TT
+select * from stored_table_with_escaped_quotes;
+----
+id0 "value0"
+id1 "value1"
+id2 "value2"
+id3 "value3"
+
+# Handling of newlines in values
+
+statement ok
+SET datafusion.optimizer.repartition_file_min_size = 1;
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_newlines_in_values_unsafe (
+col1 TEXT,
+col2 TEXT
+) STORED AS CSV
+LOCATION '../core/tests/data/newlines_in_values.csv';
+
+statement error incorrect number of fields
+select * from stored_table_with_newlines_in_values_unsafe;
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_newlines_in_values_safe (
+col1 TEXT,
+col2 TEXT
+) STORED AS CSV
+LOCATION '../core/tests/data/newlines_in_values.csv'
+OPTIONS ('format.newlines_in_values' 'true', 'format.has_header' 'false');
+
+query TT
+select * from stored_table_with_newlines_in_values_safe;
+----
+id message
+1
+01)hello
+02)world
+2
+01)something
+02)else
+3
+01)
+02)many
+03)lines
+04)make
+05)good test
+4 unquoted
+value end
+
+statement ok
+CREATE EXTERNAL TABLE stored_table_with_cr_terminator (
+col1 TEXT,
+col2 TEXT
+) STORED AS CSV
+LOCATION '../core/tests/data/cr_terminator.csv'
+OPTIONS ('format.terminator' E'\r', 'format.has_header' 'true');
+
+# Check single-thread reading of CSV with custom line terminator
+statement ok
+SET datafusion.optimizer.repartition_file_min_size = 10485760;
+
+query TT
+select * from stored_table_with_cr_terminator;
+----
+id0 value0
+id1 value1
+id2 value2
+id3 value3
+
+# Check repartitioned reading of CSV with custom line terminator
+statement ok
+SET datafusion.optimizer.repartition_file_min_size = 1;
+
+query TT
+select * from stored_table_with_cr_terminator order by col1;
+----
+id0 value0
+id1 value1
+id2 value2
+id3 value3
+
+# Reset repartition_file_min_size to default value
+statement ok
+RESET datafusion.optimizer.repartition_file_min_size;
+
+statement ok
+drop table stored_table_with_cr_terminator;
+
+# Test quote_style option
+
+statement ok
+CREATE TABLE quote_style_source (
+  int_col INT,
+  string_col TEXT,
+  float_col DOUBLE
+) AS VALUES
+(1, 'hello', 1.1),
+(2, 'world', 2.2),
+(3, 'comma,value', 3.3);
+
+# QuoteStyle::Always - all fields are quoted
+query I
+COPY quote_style_source TO 'test_files/scratch/csv_files/quote_style_always.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true', 'format.quote_style' 'Always');
+----
+3
+
+# Read the file back using a delimiter that doesn't appear in the data,
+# so each line is a single column and we can verify the actual quoting
+statement ok
+CREATE EXTERNAL TABLE stored_quote_style_always (
+  whole_file TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/quote_style_always.csv'
+OPTIONS ('format.has_header' 'true', 'format.delimiter' '@', 'format.quote' '~');
+
+query T
+select * from stored_quote_style_always;
+----
+"1","hello","1.1"
+"2","world","2.2"
+"3","comma,value","3.3"
+
+statement ok
+DROP TABLE stored_quote_style_always;
+
+# QuoteStyle::NonNumeric - only string fields are quoted
+query I
+COPY quote_style_source TO 'test_files/scratch/csv_files/quote_style_nonnumeric.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true', 'format.quote_style' 'NonNumeric');
+----
+3
+
+# Read as a single column with a non-matching delimiter/quote to see raw output
+statement ok
+CREATE EXTERNAL TABLE stored_quote_style_nonnumeric (
+  whole_file TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/quote_style_nonnumeric.csv'
+OPTIONS ('format.has_header' 'true', 'format.delimiter' '@', 'format.quote' '~');
+
+query T
+select * from stored_quote_style_nonnumeric;
+----
+1,"hello",1.1
+2,"world",2.2
+3,"comma,value",3.3
+
+statement ok
+DROP TABLE stored_quote_style_nonnumeric;
+
+# QuoteStyle::Never - no fields are quoted (can produce invalid CSV)
+# Note: the comma in 'comma,value' will NOT be quoted, so reading back
+# will see an extra column
+query I
+COPY quote_style_source TO 'test_files/scratch/csv_files/quote_style_never.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true', 'format.quote_style' 'Never');
+----
+3
+
+# Read as a single column with a non-matching delimiter/quote to see raw output
+statement ok
+CREATE EXTERNAL TABLE stored_quote_style_never (
+  whole_file TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/quote_style_never.csv'
+OPTIONS ('format.has_header' 'true', 'format.delimiter' '@', 'format.quote' '~');
+
+# No fields are quoted - note the comma in 'comma,value' is unescaped
+query T
+select * from stored_quote_style_never;
+----
+1,hello,1.1
+2,world,2.2
+3,comma,value,3.3
+
+statement ok
+DROP TABLE stored_quote_style_never;
+
+statement ok
+DROP TABLE quote_style_source;
+
+# Test ignore_leading_whitespace and ignore_trailing_whitespace options
+
+statement ok
+CREATE TABLE whitespace_source (
+  id INT,
+  value TEXT
+) AS VALUES
+(1, '  hello  '),
+(2, '  world  '),
+(3, 'no_space');
+
+# Write with ignore_leading_whitespace to trim leading spaces
+query I
+COPY whitespace_source TO 'test_files/scratch/csv_files/trim_leading.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true', 'format.ignore_leading_whitespace' 'true');
+----
+3
+
+statement ok
+CREATE EXTERNAL TABLE stored_trim_leading (
+  id INT,
+  value TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/trim_leading.csv'
+OPTIONS ('format.has_header' 'true');
+
+query ITT
+select id, value, 'end' from stored_trim_leading order by id;
+----
+1 hello   end
+2 world   end
+3 no_space end
+
+statement ok
+DROP TABLE stored_trim_leading;
+
+# Write with ignore_trailing_whitespace to trim trailing spaces
+query I
+COPY whitespace_source TO 'test_files/scratch/csv_files/trim_trailing.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true', 'format.ignore_trailing_whitespace' 'true');
+----
+3
+
+statement ok
+CREATE EXTERNAL TABLE stored_trim_trailing (
+  id INT,
+  value TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/trim_trailing.csv'
+OPTIONS ('format.has_header' 'true');
+
+query ITT
+select id, value, 'end' from stored_trim_trailing order by id;
+----
+1   hello end
+2   world end
+3 no_space end
+
+statement ok
+DROP TABLE stored_trim_trailing;
+
+# Write with both ignore_leading and ignore_trailing whitespace
+query I
+COPY whitespace_source TO 'test_files/scratch/csv_files/trim_both.csv'
+STORED AS csv
+OPTIONS ('format.has_header' 'true',
+         'format.ignore_leading_whitespace' 'true',
+         'format.ignore_trailing_whitespace' 'true');
+----
+3
+
+statement ok
+CREATE EXTERNAL TABLE stored_trim_both (
+  id INT,
+  value TEXT
+) STORED AS CSV
+LOCATION 'test_files/scratch/csv_files/trim_both.csv'
+OPTIONS ('format.has_header' 'true');
+
+query ITT
+select id, value, 'end' from stored_trim_both order by id;
+----
+1 hello end
+2 world end
+3 no_space end
+
+statement ok
+DROP TABLE stored_trim_both;
+
+statement ok
+DROP TABLE whitespace_source;

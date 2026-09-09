@@ -25,6 +25,8 @@ rust/fuzz/artifacts/
 *.out
 coverage.*
 coverage/
+!rust/src/sqllogictest/coverage.rs
+!testdata/sqllogictest/coverage.json
 *.coverprofile
 *.cov
 profile.cov

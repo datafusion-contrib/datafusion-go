@@ -16,6 +16,9 @@ mod registration;
 mod session;
 mod stream;
 
+#[cfg(feature = "test-sqllogictest")]
+mod sqllogictest;
+
 pub use abi::*;
 
 #[cfg(coverage)]

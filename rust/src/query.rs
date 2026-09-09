@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 use datafusion::common::{ParamValues, ScalarValue};
 use datafusion_sql::parser::Statement as DFStatement;
 use datafusion_sql::sqlparser::ast::Statement as SQLStatement;
-use datafusion_sql::sqlparser::dialect::GenericDialect;
+use datafusion_sql::sqlparser::dialect::Dialect;
 use datafusion_sql::sqlparser::tokenizer::{Location, Token, Tokenizer};
 
 use crate::error::FfiError;
@@ -157,11 +157,13 @@ pub(crate) fn expected_parameter_list(names: &BTreeSet<String>) -> String {
         .join(", ")
 }
 
-pub(crate) fn prepare_query(query: String) -> Result<PreparedQuery, FfiError> {
-    let dialect = GenericDialect {};
+pub(crate) fn prepare_query(
+    query: String,
+    dialect: &dyn Dialect,
+) -> Result<PreparedQuery, FfiError> {
     // Use sqlparser's tokenizer instead of scanning strings manually. That
     // keeps placeholders inside string literals and comments untouched.
-    let tokens = Tokenizer::new(&dialect, &query)
+    let tokens = Tokenizer::new(dialect, &query)
         .tokenize_with_location()
         .map_err(|e| FfiError::invalid_argument(e.to_string()))?;
 
@@ -207,7 +209,7 @@ pub(crate) fn prepare_query(query: String) -> Result<PreparedQuery, FfiError> {
             })?;
             if index <= 0 {
                 return Err(FfiError::invalid_argument(format!(
-                    "invalid placeholder {placeholder}; indexes are 1-based"
+                    "Error during planning: Invalid placeholder, zero is not a valid index: {placeholder}; indexes are 1-based"
                 )));
             }
             positional_max = positional_max.max(index);
@@ -254,6 +256,24 @@ pub(crate) fn prepare_query(query: String) -> Result<PreparedQuery, FfiError> {
         query,
         params: ParameterMetadata::None,
     })
+}
+
+// Definition parameters are bound by DataFusion when SQL EXECUTE or a stored
+// function runs. EXPLAIN retains that scope, including parenthesized options.
+pub(crate) fn statement_defines_parameters(stmt: &DFStatement) -> bool {
+    match stmt {
+        DFStatement::Statement(stmt) => sql_statement_defines_parameters(stmt),
+        DFStatement::Explain(stmt) => statement_defines_parameters(&stmt.statement),
+        _ => false,
+    }
+}
+
+fn sql_statement_defines_parameters(stmt: &SQLStatement) -> bool {
+    match stmt {
+        SQLStatement::Prepare { .. } | SQLStatement::CreateFunction(_) => true,
+        SQLStatement::Explain { statement, .. } => sql_statement_defines_parameters(statement),
+        _ => false,
+    }
 }
 
 pub(crate) fn statement_serializes(stmt: &DFStatement) -> bool {

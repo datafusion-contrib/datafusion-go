@@ -1,0 +1,469 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+##########
+## INSERT tests
+##########
+
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+# test_insert_into
+
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+statement ok
+CREATE TABLE table_without_values(field1 BIGINT NULL, field2 BIGINT NULL);
+
+query TT
+EXPLAIN
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING),
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+FROM aggregate_test_100
+ORDER by c1
+----
+logical_plan
+01)Dml: op=[Insert Into] table=[table_without_values]
+02)--Projection: sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS field1, count(*) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS field2
+03)----Sort: aggregate_test_100.c1 ASC NULLS LAST
+04)------Projection: sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS count(*) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, aggregate_test_100.c1
+05)--------WindowAggr: windowExpr=[[sum(CAST(aggregate_test_100.c4 AS Int64)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING]]
+06)----------TableScan: aggregate_test_100 projection=[c1, c4, c9]
+physical_plan
+01)DataSinkExec: sink=MemoryTable (partitions=1)
+02)--ProjectionExec: expr=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@0 as field1, count(*) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@1 as field2]
+03)----SortPreservingMergeExec: [c1@2 ASC NULLS LAST]
+04)------ProjectionExec: expr=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@3 as sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@4 as count(*) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, c1@0 as c1]
+05)--------BoundedWindowAggExec: wdw=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": nullable Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING], mode=[Sorted]
+06)----------SortExec: expr=[c1@0 ASC NULLS LAST, c9@2 ASC NULLS LAST], preserve_partitioning=[true]
+07)------------RepartitionExec: partitioning=Hash([c1@0], 8), input_partitions=1
+08)--------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c4, c9], file_type=csv, has_header=true
+
+query I
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING),
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+FROM aggregate_test_100
+ORDER by c1
+----
+100
+
+# verify there is data now in the table
+query I
+SELECT COUNT(*) from table_without_values;
+----
+100
+
+# verify there is data now in the table
+query II
+SELECT *
+FROM table_without_values
+ORDER BY field1, field2
+LIMIT 5;
+----
+-70111 3
+-65362 3
+-62295 3
+-56721 3
+-55414 3
+
+statement ok
+drop table table_without_values;
+
+
+
+# test_insert_into_as_select_multi_partitioned
+statement ok
+CREATE TABLE table_without_values(field1 BIGINT NULL, field2 BIGINT NULL)
+
+query TT
+EXPLAIN
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a1,
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a2
+FROM aggregate_test_100
+----
+logical_plan
+01)Dml: op=[Insert Into] table=[table_without_values]
+02)--Projection: sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS field1, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS field2
+03)----WindowAggr: windowExpr=[[sum(CAST(aggregate_test_100.c4 AS Int64)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING]]
+04)------TableScan: aggregate_test_100 projection=[c1, c4, c9]
+physical_plan
+01)DataSinkExec: sink=MemoryTable (partitions=1)
+02)--CoalescePartitionsExec
+03)----ProjectionExec: expr=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@3 as field1, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@4 as field2]
+04)------BoundedWindowAggExec: wdw=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": nullable Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING], mode=[Sorted]
+05)--------SortExec: expr=[c1@0 ASC NULLS LAST, c9@2 ASC NULLS LAST], preserve_partitioning=[true]
+06)----------RepartitionExec: partitioning=Hash([c1@0], 8), input_partitions=1
+07)------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c4, c9], file_type=csv, has_header=true
+
+
+
+query I
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a1,
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a2
+FROM aggregate_test_100
+----
+100
+
+statement ok
+drop table table_without_values;
+
+
+# test_insert_into_as_select_single_partition
+
+statement ok
+CREATE TABLE table_without_values AS SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a1,
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a2
+FROM aggregate_test_100
+
+
+# // TODO: The generated plan is suboptimal since SortExec is in global state.
+query TT
+EXPLAIN
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a1,
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a2
+FROM aggregate_test_100
+ORDER BY c1
+----
+logical_plan
+01)Dml: op=[Insert Into] table=[table_without_values]
+02)--Projection: a1, a2
+03)----Sort: aggregate_test_100.c1 ASC NULLS LAST
+04)------Projection: sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS a1, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS count(*) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS a2, aggregate_test_100.c1
+05)--------WindowAggr: windowExpr=[[sum(CAST(aggregate_test_100.c4 AS Int64)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING]]
+06)----------TableScan: aggregate_test_100 projection=[c1, c4, c9]
+physical_plan
+01)DataSinkExec: sink=MemoryTable (partitions=8)
+02)--ProjectionExec: expr=[a1@0 as a1, a2@1 as a2]
+03)----SortPreservingMergeExec: [c1@2 ASC NULLS LAST]
+04)------ProjectionExec: expr=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@3 as a1, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@4 as a2, c1@0 as c1]
+05)--------BoundedWindowAggExec: wdw=[sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "sum(aggregate_test_100.c4) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": nullable Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING, count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "count(Int64(1)) PARTITION BY [aggregate_test_100.c1] ORDER BY [aggregate_test_100.c9 ASC NULLS LAST] ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": Int64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING], mode=[Sorted]
+06)----------SortExec: expr=[c1@0 ASC NULLS LAST, c9@2 ASC NULLS LAST], preserve_partitioning=[true]
+07)------------RepartitionExec: partitioning=Hash([c1@0], 8), input_partitions=1
+08)--------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c4, c9], file_type=csv, has_header=true
+
+
+query I
+INSERT INTO table_without_values SELECT
+SUM(c4) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a1,
+COUNT(*) OVER(PARTITION BY c1 ORDER BY c9 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as a2
+FROM aggregate_test_100
+ORDER BY c1
+----
+100
+
+
+statement ok
+drop table table_without_values;
+
+# test_insert_into_with_sort
+
+statement ok
+create table table_without_values(c1 varchar not null);
+
+# verify that the sort order of the insert query is maintained into the
+# insert (there should be a SortExec in the following plan)
+# See https://github.com/apache/datafusion/pull/6354#discussion_r1195284178 for more background
+query TT
+explain insert into table_without_values select c1 from aggregate_test_100 order by c1;
+----
+logical_plan
+01)Dml: op=[Insert Into] table=[table_without_values]
+02)--Projection: aggregate_test_100.c1 AS c1
+03)----Sort: aggregate_test_100.c1 ASC NULLS LAST
+04)------TableScan: aggregate_test_100 projection=[c1]
+physical_plan
+01)DataSinkExec: sink=MemoryTable (partitions=1)
+02)--SortExec: expr=[c1@0 ASC NULLS LAST], preserve_partitioning=[false]
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1], file_type=csv, has_header=true
+
+query I
+insert into table_without_values select c1 from aggregate_test_100 order by c1;
+----
+100
+
+query I
+select count(*) from table_without_values;
+----
+100
+
+statement ok
+drop table table_without_values;
+
+
+# test insert with column names
+statement ok
+CREATE TABLE table_without_values(id BIGINT, name varchar);
+
+query I
+insert into table_without_values(id, name) values(1, 'foo');
+----
+1
+
+query I
+insert into table_without_values(name, id) values('bar', 2);
+----
+1
+
+statement error Schema error: Schema contains duplicate unqualified field name id
+insert into table_without_values(id, id) values(3, 3);
+
+statement error Arrow error: Cast error: Cannot cast string 'zoo' to value of Int64 type
+insert into table_without_values(name, id) values(4, 'zoo');
+
+statement error Error during planning: Inconsistent data length across values list: got 2 values in row 0 but expected 1
+insert into table_without_values(id) values(4, 'zoo');
+
+# insert NULL values for the missing column (name)
+query I
+insert into table_without_values(id) values(4);
+----
+1
+
+query IT rowsort
+select * from table_without_values;
+----
+1 foo
+2 bar
+4 NULL
+
+statement ok
+drop table table_without_values;
+
+
+# test insert with non-nullable column
+statement ok
+CREATE TABLE table_without_values(field1 BIGINT NOT NULL, field2 BIGINT NULL);
+
+query I
+insert into table_without_values values(1, 100);
+----
+1
+
+query I
+insert into table_without_values values(2, NULL);
+----
+1
+
+# insert NULL values for the missing column (field2)
+query I
+insert into table_without_values(field1) values(3);
+----
+1
+
+# insert NULL values for the missing column (field1), but column is non-nullable
+statement error
+insert into table_without_values(field2) values(300);
+----
+DataFusion error: Execution error: Invalid batch column at '0' has null but schema specifies non-nullable
+
+
+statement error Invalid argument error: Column 'column1' is declared as non-nullable but contains null values
+insert into table_without_values values(NULL, 300);
+
+statement error Invalid argument error: Column 'column1' is declared as non-nullable but contains null values
+insert into table_without_values values(3, 300), (NULL, 400);
+
+query II rowsort
+select * from table_without_values;
+----
+1 100
+2 NULL
+3 NULL
+
+statement ok
+drop table table_without_values;
+
+
+### Test for creating tables into directories that do not already exist
+# note use of `scratch` directory (which is cleared between runs)
+
+statement ok
+create external table new_empty_table(x int) stored as parquet  location 'test_files/scratch/insert/new_empty_table/'; -- needs trailing slash
+
+# should start empty
+query I
+select * from new_empty_table;
+----
+
+# should succeed and the table should create the direectory
+statement ok
+insert into new_empty_table values (1);
+
+# Now has values
+query I
+select * from new_empty_table;
+----
+1
+
+statement ok
+drop table new_empty_table;
+
+## test we get an error if the path doesn't end in slash
+statement ok
+create external table bad_new_empty_table(x int) stored as parquet  location 'test_files/scratch/insert/bad_new_empty_table'; -- no trailing slash
+
+# should fail
+query error DataFusion error: Error during planning: Inserting into a ListingTable backed by a single file is not supported, URL is possibly missing a trailing `/`\. To append to an existing file use StreamTable, e\.g\. by using CREATE UNBOUNDED EXTERNAL TABLE
+insert into bad_new_empty_table values (1);
+
+statement ok
+drop table bad_new_empty_table;
+
+
+### Test for specifying column's default value
+
+statement ok
+create table test_column_defaults(
+  a int,
+  b int not null default null,
+  c int default 100*2+300,
+  d text default lower('DEFAULT_TEXT'),
+  e timestamp default now()
+)
+
+query I
+insert into test_column_defaults values(1, 10, 100, 'ABC', now())
+----
+1
+
+statement error
+insert into test_column_defaults(a) values(2)
+----
+DataFusion error: Execution error: Invalid batch column at '1' has null but schema specifies non-nullable
+
+
+query I
+insert into test_column_defaults(b) values(20)
+----
+1
+
+query IIIT rowsort
+select a,b,c,d from test_column_defaults
+----
+1 10 100 ABC
+NULL 20 500 default_text
+
+# fill the timestamp column with default value `now()` again, it should be different from the previous one
+query I
+insert into test_column_defaults(a, b, c, d) values(2, 20, 200, 'DEF')
+----
+1
+
+# Ensure that the default expression `now()` is evaluated during insertion, not optimized away.
+# Rows are inserted during different time, so their timestamp values should be different.
+query I rowsort
+select count(distinct e) from test_column_defaults
+----
+3
+
+# Expect all rows to be true as now() was inserted into the table
+query B rowsort
+select e < now() from test_column_defaults
+----
+true
+true
+true
+
+statement ok
+drop table test_column_defaults
+
+
+# test create table as
+statement ok
+create table test_column_defaults(
+  a int,
+  b int not null default null,
+  c int default 100*2+300,
+  d text default lower('DEFAULT_TEXT'),
+  e timestamp default now()
+) as values(1, 10, 100, 'ABC', now())
+
+query I
+insert into test_column_defaults(b) values(20)
+----
+1
+
+query IIIT rowsort
+select a,b,c,d from test_column_defaults
+----
+1 10 100 ABC
+NULL 20 500 default_text
+
+statement ok
+drop table test_column_defaults
+
+statement error DataFusion error: Schema error: No field named a\.
+create table test_column_defaults(a int, b int default a+1)
+
+
+# test inserting UInt64 and signed integers into a bigint unsigned column
+statement ok
+create table unsigned_bigint_test (v bigint unsigned)
+
+query I
+insert into unsigned_bigint_test values (10000000000000000000), (18446744073709551615)
+----
+2
+
+query I
+insert into unsigned_bigint_test values (10000000000000000001), (1), (10000000000000000002)
+----
+3
+
+query I rowsort
+select * from unsigned_bigint_test
+----
+1
+10000000000000000000
+10000000000000000001
+10000000000000000002
+18446744073709551615
+
+statement ok
+drop table unsigned_bigint_test
+
+# Config reset
+
+# The SLT runner sets `target_partitions` to 4 instead of using the default, so 
+# reset it explicitly.
+statement ok
+set datafusion.execution.target_partitions = 4;

@@ -1,0 +1,1060 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+##########
+## UNION Tests
+##########
+
+statement ok
+CREATE TABLE t1(
+  id INT,
+  name TEXT
+) as VALUES
+  (1, 'Alex'),
+  (2, 'Bob'),
+  (3, 'Alice')
+;
+
+statement ok
+CREATE TABLE t2(
+  id TINYINT,
+  name TEXT
+) as VALUES
+  (1, 'Alex'),
+  (2, 'Bob'),
+  (3, 'John')
+;
+
+# union with EXCEPT(JOIN)
+query T rowsort
+(
+    SELECT name FROM t1
+    EXCEPT
+    SELECT name FROM t2
+)
+UNION ALL
+(
+    SELECT name FROM t2
+    EXCEPT
+    SELECT name FROM t1
+)
+----
+Alice
+John
+
+# union with type coercion
+query IT rowsort
+(
+    SELECT * FROM t1
+    EXCEPT
+    SELECT * FROM t2
+)
+UNION ALL
+(
+    SELECT * FROM t2
+    EXCEPT
+    SELECT * FROM t1
+)
+----
+3 Alice
+3 John
+
+# union all
+query I rowsort
+SELECT 1 as x
+UNION ALL
+SELECT 2 as x
+----
+1
+2
+
+query I
+select count(*) from (select id from t1 union all select id from t2)
+----
+6
+
+# csv_union_all
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+query I
+select COUNT(*) from (
+    SELECT c1 FROM aggregate_test_100
+    UNION ALL
+    SELECT c1 FROM aggregate_test_100
+)
+----
+200
+
+# union_distinct
+query I rowsort
+SELECT 1 as x
+UNION
+SELECT 1 as x
+----
+1
+
+# union_all_with_aggregate
+query I
+SELECT SUM(d) FROM (
+    SELECT 1 as c, 2 as d
+    UNION ALL
+    SELECT 1 as c, 3 AS d
+) as a
+----
+5
+
+# three way union with aggregate and type coercion
+query II rowsort
+SELECT c1, SUM(c2) FROM (
+    SELECT 1 as c1, 1::int as c2
+    UNION
+    SELECT 2 as c1, 2::int as c2
+    UNION
+    SELECT 3 as c1, COALESCE(3::int, 0) as c2
+) as a
+GROUP BY c1
+----
+1 1
+2 2
+3 3
+
+# This test goes through schema check in aggregate plan, if count's nullable is not matched, this test failed
+query II rowsort
+SELECT c1, SUM(c2) FROM (
+    SELECT 1 as c1, 1::int as c2
+    UNION
+    SELECT 2 as c1, 2::int as c2
+    UNION
+    SELECT 3 as c1, count(1) as c2
+) as a
+GROUP BY c1
+----
+1 1
+2 2
+3 1
+
+# union_all_with_count
+statement ok
+CREATE table t as SELECT 1 as a
+
+query I
+SELECT COUNT(*) FROM (
+    SELECT a from t
+    UNION ALL
+    SELECT a from t
+)
+----
+2
+
+# union_schemas
+query I rowsort
+SELECT 1 A UNION ALL SELECT 2
+----
+1
+2
+
+# union_schemas
+query I rowsort
+SELECT 1 UNION SELECT 2
+----
+1
+2
+
+# union_with_except_input
+query T rowsort
+(
+    SELECT name FROM t1
+    EXCEPT
+    SELECT name FROM t2
+)
+UNION ALL
+(
+    SELECT name FROM t2
+    EXCEPT
+    SELECT name FROM t1
+)
+----
+Alice
+John
+
+# nested_union
+query T rowsort
+SELECT name FROM t1 UNION (SELECT name from t2 UNION SELECT name || '_new' from t2)
+----
+Alex
+Alex_new
+Alice
+Bob
+Bob_new
+John
+John_new
+
+# should be un-nested, with a single (logical) aggregate
+query TT
+EXPLAIN SELECT name FROM t1 UNION (SELECT name from t2 UNION SELECT name || '_new' from t2)
+----
+logical_plan
+01)Aggregate: groupBy=[[name]], aggr=[[]]
+02)--Union
+03)----TableScan: t1 projection=[name]
+04)----TableScan: t2 projection=[name]
+05)----Projection: t2.name || Utf8View("_new") AS name
+06)------TableScan: t2 projection=[name]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[name@0 as name], aggr=[]
+02)--RepartitionExec: partitioning=Hash([name@0], 4), input_partitions=3
+03)----AggregateExec: mode=Partial, gby=[name@0 as name], aggr=[]
+04)------UnionExec
+05)--------DataSourceExec: partitions=1, partition_sizes=[1]
+06)--------DataSourceExec: partitions=1, partition_sizes=[1]
+07)--------ProjectionExec: expr=[name@0 || _new as name]
+08)----------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# nested_union_all
+query T rowsort
+SELECT name FROM t1 UNION ALL (SELECT name from t2 UNION ALL SELECT name || '_new' from t2)
+----
+Alex
+Alex
+Alex_new
+Alice
+Bob
+Bob
+Bob_new
+John
+John_new
+
+# Test UNION ALL with unaliased duplicate literal values on the right side.
+# The second projection will inherit field names from the first one, and so
+# pass the unique projection expression name check.
+query TII rowsort
+SELECT name, 1 as table, 1 as row FROM t1 WHERE id = 1
+UNION ALL
+SELECT name, 2, 2 FROM t2 WHERE id = 2
+----
+Alex 1 1
+Bob 2 2
+
+# Test nested UNION, EXCEPT, INTERSECT with duplicate unaliased literals.
+# Only the first SELECT has column aliases, which should propagate to all projections.
+query III rowsort
+SELECT 1 as a, 0 as b, 0 as c
+UNION ALL
+((SELECT 2, 0, 0 UNION ALL SELECT 3, 0, 0) EXCEPT SELECT 3, 0, 0)
+UNION ALL
+(SELECT 4, 0, 0 INTERSECT SELECT 4, 0, 0)
+----
+1 0 0
+2 0 0
+4 0 0
+
+# Plan is unnested
+query TT
+EXPLAIN SELECT name FROM t1 UNION ALL (SELECT name from t2 UNION ALL SELECT name || '_new' from t2)
+----
+logical_plan
+01)Union
+02)--TableScan: t1 projection=[name]
+03)--TableScan: t2 projection=[name]
+04)--Projection: t2.name || Utf8View("_new") AS name
+05)----TableScan: t2 projection=[name]
+physical_plan
+01)UnionExec
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+03)--DataSourceExec: partitions=1, partition_sizes=[1]
+04)--ProjectionExec: expr=[name@0 || _new as name]
+05)----DataSourceExec: partitions=1, partition_sizes=[1]
+
+# unions_to_filter is disabled by default
+
+statement ok
+set datafusion.optimizer.enable_unions_to_filter = false;
+
+query TT
+EXPLAIN SELECT id, name FROM t1 WHERE id = 1 UNION SELECT id, name FROM t1 WHERE id = 2
+----
+logical_plan
+01)Aggregate: groupBy=[[id, name]], aggr=[[]]
+02)--Union
+03)----Filter: t1.id = Int32(1)
+04)------TableScan: t1 projection=[id, name]
+05)----Filter: t1.id = Int32(2)
+06)------TableScan: t1 projection=[id, name]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[id@0 as id, name@1 as name], aggr=[]
+02)--RepartitionExec: partitioning=Hash([id@0, name@1], 4), input_partitions=4
+03)----AggregateExec: mode=Partial, gby=[id@0 as id, name@1 as name], aggr=[]
+04)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=2
+05)--------UnionExec
+06)----------FilterExec: id@0 = 1
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+08)----------FilterExec: id@0 = 2
+09)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement ok
+set datafusion.optimizer.enable_unions_to_filter = true;
+
+query TT
+EXPLAIN SELECT id, name FROM t1 WHERE id = 1 UNION SELECT id, name FROM t1 WHERE id = 2
+----
+logical_plan
+01)Aggregate: groupBy=[[id, name]], aggr=[[]]
+02)--Filter: t1.id = Int32(1) OR t1.id = Int32(2)
+03)----TableScan: t1 projection=[id, name]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[id@0 as id, name@1 as name], aggr=[]
+02)--RepartitionExec: partitioning=Hash([id@0, name@1], 4), input_partitions=4
+03)----AggregateExec: mode=Partial, gby=[id@0 as id, name@1 as name], aggr=[]
+04)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+05)--------FilterExec: id@0 = 1 OR id@0 = 2
+06)----------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# Regression: schema recomputation must preserve the unqualified UNION
+# output labels while unions_to_filter is enabled.
+query IT rowsort
+SELECT id, name FROM t1 WHERE id = 1 UNION SELECT id, name FROM t1 WHERE id = 2
+----
+1 Alex
+2 Bob
+
+statement ok
+set datafusion.optimizer.enable_unions_to_filter = false;
+
+# Make sure to choose a small batch size to introduce parallelism to the plan.
+statement ok
+set datafusion.execution.batch_size = 2;
+
+# union_with_type_coercion
+query TT
+explain
+(
+    SELECT id, name FROM t1
+    EXCEPT
+    SELECT id, name FROM t2
+)
+UNION ALL
+(
+    SELECT id, name FROM t2
+    EXCEPT
+    SELECT id, name FROM t1
+)
+----
+logical_plan
+01)Union
+02)--LeftAnti Join: t1.id = CAST(t2.id AS Int32), t1.name = t2.name
+03)----Aggregate: groupBy=[[t1.id, t1.name]], aggr=[[]]
+04)------TableScan: t1 projection=[id, name]
+05)----TableScan: t2 projection=[id, name]
+06)--Projection: CAST(t2.id AS Int32) AS id, t2.name
+07)----LeftAnti Join: CAST(t2.id AS Int32) = t1.id, t2.name = t1.name
+08)------Aggregate: groupBy=[[t2.id, t2.name]], aggr=[[]]
+09)--------TableScan: t2 projection=[id, name]
+10)------TableScan: t1 projection=[id, name]
+physical_plan
+01)UnionExec
+02)--HashJoinExec: mode=CollectLeft, join_type=RightAnti, on=[(CAST(t2.id AS Int32)@2, id@0), (name@1, name@1)], NullsEqual: true
+03)----CoalescePartitionsExec
+04)------ProjectionExec: expr=[id@0 as id, name@1 as name, CAST(id@0 AS Int32) as CAST(t2.id AS Int32)]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+06)----------DataSourceExec: partitions=1, partition_sizes=[1]
+07)----AggregateExec: mode=FinalPartitioned, gby=[id@0 as id, name@1 as name], aggr=[]
+08)------RepartitionExec: partitioning=Hash([id@0, name@1], 4), input_partitions=4
+09)--------AggregateExec: mode=Partial, gby=[id@0 as id, name@1 as name], aggr=[]
+10)----------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+11)------------DataSourceExec: partitions=1, partition_sizes=[1]
+12)--ProjectionExec: expr=[CAST(id@0 AS Int32) as id, name@1 as name]
+13)----HashJoinExec: mode=CollectLeft, join_type=LeftAnti, on=[(CAST(t2.id AS Int32)@2, id@0), (name@1, name@1)], projection=[id@0, name@1], NullsEqual: true
+14)------CoalescePartitionsExec
+15)--------ProjectionExec: expr=[id@0 as id, name@1 as name, CAST(id@0 AS Int32) as CAST(t2.id AS Int32)]
+16)----------AggregateExec: mode=FinalPartitioned, gby=[id@0 as id, name@1 as name], aggr=[]
+17)------------RepartitionExec: partitioning=Hash([id@0, name@1], 4), input_partitions=4
+18)--------------AggregateExec: mode=Partial, gby=[id@0 as id, name@1 as name], aggr=[]
+19)----------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+20)------------------DataSourceExec: partitions=1, partition_sizes=[1]
+21)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+22)--------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+query IT rowsort
+(
+    SELECT id, name FROM t1
+    EXCEPT
+    SELECT id, name FROM t2
+)
+UNION ALL
+(
+    SELECT id, name FROM t2
+    EXCEPT
+    SELECT id, name FROM t1
+)
+----
+3 Alice
+3 John
+
+# union_with_except_input
+query TT
+explain
+(
+    SELECT name FROM t1
+    EXCEPT
+    SELECT name FROM t2
+)
+UNION ALL
+(
+    SELECT name FROM t2
+    EXCEPT
+    SELECT name FROM t1
+)
+----
+logical_plan
+01)Union
+02)--LeftAnti Join: t1.name = t2.name
+03)----Aggregate: groupBy=[[t1.name]], aggr=[[]]
+04)------TableScan: t1 projection=[name]
+05)----TableScan: t2 projection=[name]
+06)--LeftAnti Join: t2.name = t1.name
+07)----Aggregate: groupBy=[[t2.name]], aggr=[[]]
+08)------TableScan: t2 projection=[name]
+09)----TableScan: t1 projection=[name]
+physical_plan
+01)UnionExec
+02)--HashJoinExec: mode=CollectLeft, join_type=LeftAnti, on=[(name@0, name@0)], NullsEqual: true
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=FinalPartitioned, gby=[name@0 as name], aggr=[]
+05)--------RepartitionExec: partitioning=Hash([name@0], 4), input_partitions=4
+06)----------AggregateExec: mode=Partial, gby=[name@0 as name], aggr=[]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)--------------DataSourceExec: partitions=1, partition_sizes=[1]
+09)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+10)------DataSourceExec: partitions=1, partition_sizes=[1]
+11)--HashJoinExec: mode=CollectLeft, join_type=LeftAnti, on=[(name@0, name@0)], NullsEqual: true
+12)----CoalescePartitionsExec
+13)------AggregateExec: mode=FinalPartitioned, gby=[name@0 as name], aggr=[]
+14)--------RepartitionExec: partitioning=Hash([name@0], 4), input_partitions=4
+15)----------AggregateExec: mode=Partial, gby=[name@0 as name], aggr=[]
+16)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+17)--------------DataSourceExec: partitions=1, partition_sizes=[1]
+18)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+19)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# union_upcast_types
+query TT
+explain SELECT c1, c9 FROM aggregate_test_100 UNION ALL SELECT c1, c3 FROM aggregate_test_100 ORDER BY c9 DESC LIMIT 5
+----
+logical_plan
+01)Sort: c9 DESC NULLS FIRST, fetch=5
+02)--Union
+03)----Projection: aggregate_test_100.c1, CAST(aggregate_test_100.c9 AS Decimal128(20, 0)) AS c9
+04)------TableScan: aggregate_test_100 projection=[c1, c9]
+05)----Projection: aggregate_test_100.c1, CAST(aggregate_test_100.c3 AS Decimal128(20, 0)) AS c9
+06)------TableScan: aggregate_test_100 projection=[c1, c3]
+physical_plan
+01)SortPreservingMergeExec: [c9@1 DESC], fetch=5
+02)--SortExec: TopK(fetch=5), expr=[c9@1 DESC], preserve_partitioning=[true]
+03)----UnionExec
+04)------ProjectionExec: expr=[c1@0 as c1, CAST(c9@1 AS Decimal128(20, 0)) as c9]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+06)----------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c9], file_type=csv, has_header=true
+07)------ProjectionExec: expr=[c1@0 as c1, CAST(c3@1 AS Decimal128(20, 0)) as c9]
+08)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+09)----------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c3], file_type=csv, has_header=true
+
+query TR
+SELECT c1, c9 FROM aggregate_test_100 UNION ALL SELECT c1, c3 FROM aggregate_test_100 ORDER BY c9 DESC LIMIT 5
+----
+c 4268716378
+e 4229654142
+d 4216440507
+e 4144173353
+b 4076864659
+
+# union_with_hash_aggregate
+query TT
+explain
+SELECT count(*) FROM (
+    SELECT distinct name FROM t1
+    UNION ALL
+    SELECT distinct name FROM t2
+) GROUP BY name
+----
+logical_plan
+01)Projection: count(Int64(1)) AS count(*)
+02)--Aggregate: groupBy=[[name]], aggr=[[count(Int64(1))]]
+03)----Union
+04)------Aggregate: groupBy=[[t1.name]], aggr=[[]]
+05)--------TableScan: t1 projection=[name]
+06)------Aggregate: groupBy=[[t2.name]], aggr=[[]]
+07)--------TableScan: t2 projection=[name]
+physical_plan
+01)ProjectionExec: expr=[count(Int64(1))@1 as count(*)]
+02)--AggregateExec: mode=SinglePartitioned, gby=[name@0 as name], aggr=[count(Int64(1))]
+03)----InterleaveExec
+04)------AggregateExec: mode=FinalPartitioned, gby=[name@0 as name], aggr=[]
+05)--------RepartitionExec: partitioning=Hash([name@0], 4), input_partitions=4
+06)----------AggregateExec: mode=Partial, gby=[name@0 as name], aggr=[]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)--------------DataSourceExec: partitions=1, partition_sizes=[1]
+09)------AggregateExec: mode=FinalPartitioned, gby=[name@0 as name], aggr=[]
+10)--------RepartitionExec: partitioning=Hash([name@0], 4), input_partitions=4
+11)----------AggregateExec: mode=Partial, gby=[name@0 as name], aggr=[]
+12)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+13)--------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# Union with limit push down 3 children test case
+query TT
+EXPLAIN
+               SELECT count(*) as cnt FROM
+                 (SELECT count(*), c1
+                  FROM aggregate_test_100
+                  WHERE c13 != 'C2GT5KVyOPZpgKVl110TyZO0NcJ434'
+                  GROUP BY c1
+                  ORDER BY c1
+                  ) AS a
+                 UNION ALL
+               SELECT 1 as cnt
+                 UNION ALL
+               SELECT lead(c1, 1) OVER () as cnt FROM (select 1 as c1) AS b
+               LIMIT 3
+----
+logical_plan
+01)Limit: skip=0, fetch=3
+02)--Union
+03)----Projection: count(Int64(1)) AS count(*) AS cnt
+04)------Limit: skip=0, fetch=3
+05)--------Aggregate: groupBy=[[]], aggr=[[count(Int64(1))]]
+06)----------SubqueryAlias: a
+07)------------Projection:
+08)--------------Aggregate: groupBy=[[aggregate_test_100.c1]], aggr=[[]]
+09)----------------Projection: aggregate_test_100.c1
+10)------------------Filter: aggregate_test_100.c13 != Utf8View("C2GT5KVyOPZpgKVl110TyZO0NcJ434")
+11)--------------------TableScan: aggregate_test_100 projection=[c1, c13], partial_filters=[aggregate_test_100.c13 != Utf8View("C2GT5KVyOPZpgKVl110TyZO0NcJ434")]
+12)----Projection: Int64(1) AS cnt
+13)------Limit: skip=0, fetch=3
+14)--------EmptyRelation: rows=1
+15)----Projection: lead(b.c1,Int64(1)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING AS cnt
+16)------Limit: skip=0, fetch=3
+17)--------WindowAggr: windowExpr=[[lead(b.c1, Int64(1)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING]]
+18)----------SubqueryAlias: b
+19)------------Projection: Int64(1) AS c1
+20)--------------EmptyRelation: rows=1
+physical_plan
+01)CoalescePartitionsExec: fetch=3
+02)--UnionExec
+03)----ProjectionExec: expr=[CAST(count(Int64(1))@0 AS Int64) as cnt]
+04)------GlobalLimitExec: skip=0, fetch=3
+05)--------AggregateExec: mode=Final, gby=[], aggr=[count(Int64(1))]
+06)----------CoalescePartitionsExec
+07)------------AggregateExec: mode=Partial, gby=[], aggr=[count(Int64(1))]
+08)--------------ProjectionExec: expr=[]
+09)----------------AggregateExec: mode=FinalPartitioned, gby=[c1@0 as c1], aggr=[]
+10)------------------RepartitionExec: partitioning=Hash([c1@0], 4), input_partitions=4
+11)--------------------AggregateExec: mode=Partial, gby=[c1@0 as c1], aggr=[]
+12)----------------------FilterExec: c13@1 != C2GT5KVyOPZpgKVl110TyZO0NcJ434, projection=[c1@0]
+13)------------------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+14)--------------------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c13], file_type=csv, has_header=true
+15)----ProjectionExec: expr=[CAST(1 AS Int64) as cnt]
+16)------PlaceholderRowExec
+17)----ProjectionExec: expr=[lead(b.c1,Int64(1)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING@1 as cnt]
+18)------GlobalLimitExec: skip=0, fetch=3
+19)--------BoundedWindowAggExec: wdw=[lead(b.c1,Int64(1)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING: Field { "lead(b.c1,Int64(1)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING": nullable Int64 }, frame: ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING], mode=[Sorted]
+20)----------ProjectionExec: expr=[1 as c1]
+21)------------PlaceholderRowExec
+
+
+########
+# Clean up after the test
+########
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+drop table aggregate_test_100;
+
+statement ok
+CREATE EXTERNAL TABLE t1 (
+        c1  VARCHAR NOT NULL,
+        c2  TINYINT NOT NULL,
+        c3  SMALLINT NOT NULL,
+        c4  SMALLINT NOT NULL,
+        c5  INTEGER NOT NULL,
+        c6  BIGINT NOT NULL,
+        c7  SMALLINT NOT NULL,
+        c8  INT NOT NULL,
+        c9  INT UNSIGNED NOT NULL,
+        c10 BIGINT UNSIGNED NOT NULL,
+        c11 FLOAT NOT NULL,
+        c12 DOUBLE NOT NULL,
+        c13 VARCHAR NOT NULL
+    )
+STORED AS CSV
+WITH ORDER (c1 ASC)
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+statement ok
+CREATE EXTERNAL TABLE t2 (
+        c1a  VARCHAR NOT NULL,
+        c2  TINYINT NOT NULL,
+        c3  SMALLINT NOT NULL,
+        c4  SMALLINT NOT NULL,
+        c5  INTEGER NOT NULL,
+        c6  BIGINT NOT NULL,
+        c7  SMALLINT NOT NULL,
+        c8  INT NOT NULL,
+        c9  INT UNSIGNED NOT NULL,
+        c10 BIGINT UNSIGNED NOT NULL,
+        c11 FLOAT NOT NULL,
+        c12 DOUBLE NOT NULL,
+        c13 VARCHAR NOT NULL
+    )
+STORED AS CSV
+WITH ORDER (c1a ASC)
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TT
+explain
+SELECT c1 FROM(
+(
+    SELECT c1 FROM t1
+)
+UNION ALL
+(
+    SELECT c1a FROM t2
+))
+ORDER BY c1
+----
+logical_plan
+01)Sort: c1 ASC NULLS LAST
+02)--Union
+03)----TableScan: t1 projection=[c1]
+04)----Projection: t2.c1a AS c1
+05)------TableScan: t2 projection=[c1a]
+physical_plan
+01)SortPreservingMergeExec: [c1@0 ASC NULLS LAST]
+02)--UnionExec
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1], output_ordering=[c1@0 ASC NULLS LAST], file_type=csv, has_header=true
+04)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1a@0 as c1], file_type=csv, has_header=true
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+# test UNION ALL aliases correctly with aliased columns
+query TT
+explain select 1 a group by a union all select 2 b union all select 3 c
+----
+logical_plan
+01)Union
+02)--Projection: Int64(1) AS a
+03)----Aggregate: groupBy=[[Int64(1)]], aggr=[[]]
+04)------EmptyRelation: rows=1
+05)--Projection: Int64(2) AS a
+06)----EmptyRelation: rows=1
+07)--Projection: Int64(3) AS a
+08)----EmptyRelation: rows=1
+physical_plan
+01)UnionExec
+02)--ProjectionExec: expr=[Int64(1)@0 as a]
+03)----AggregateExec: mode=SinglePartitioned, gby=[1 as Int64(1)], aggr=[], ordering_mode=Sorted
+04)------PlaceholderRowExec
+05)--ProjectionExec: expr=[2 as a]
+06)----PlaceholderRowExec
+07)--ProjectionExec: expr=[3 as a]
+08)----PlaceholderRowExec
+
+# test UNION ALL aliases correctly with aliased subquery
+query TT
+explain select count(*) count, n from (select 5 as n) a group by n
+union all
+select x, y from (select 1 as x , max(10) as y) b
+----
+logical_plan
+01)Union
+02)--Projection: count(Int64(1)) AS count(*) AS count, a.n
+03)----Aggregate: groupBy=[[a.n]], aggr=[[count(Int64(1))]]
+04)------SubqueryAlias: a
+05)--------Projection: Int64(5) AS n
+06)----------EmptyRelation: rows=1
+07)--Projection: b.x AS count, b.y AS n
+08)----SubqueryAlias: b
+09)------Projection: Int64(1) AS x, max(Int64(10)) AS y
+10)--------Aggregate: groupBy=[[]], aggr=[[max(Int64(10))]]
+11)----------EmptyRelation: rows=1
+physical_plan
+01)UnionExec
+02)--ProjectionExec: expr=[count(Int64(1))@1 as count, CAST(n@0 AS Int64) as n]
+03)----AggregateExec: mode=SinglePartitioned, gby=[n@0 as n], aggr=[count(Int64(1))], ordering_mode=Sorted
+04)------ProjectionExec: expr=[5 as n]
+05)--------PlaceholderRowExec
+06)--ProjectionExec: expr=[1 as count, max(Int64(10))@0 as n]
+07)----AggregateExec: mode=Single, gby=[], aggr=[max(Int64(10))]
+08)------PlaceholderRowExec
+
+
+# Test issue: https://github.com/apache/datafusion/issues/11409
+statement ok
+CREATE TABLE t1(v0 BIGINT, v1 BIGINT, v2 BIGINT, v3 BOOLEAN);
+
+statement ok
+CREATE TABLE t2(v0 DOUBLE);
+
+query I
+INSERT INTO t1(v0, v2, v1) VALUES (-1229445667, -342312412, -1507138076);
+----
+1
+
+query I
+INSERT INTO t1(v0, v1) VALUES (1541512604, -1229445667);
+----
+1
+
+query I
+INSERT INTO t1(v1, v3, v0, v2) VALUES (-1020641465, false, -1493773377, 1751276473);
+----
+1
+
+query I
+INSERT INTO t1(v3) VALUES (true), (true), (false);
+----
+3
+
+query I
+INSERT INTO t2(v0) VALUES (0.28014577292925047);
+----
+1
+
+query II
+SELECT t1.v2, t1.v0 FROM t2 NATURAL JOIN t1
+    UNION ALL
+SELECT t1.v2, t1.v0 FROM t2 NATURAL JOIN t1 WHERE (t1.v2 IS NULL);
+----
+
+query IR
+SELECT t1.v0, t2.v0 FROM t1,t2
+    UNION ALL
+SELECT t1.v0, t2.v0 FROM t1,t2
+ORDER BY v0;
+----
+-1493773377 0.280145772929
+-1493773377 0.280145772929
+-1229445667 0.280145772929
+-1229445667 0.280145772929
+1541512604 0.280145772929
+1541512604 0.280145772929
+NULL 0.280145772929
+NULL 0.280145772929
+NULL 0.280145772929
+NULL 0.280145772929
+NULL 0.280145772929
+NULL 0.280145772929
+
+statement ok
+CREATE TABLE t3 (
+  id INT
+) as VALUES
+  (1),
+  (2),
+  (3)
+;
+
+statement ok
+CREATE TABLE t4 (
+  id TEXT
+) as VALUES
+  ('4'),
+  ('5'),
+  ('6')
+;
+
+# test type coersion for wildcard expansion
+query T rowsort
+(SELECT * FROM t3 ) UNION ALL (SELECT * FROM t4)
+----
+1
+2
+3
+4
+5
+6
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP TABLE t3;
+
+statement ok
+DROP TABLE t4;
+
+# Test issue: https://github.com/apache/datafusion/issues/11742
+query R rowsort
+WITH
+  tt(v1) AS (VALUES (1::INT),(NULL::INT))
+SELECT NVL(v1, 0.5) FROM tt
+  UNION ALL
+SELECT NULL WHERE FALSE;
+----
+0.5
+1
+
+# Test Union of List Types. Issue: https://github.com/apache/datafusion/issues/12291
+query error DataFusion error: type_coercion\ncaused by\nError during planning: Incompatible inputs for Union: Previous inputs were of type List(.*), but got incompatible type List(.*) on column 'x'
+SELECT make_array(2) x UNION ALL SELECT make_array(now()) x;
+
+query ? rowsort
+select make_array(arrow_cast(2, 'UInt8')) x UNION ALL SELECT make_array(arrow_cast(-2, 'Int8')) x;
+----
+[-2]
+[2]
+
+query ? rowsort
+select make_array(make_array(1)) x UNION ALL SELECT make_array(arrow_cast(make_array(-1), 'LargeList(Int8)')) x;
+----
+[[-1]]
+[[1]]
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+statement ok
+set datafusion.execution.batch_size = 2;
+
+# Constant value tracking across union
+query TT
+explain
+SELECT * FROM(
+(
+    SELECT * FROM aggregate_test_100 WHERE c1='a'
+)
+UNION ALL
+(
+    SELECT * FROM aggregate_test_100 WHERE c1='a'
+))
+ORDER BY c1
+----
+logical_plan
+01)Sort: c1 ASC NULLS LAST
+02)--Union
+03)----Filter: aggregate_test_100.c1 = Utf8View("a")
+04)------TableScan: aggregate_test_100 projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], partial_filters=[aggregate_test_100.c1 = Utf8View("a")]
+05)----Filter: aggregate_test_100.c1 = Utf8View("a")
+06)------TableScan: aggregate_test_100 projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], partial_filters=[aggregate_test_100.c1 = Utf8View("a")]
+physical_plan
+01)CoalescePartitionsExec
+02)--UnionExec
+03)----FilterExec: c1@0 = a
+04)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], file_type=csv, has_header=true
+06)----FilterExec: c1@0 = a
+07)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], file_type=csv, has_header=true
+
+# Clean up after the test
+statement ok
+drop table aggregate_test_100;
+
+# test for https://github.com/apache/datafusion/issues/14352
+query TB rowsort
+SELECT
+    a,
+    a IS NOT NULL
+FROM (
+    -- second column, even though it's not selected, was necessary to reproduce the bug linked above
+    SELECT 'foo' AS a, 3 AS b
+    UNION ALL
+    SELECT NULL AS a, 4 AS b
+)
+----
+NULL false
+foo true
+
+query T
+SELECT combined
+FROM (
+  SELECT concat('A', 'B') AS combined UNION ALL
+  SELECT concat('A', 'B') AS combined
+)
+GROUP BY combined
+----
+AB
+
+
+# Test union in view
+statement ok
+CREATE TABLE u1 (x INT, y INT);
+
+statement ok
+INSERT INTO u1 VALUES (3, 3), (3, 3), (1, 1);
+
+statement ok
+CREATE TABLE u2 (y BIGINT, z BIGINT);
+
+statement ok
+INSERT INTO u2 VALUES (20, 20), (40, 40);
+
+statement ok
+CREATE VIEW v1 AS
+SELECT y FROM u1 UNION ALL SELECT y FROM u2 ORDER BY y;
+
+query I rowsort
+SELECT * FROM (SELECT y FROM u1 UNION ALL SELECT y FROM u2) ORDER BY y;
+----
+1
+20
+3
+3
+40
+
+query TT
+explain SELECT * FROM (SELECT y FROM u1 UNION ALL SELECT y FROM u2) ORDER BY y;
+----
+logical_plan
+01)Sort: y ASC NULLS LAST
+02)--Union
+03)----Projection: CAST(u1.y AS Int64) AS y
+04)------TableScan: u1 projection=[y]
+05)----TableScan: u2 projection=[y]
+physical_plan
+01)SortPreservingMergeExec: [y@0 ASC NULLS LAST]
+02)--UnionExec
+03)----SortExec: expr=[y@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------ProjectionExec: expr=[CAST(y@0 AS Int64) as y]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+06)----------DataSourceExec: partitions=1, partition_sizes=[2]
+07)----SortExec: expr=[y@0 ASC NULLS LAST], preserve_partitioning=[false]
+08)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# optimize_subquery_sort in create_relation removes Sort so the result is not sorted.
+query I
+SELECT * FROM v1 ORDER BY 1;
+----
+1
+3
+3
+20
+40
+
+query TT
+explain SELECT * FROM v1;
+----
+logical_plan
+01)SubqueryAlias: v1
+02)--Union
+03)----Projection: CAST(u1.y AS Int64) AS y
+04)------TableScan: u1 projection=[y]
+05)----TableScan: u2 projection=[y]
+physical_plan
+01)UnionExec
+02)--ProjectionExec: expr=[CAST(y@0 AS Int64) as y]
+03)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+04)------DataSourceExec: partitions=1, partition_sizes=[2]
+05)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement count 0
+drop view v1;
+
+statement count 0
+drop table u1;
+
+statement count 0
+drop table u2;
+
+# repro for https://github.com/apache/datafusion/issues/18327
+# should not error
+query TITT
+  WITH typ(oid, typnamespace, typname, typtype) AS (
+                      SELECT * FROM (VALUES (1, 10, 't1', 'b'))
+            UNION ALL SELECT * FROM (VALUES (2, NULL, 't2', 'b'))
+            UNION ALL SELECT * FROM (VALUES (3, 12, 't3', NULL))
+       )
+       , ns(oid, nspname) AS (VALUES (1, 'ns1'), (2, 'ns2'))
+    SELECT ns.nspname, typ.oid, typ.typname, typ.typtype
+      FROM typ JOIN ns ON (ns.oid = typ.typnamespace)
+     WHERE typ.typtype IN ('b','r','m','e','d')
+     ORDER BY CASE WHEN typ.typtype IN ('b','e','p') THEN 0
+                   WHEN typ.typtype = 'r' THEN 1
+              END
+----
+
+# Add another row with a non-NULL value `m` which is retained by the
+# filter but not matching any WHEN branch m?
+query TITT
+  WITH typ(oid, typnamespace, typname, typtype) AS (
+                      SELECT * FROM (VALUES (1, 10, 't1', 'b'))
+            UNION ALL SELECT * FROM (VALUES (2, NULL, 't2', 'b'))
+            UNION ALL SELECT * FROM (VALUES (3, 12, 't3', NULL))
+            UNION ALL SELECT * FROM (VALUES (4, 40, 't3', 'm'))
+       ), ns(oid, nspname) AS (
+         VALUES (1, 'ns1'), (2, 'ns2'), (40, 'ns3')
+       )
+    SELECT ns.nspname, typ.oid, typ.typname, typ.typtype
+      FROM typ JOIN ns ON (ns.oid = typ.typnamespace)
+     WHERE typ.typtype IN ('b','r','m','e','d')
+     ORDER BY CASE WHEN typ.typtype IN ('b','e','p') THEN 0
+                   WHEN typ.typtype = 'r' THEN 1
+              END
+----
+ns3 4 t3 m
+
+# Config reset
+statement ok
+RESET datafusion.execution.batch_size;

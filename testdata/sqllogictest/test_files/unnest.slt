@@ -1,0 +1,1648 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+############################
+# Unnest Expressions Tests #
+############################
+
+statement ok
+CREATE TABLE unnest_table
+AS VALUES
+    ([1,2,3], [7], 1, [13, 14], struct(1,2)),
+    ([4,5], [8,9,10], 2, [15, 16], struct(3,4)),
+    ([6], [11,12], 3, null, null),
+    ([12], [null, 42, null], null, null, struct(7,8)),
+    -- null array to verify the `preserve_nulls` option
+    (null, null, 4, [17, 18], null)
+;
+
+statement ok
+CREATE TABLE nested_unnest_table
+AS VALUES
+    (struct('a', 'b', struct('c')), (struct('a', 'b', [10,20])), [struct('a', 'b')]),
+    (struct('d', 'e', struct('f')), (struct('x', 'y', [30,40, 50])), null)
+;
+
+statement ok
+CREATE TABLE recursive_unnest_table
+AS VALUES
+    (struct([1], 'a'), [[[1],[2]],[[1,1]]], [struct([1],[[1,2]])]),
+    (struct([2], 'b'), [[[3,4],[5]],[[null,6],null,[7,8]]], [struct([2],[[3],[4]])])
+;
+
+## Basic unnest expression in select list
+query I
+select unnest([1,2,3]);
+----
+1
+2
+3
+
+## Basic unnest expression in select struct
+query III
+select unnest(struct(1,2,3));
+----
+1 2 3
+
+## Basic unnest expression in select struct with alias (alias is ignored for struct unnest)
+query III
+select unnest(struct(1,2,3)) as ignored_alias;
+----
+1 2 3
+
+## Verify schema output for struct unnest with alias (alias is ignored)
+query TTT
+describe select unnest(struct(1,2,3)) as ignored_alias;
+----
+struct(Int64(1),Int64(2),Int64(3)).c0 Int64 YES
+struct(Int64(1),Int64(2),Int64(3)).c1 Int64 YES
+struct(Int64(1),Int64(2),Int64(3)).c2 Int64 YES
+
+## Basic unnest list expression in from clause
+query I
+select * from unnest([1,2,3]);
+----
+1
+2
+3
+
+## Basic unnest struct expression in from clause
+query III
+select * from unnest(struct(1,2,3));
+----
+1 2 3
+
+## Multiple unnest expression in from clause
+query IIII
+select * from unnest(struct(1,2,3)),unnest([4,5,6]);
+----
+1 2 3 4
+1 2 3 5
+1 2 3 6
+
+
+## Unnest null in select list
+query error DataFusion error: This feature is not implemented: unnest\(\) does not support null yet
+select unnest(null);
+
+## Unnest null in from clause
+query error DataFusion error: This feature is not implemented: unnest\(\) does not support null yet
+select * from unnest(null);
+
+
+## Unnest empty array in select list
+query ?
+select unnest([]);
+----
+
+## Unnest empty array in from clause
+query ?
+select * from unnest([]);
+----
+
+
+## Unnest column non-null
+query I
+select unnest(column1) from unnest_table;
+----
+1
+2
+3
+4
+5
+6
+12
+
+## Unnest column with null
+query I
+select unnest(column2) from unnest_table;
+----
+7
+8
+9
+10
+11
+12
+NULL
+42
+NULL
+
+## Unnest single column and filter out null lists
+query I
+select unnest(column2) from unnest_table where column2 is not null;
+----
+7
+8
+9
+10
+11
+12
+NULL
+42
+NULL
+
+## Unnest with additional column
+## Issue: https://github.com/apache/datafusion/issues/9349
+query II
+select unnest(column1), column3 from unnest_table;
+----
+1 1
+2 1
+3 1
+4 2
+5 2
+6 3
+12 NULL
+
+query I?
+select unnest(column1), column1 from unnest_table;
+----
+1 [1, 2, 3]
+2 [1, 2, 3]
+3 [1, 2, 3]
+4 [4, 5]
+5 [4, 5]
+6 [6]
+12 [12]
+
+# unnest at different level at the same time
+query II
+select unnest([1,2,3]), unnest(unnest([[1,2,3]]));
+----
+1 1
+2 2
+3 3
+
+# binary expr linking different unnest exprs
+query II
+select unnest([1,2,3]) + unnest([1,2,3]), unnest([1,2,3]) + unnest([4,5]);
+----
+2 5
+4 7
+6 NULL
+
+
+# binary expr linking different recursive unnest exprs
+query III
+select unnest(unnest([[1,2,3]])) + unnest(unnest([[1,2,3]])), unnest(unnest([[1,2,3]])) + unnest([4,5]), unnest([4,5]);
+----
+2 5 4
+4 7 5
+6 NULL NULL
+
+
+
+
+## unnest as children of other expr
+query I?
+select unnest(column1) + 1 , column1 from unnest_table;
+----
+2 [1, 2, 3]
+3 [1, 2, 3]
+4 [1, 2, 3]
+5 [4, 5]
+6 [4, 5]
+7 [6]
+13 [12]
+
+## unnest on multiple columns
+query II
+select unnest(column1), unnest(column2) from unnest_table;
+----
+1 7
+2 NULL
+3 NULL
+4 8
+5 9
+NULL 10
+6 11
+NULL 12
+12 NULL
+NULL 42
+NULL NULL
+
+query error DataFusion error: Error during planning: unnest\(\) can only be applied to array, struct and null
+select unnest('foo');
+
+query ?II
+select array_remove(column1, 4), unnest(column2), column3 * 10 from unnest_table;
+----
+[1, 2, 3] 7 10
+[5] 8 20
+[5] 9 20
+[5] 10 20
+[6] 11 30
+[6] 12 30
+[12] NULL NULL
+[12] 42 NULL
+[12] NULL NULL
+
+
+## Unnest doesn't work with untyped nulls
+query error DataFusion error: This feature is not implemented: unnest\(\) does not support null yet
+select unnest(null) from unnest_table;
+
+## Multiple unnest functions in selection
+query ?I
+select unnest([]), unnest(NULL::int[]);
+----
+
+query III
+select
+    unnest(column1),
+    unnest(arrow_cast(column2, 'LargeList(Int64)')),
+    unnest(arrow_cast(column4, 'FixedSizeList(2, Int64)'))
+from unnest_table where column4 is not null;
+----
+1 7 13
+2 NULL 14
+3 NULL NULL
+4 8 15
+5 9 16
+NULL 10 NULL
+NULL NULL 17
+NULL NULL 18
+
+query IIII
+select
+    unnest(column1), unnest(column2) + 2,
+    column3 * 10, unnest(array_remove(column1, 4))
+from unnest_table;
+----
+1 9 10 1
+2 NULL 10 2
+3 NULL 10 3
+4 10 20 5
+5 11 20 NULL
+NULL 12 20 NULL
+6 13 30 6
+NULL 14 30 NULL
+12 NULL NULL 12
+NULL 44 NULL NULL
+NULL NULL NULL NULL
+
+## Unnest scalar in select list
+query error DataFusion error: Error during planning: unnest\(\) can only be applied to array, struct and null
+select unnest(1);
+
+## Unnest scalar in from clause
+query error DataFusion error: Error during planning: unnest\(\) can only be applied to array, struct and null
+select * from unnest(1);
+
+
+## Unnest empty expression in select list
+query error DataFusion error: Error during planning: unnest\(\) requires exactly one argument
+select unnest();
+
+## Unnest empty expression in from clause
+query error DataFusion error: SQL error: ParserError\("Expected: an expression, found: \) at Line: 1, Column: 22"\)
+select * from unnest();
+
+
+## Unnest multiple expressions in select list. This form is only allowed in a query's FROM clause.
+query error DataFusion error: Error during planning: unnest\(\) requires exactly one argument
+select unnest([1,2], [2,3]);
+
+## Unnest multiple expressions in from clause
+query ITII
+select * from unnest(
+    [1,2],
+    arrow_cast(['a','b', 'c'], 'LargeList(Utf8)'),
+    arrow_cast([4, NULL], 'FixedSizeList(2, Int64)'),
+    NULL::int[]
+) as t(a, b, c, d);
+----
+1 a 4 NULL
+2 b NULL NULL
+NULL c NULL NULL
+
+query ?I
+select * from unnest([], NULL::int[]);
+----
+
+
+## Unnest struct expression in select list
+query ?
+select unnest(struct(null));
+----
+NULL
+
+## Unnest struct expression in from clause
+query ?
+select * from unnest(struct(null));
+----
+NULL
+
+
+## Unnest array expression
+query I
+select unnest(range(1, 3));
+----
+1
+2
+
+query I
+select * from unnest(range(1, 3));
+----
+1
+2
+
+query I
+select unnest(arrow_cast(range(1, 3), 'LargeList(Int64)'));
+----
+1
+2
+
+query I
+select * from unnest(arrow_cast(range(1, 3), 'LargeList(Int64)'));
+----
+1
+2
+
+query I
+select unnest(arrow_cast(range(1, 3), 'FixedSizeList(2, Int64)'));
+----
+1
+2
+
+query I
+select * from unnest(arrow_cast(range(1, 3), 'FixedSizeList(2, Int64)'));
+----
+1
+2
+
+query I
+select unnest(array_remove(column1, 12)) from unnest_table;
+----
+1
+2
+3
+4
+5
+6
+
+## unnest struct-typed column and list-typed column at the same time
+query I?II?
+select unnest(column1), column1, unnest(column5), column5 from unnest_table;
+----
+1 [1, 2, 3] 1 2 {c0: 1, c1: 2}
+2 [1, 2, 3] 1 2 {c0: 1, c1: 2}
+3 [1, 2, 3] 1 2 {c0: 1, c1: 2}
+4 [4, 5] 3 4 {c0: 3, c1: 4}
+5 [4, 5] 3 4 {c0: 3, c1: 4}
+6 [6] NULL NULL NULL
+12 [12] 7 8 {c0: 7, c1: 8}
+
+
+## Unnest in from clause with alias
+query I
+select * from unnest([1,2]) as t;
+----
+1
+2
+
+query I
+select a from unnest([1,2]) as t(a);
+----
+1
+2
+
+
+## Unnest in from clause with offset is not supported
+query error DataFusion error: This feature is not implemented: UNNEST table factor with offset is not supported yet
+select * from unnest([1,2]) with offset;
+
+query error DataFusion error: This feature is not implemented: UNNEST table factor with offset is not supported yet
+select * from unnest([1,2]) with offset offset_alias;
+
+
+## More complex cases
+query I
+select * from unnest([1,2,(select sum(column3) from unnest_table)]);
+----
+1
+2
+10
+
+## Unnest is the sub-expression of other expression
+query II
+select unnest(column1) as a, column3 from unnest_table;
+----
+1 1
+2 1
+3 1
+4 2
+5 2
+6 3
+12 NULL
+
+query BI
+select unnest(column1) is not null, column3 from unnest_table;
+----
+true 1
+true 1
+true 1
+true 2
+true 2
+true 3
+true NULL
+
+query II
+select -unnest(column1) as a, column3 from unnest_table;
+----
+-1 1
+-2 1
+-3 1
+-4 2
+-5 2
+-6 3
+-12 NULL
+
+query II
+select unnest(array_remove(column1, 3)) as a, column3 from unnest_table;
+----
+1 1
+2 1
+4 2
+5 2
+6 3
+12 NULL
+
+query II
+select unnest(array_remove(column1, 3)) as c1, column3 from unnest_table order by c1 desc, column3;
+----
+12 NULL
+6 3
+5 2
+4 2
+2 1
+1 1
+
+query II
+select unnest(array_remove(column1, 3)) - 1 as c1, column3 from unnest_table;
+----
+0 1
+1 1
+3 2
+4 2
+5 3
+11 NULL
+
+## unnest on nested(list(struct))
+query ?
+select unnest(column3) as struct_elem from nested_unnest_table;
+----
+{c0: a, c1: b}
+
+## unnest for nested struct(struct)
+query TT?
+select unnest(column1) from nested_unnest_table;
+----
+a b {c0: c}
+d e {c0: f}
+
+## unnest for nested(struct(list))
+query TT?
+select unnest(column2) from nested_unnest_table;
+----
+a b [10, 20]
+x y [30, 40, 50]
+
+query error DataFusion error: type_coercion\ncaused by\nThis feature is not implemented: Unnest should be rewritten to LogicalPlan::Unnest before type coercion
+select sum(unnest(generate_series(1,10)));
+
+query error DataFusion error: Internal error: Assertion failed: struct_allowed: unnest on struct can only be applied at the root level of select expression
+select arrow_typeof(unnest(column5)) from unnest_table;
+
+query T
+select arrow_typeof(unnest(column1)) from unnest_table;
+----
+Int64
+Int64
+Int64
+Int64
+Int64
+Int64
+Int64
+
+## unnest from a result of a logical plan with limit and offset
+query I
+select unnest(column1) from (select * from (values([1,2,3]), ([4,5,6])) limit 1 offset 1);
+----
+4
+5
+6
+
+query error DataFusion error: Error during planning: Projections require unique expression names but the expression "UNNEST\(unnest_table.column1\)" at position 0 and "UNNEST\(unnest_table.column1\)" at position 1 have the same name. Consider aliasing \("AS"\) one of them.
+select unnest(column1), unnest(column1) from unnest_table;
+
+query II
+select unnest(column1), unnest(column1) u1 from unnest_table;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+6 6
+12 12
+
+## the same unnest expr is referened multiple times (unnest is the bottom-most expr)
+query ??II
+select unnest(column2), unnest(unnest(column2)), unnest(unnest(unnest(column2))), unnest(unnest(unnest(column2))) + 1 from recursive_unnest_table;
+----
+[[1], [2]] [1] 1 2
+[[1, 1]] [2] NULL NULL
+[[1], [2]] [1, 1] 2 3
+[[1, 1]] NULL NULL NULL
+[[1], [2]] [1] 1 2
+[[1, 1]] [2] 1 2
+[[1], [2]] [1, 1] NULL NULL
+[[1, 1]] NULL NULL NULL
+[[3, 4], [5]] [3, 4] 3 4
+[[NULL, 6], NULL, [7, 8]] [5] 4 5
+[[3, 4], [5]] [NULL, 6] 5 6
+[[NULL, 6], NULL, [7, 8]] NULL NULL NULL
+NULL [7, 8] NULL NULL
+[[3, 4], [5]] [3, 4] NULL NULL
+[[NULL, 6], NULL, [7, 8]] [5] 6 7
+[[3, 4], [5]] [NULL, 6] NULL NULL
+[[NULL, 6], NULL, [7, 8]] NULL NULL NULL
+NULL [7, 8] NULL NULL
+[[3, 4], [5]] NULL 7 8
+[[NULL, 6], NULL, [7, 8]] NULL 8 9
+
+## the same composite expr (unnest(field_access(unnest(col)))) which containing unnest is referened multiple times
+query ??II
+select unnest(column3), unnest(column3)['c0'], unnest(unnest(column3)['c0']), unnest(unnest(column3)['c0']) + unnest(unnest(column3)['c0'])  from recursive_unnest_table;
+----
+{c0: [1], c1: [[1, 2]]} [1] 1 2
+{c0: [2], c1: [[3], [4]]} [2] 2 4
+
+
+
+
+## unnest list followed by unnest struct
+query ???
+select unnest(unnest(column3)), column3 from recursive_unnest_table;
+----
+[1] [[1, 2]] [{c0: [1], c1: [[1, 2]]}]
+[2] [[3], [4]] [{c0: [2], c1: [[3], [4]]}]
+
+
+query TT
+explain select unnest(unnest(column3)), column3 from recursive_unnest_table;
+----
+logical_plan
+01)Projection: __unnest_placeholder(UNNEST(recursive_unnest_table.column3)).c0 AS UNNEST(recursive_unnest_table.column3).c0, __unnest_placeholder(UNNEST(recursive_unnest_table.column3)).c1 AS UNNEST(recursive_unnest_table.column3).c1, recursive_unnest_table.column3
+02)--Unnest: lists[] structs[__unnest_placeholder(UNNEST(recursive_unnest_table.column3))]
+03)----Projection: __unnest_placeholder(recursive_unnest_table.column3,depth=1) AS UNNEST(recursive_unnest_table.column3) AS __unnest_placeholder(UNNEST(recursive_unnest_table.column3)), recursive_unnest_table.column3
+04)------Unnest: lists[__unnest_placeholder(recursive_unnest_table.column3)|depth=1] structs[]
+05)--------Projection: recursive_unnest_table.column3 AS __unnest_placeholder(recursive_unnest_table.column3), recursive_unnest_table.column3
+06)----------TableScan: recursive_unnest_table projection=[column3]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(UNNEST(recursive_unnest_table.column3)).c0@0 as UNNEST(recursive_unnest_table.column3).c0, __unnest_placeholder(UNNEST(recursive_unnest_table.column3)).c1@1 as UNNEST(recursive_unnest_table.column3).c1, column3@2 as column3]
+02)--UnnestExec
+03)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+04)------ProjectionExec: expr=[__unnest_placeholder(recursive_unnest_table.column3,depth=1)@0 as __unnest_placeholder(UNNEST(recursive_unnest_table.column3)), column3@1 as column3]
+05)--------UnnestExec
+06)----------ProjectionExec: expr=[column3@0 as __unnest_placeholder(recursive_unnest_table.column3), column3@0 as column3]
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+## unnest->field_access->unnest->unnest
+query I?
+select unnest(unnest(unnest(column3)['c1'])), column3 from recursive_unnest_table;
+----
+1 [{c0: [1], c1: [[1, 2]]}]
+2 [{c0: [1], c1: [[1, 2]]}]
+3 [{c0: [2], c1: [[3], [4]]}]
+4 [{c0: [2], c1: [[3], [4]]}]
+
+## triple list unnest
+query I?
+select unnest(unnest(unnest(column2))), column2 from recursive_unnest_table;
+----
+1 [[[1], [2]], [[1, 1]]]
+2 [[[1], [2]], [[1, 1]]]
+1 [[[1], [2]], [[1, 1]]]
+1 [[[1], [2]], [[1, 1]]]
+3 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+4 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+5 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+NULL [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+6 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+7 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+8 [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]]
+
+
+query I??
+select unnest(unnest(unnest(column3)['c1'])), unnest(unnest(column3)['c1']), column3 from recursive_unnest_table;
+----
+1 [1, 2] [{c0: [1], c1: [[1, 2]]}]
+2 NULL [{c0: [1], c1: [[1, 2]]}]
+3 [3] [{c0: [2], c1: [[3], [4]]}]
+NULL [4] [{c0: [2], c1: [[3], [4]]}]
+4 [3] [{c0: [2], c1: [[3], [4]]}]
+NULL [4] [{c0: [2], c1: [[3], [4]]}]
+
+## demonstrate where recursive unnest is impossible
+## and need multiple unnesting logical plans
+## e.g unnest -> field_access -> unnest
+query TT
+explain select unnest(unnest(unnest(column3)['c1'])), column3 from recursive_unnest_table;
+----
+logical_plan
+01)Projection: __unnest_placeholder(UNNEST(recursive_unnest_table.column3)[c1],depth=2) AS UNNEST(UNNEST(UNNEST(recursive_unnest_table.column3)[c1])), recursive_unnest_table.column3
+02)--Unnest: lists[__unnest_placeholder(UNNEST(recursive_unnest_table.column3)[c1])|depth=2] structs[]
+03)----Projection: get_field(__unnest_placeholder(recursive_unnest_table.column3,depth=1), Utf8("c1")) AS __unnest_placeholder(UNNEST(recursive_unnest_table.column3)[c1]), recursive_unnest_table.column3
+04)------Unnest: lists[__unnest_placeholder(recursive_unnest_table.column3)|depth=1] structs[]
+05)--------Projection: recursive_unnest_table.column3 AS __unnest_placeholder(recursive_unnest_table.column3), recursive_unnest_table.column3
+06)----------TableScan: recursive_unnest_table projection=[column3]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(UNNEST(recursive_unnest_table.column3)[c1],depth=2)@0 as UNNEST(UNNEST(UNNEST(recursive_unnest_table.column3)[c1])), column3@1 as column3]
+02)--UnnestExec
+03)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+04)------ProjectionExec: expr=[get_field(__unnest_placeholder(recursive_unnest_table.column3,depth=1)@0, c1) as __unnest_placeholder(UNNEST(recursive_unnest_table.column3)[c1]), column3@1 as column3]
+05)--------UnnestExec
+06)----------ProjectionExec: expr=[column3@0 as __unnest_placeholder(recursive_unnest_table.column3), column3@0 as column3]
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+
+## group by unnest
+
+### without agg exprs
+query I
+select unnest(column1) c1 from unnest_table group by c1 order by c1;
+----
+1
+2
+3
+4
+5
+6
+12
+
+query II
+select unnest(column1) c1, unnest(column2) c2 from unnest_table group by c1, c2 order by c1, c2;
+----
+1 7
+2 NULL
+3 NULL
+4 8
+5 9
+6 11
+12 NULL
+NULL 10
+NULL 12
+NULL 42
+NULL NULL
+
+query III
+select unnest(column1) c1, unnest(column2) c2, column3 c3 from unnest_table group by c1, c2, c3 order by c1, c2, c3;
+----
+1 7 1
+2 NULL 1
+3 NULL 1
+4 8 2
+5 9 2
+6 11 3
+12 NULL NULL
+NULL 10 2
+NULL 12 3
+NULL 42 NULL
+NULL NULL NULL
+
+### with agg exprs
+
+query IIII
+select unnest(column1) c1, unnest(column2) c2, column3 c3, count(1) from unnest_table group by c1, c2, c3 order by c1, c2, c3;
+----
+1 7 1 1
+2 NULL 1 1
+3 NULL 1 1
+4 8 2 1
+5 9 2 1
+6 11 3 1
+12 NULL NULL 1
+NULL 10 2 1
+NULL 12 3 1
+NULL 42 NULL 1
+NULL NULL NULL 1
+
+query IIII
+select unnest(column1) c1, unnest(column2) c2, column3 c3, count(column4) from unnest_table group by c1, c2, c3 order by c1, c2, c3;
+----
+1 7 1 1
+2 NULL 1 1
+3 NULL 1 1
+4 8 2 1
+5 9 2 1
+6 11 3 0
+12 NULL NULL 0
+NULL 10 2 1
+NULL 12 3 0
+NULL 42 NULL 0
+NULL NULL NULL 0
+
+query IIIII
+select unnest(column1) c1, unnest(column2) c2, column3 c3, count(column4), sum(column3) from unnest_table group by c1, c2, c3 order by c1, c2, c3;
+----
+1 7 1 1 1
+2 NULL 1 1 1
+3 NULL 1 1 1
+4 8 2 1 2
+5 9 2 1 2
+6 11 3 0 3
+12 NULL NULL 0 NULL
+NULL 10 2 1 2
+NULL 12 3 0 3
+NULL 42 NULL 0 NULL
+NULL NULL NULL 0 NULL
+
+query II
+select unnest(column1), count(*) from unnest_table group by unnest(column1) order by unnest(column1) desc;
+----
+12 1
+6 1
+5 1
+4 1
+3 1
+2 1
+1 1
+
+### group by recursive unnest list
+
+query ?
+select unnest(unnest(column2)) c2 from recursive_unnest_table group by c2 order by c2;
+----
+[1]
+[1, 1]
+[2]
+[3, 4]
+[5]
+[7, 8]
+[NULL, 6]
+NULL
+
+query ?I
+select unnest(unnest(column2)) c2, count(column3) from recursive_unnest_table group by c2 order by c2;
+----
+[1] 1
+[1, 1] 1
+[2] 1
+[3, 4] 1
+[5] 1
+[7, 8] 1
+[NULL, 6] 1
+NULL 1
+
+query error DataFusion error: Error during planning: Column in SELECT must be in GROUP BY or an aggregate function: While expanding wildcard, column "nested_unnest_table\.column1" must appear in the GROUP BY clause or must be part of an aggregate function, currently only "UNNEST\(nested_unnest_table\.column1\)\[c0\]" appears in the SELECT clause satisfies this requirement
+select unnest(column1) c1 from nested_unnest_table group by c1.c0;
+
+## Unnest struct with alias - alias is ignored (same as DuckDB behavior)
+## See: https://github.com/apache/datafusion/issues/12794
+query TT?
+select unnest(column1) c1 from nested_unnest_table
+----
+a b {c0: c}
+d e {c0: f}
+
+## Verify schema output for struct unnest with alias (alias is ignored)
+query TTT
+describe select unnest(column1) c1 from nested_unnest_table;
+----
+nested_unnest_table.column1.c0 Utf8 YES
+nested_unnest_table.column1.c1 Utf8 YES
+nested_unnest_table.column1.c2 Struct("c0": Utf8) YES
+
+query II??I??
+select unnest(column5), * from unnest_table;
+----
+1 2 [1, 2, 3] [7] 1 [13, 14] {c0: 1, c1: 2}
+3 4 [4, 5] [8, 9, 10] 2 [15, 16] {c0: 3, c1: 4}
+NULL NULL [6] [11, 12] 3 NULL NULL
+7 8 [12] [NULL, 42, NULL] NULL NULL {c0: 7, c1: 8}
+NULL NULL NULL NULL 4 [17, 18] NULL
+
+query TT????
+select unnest(column1), * from nested_unnest_table
+----
+a b {c0: c} {c0: a, c1: b, c2: {c0: c}} {c0: a, c1: b, c2: [10, 20]} [{c0: a, c1: b}]
+d e {c0: f} {c0: d, c1: e, c2: {c0: f}} {c0: x, c1: y, c2: [30, 40, 50]} NULL
+
+query ?????
+select unnest(unnest(column3)), * from recursive_unnest_table
+----
+[1] [[1, 2]] {c0: [1], c1: a} [[[1], [2]], [[1, 1]]] [{c0: [1], c1: [[1, 2]]}]
+[2] [[3], [4]] {c0: [2], c1: b} [[[3, 4], [5]], [[NULL, 6], NULL, [7, 8]]] [{c0: [2], c1: [[3], [4]]}]
+
+statement ok
+CREATE TABLE join_table
+AS VALUES
+    (1, 2, 3),
+    (2, 3, 4),
+    (4, 5, 6)
+;
+
+query IIIII
+select unnest(u.column5), j.* from unnest_table u join join_table j on u.column3 = j.column1
+----
+1 2 1 2 3
+3 4 2 3 4
+NULL NULL 4 5 6
+
+query II?I?
+select unnest(column5), * except (column5, column1) from unnest_table;
+----
+1 2 [7] 1 [13, 14]
+3 4 [8, 9, 10] 2 [15, 16]
+NULL NULL [11, 12] 3 NULL
+7 8 [NULL, 42, NULL] NULL NULL
+NULL NULL NULL 4 [17, 18]
+
+query III
+select unnest(u.column5), j.* except(column2, column3) from unnest_table u join join_table j on u.column3 = j.column1
+----
+1 2 1
+3 4 2
+NULL NULL 4
+
+## Issue: https://github.com/apache/datafusion/issues/13237
+query I
+select count(*) from (select unnest(range(0, 100000)) id) t inner join (select unnest(range(0, 100000)) id) t1 on t.id = t1.id;
+----
+100000
+
+# Test implicit LATERAL support for UNNEST
+# Issue: https://github.com/apache/datafusion/issues/13659
+# TODO: https://github.com/apache/datafusion/issues/10048
+query error DataFusion error: This feature is not implemented: Physical plan does not support logical expression OuterReferenceColumn\(Field \{ name: "column1", data_type: List\(Field \{ data_type: Int64, nullable: true \}\), nullable: true \}, Column \{ relation: Some\(Bare \{ table: "u" \}\), name: "column1" \}\)
+select * from unnest_table u, unnest(u.column1);
+
+# Test implicit LATERAL support for UNNEST (INNER JOIN)
+query error DataFusion error: This feature is not implemented: Physical plan does not support logical expression OuterReferenceColumn\(Field \{ name: "column1", data_type: List\(Field \{ data_type: Int64, nullable: true \}\), nullable: true \}, Column \{ relation: Some\(Bare \{ table: "u" \}\), name: "column1" \}\)
+select * from unnest_table u INNER JOIN unnest(u.column1) AS t(column1) ON u.column3 = t.column1;
+
+# Test implicit LATERAL planning for UNNEST
+query TT
+explain select * from unnest_table u, unnest(u.column1);
+----
+logical_plan
+01)Cross Join:
+02)--SubqueryAlias: u
+03)----TableScan: unnest_table projection=[column1, column2, column3, column4, column5]
+04)--Subquery:
+05)----Projection: __unnest_placeholder(outer_ref(u.column1),depth=1) AS UNNEST(outer_ref(u.column1))
+06)------Unnest: lists[__unnest_placeholder(outer_ref(u.column1))|depth=1] structs[]
+07)--------Projection: outer_ref(u.column1) AS __unnest_placeholder(outer_ref(u.column1))
+08)----------EmptyRelation: rows=1
+physical_plan_error This feature is not implemented: Physical plan does not support logical expression OuterReferenceColumn(Field { name: "column1", data_type: List(Field { data_type: Int64, nullable: true }), nullable: true }, Column { relation: Some(Bare { table: "u" }), name: "column1" })
+
+# Test implicit LATERAL planning for UNNEST (INNER JOIN)
+query TT
+explain select * from unnest_table u INNER JOIN unnest(u.column1) AS t(column1) ON u.column3 = t.column1;
+----
+logical_plan
+01)Inner Join: u.column3 = t.column1
+02)--SubqueryAlias: u
+03)----TableScan: unnest_table projection=[column1, column2, column3, column4, column5]
+04)--SubqueryAlias: t
+05)----Subquery:
+06)------Projection: __unnest_placeholder(outer_ref(u.column1),depth=1) AS column1
+07)--------Unnest: lists[__unnest_placeholder(outer_ref(u.column1))|depth=1] structs[]
+08)----------Projection: outer_ref(u.column1) AS __unnest_placeholder(outer_ref(u.column1))
+09)------------EmptyRelation: rows=1
+physical_plan_error This feature is not implemented: Physical plan does not support logical expression OuterReferenceColumn(Field { name: "column1", data_type: List(Field { data_type: Int64, nullable: true }), nullable: true }, Column { relation: Some(Bare { table: "u" }), name: "column1" })
+
+# uncorrelated EXISTS with unnest
+query I
+SELECT 1
+WHERE EXISTS (SELECT unnest([2]))
+----
+1
+
+# EXISTS with unnest below correlation
+query I
+SELECT i
+FROM (VALUES (1), (3), (7)) AS t(i)
+WHERE EXISTS (SELECT 1 FROM unnest([2,3,4]) AS u(j) WHERE i + j = 6)
+----
+3
+
+## Unnest in subquery
+query IIII
+with t as (
+  select
+    left1,
+    width1,
+    min(column3) as min_height
+  from
+    unnest_table a
+    cross join unnest(ARRAY[1,2,3,4,5,6,7,8,9,10]) as t(left1)
+    cross join unnest(ARRAY[1,2,3,4,5,6,7,8,9,10]) as t1(width1)
+  where
+    left1 + width1 - 1 <= 10
+    and column3 between left1 and left1 + width1 - 1
+  group by
+    left1, width1
+)
+select
+  left1, width1, min_height, min_height * width1 as area
+from t
+where min_height * width1 = (
+  select max(min_height * width1) from t
+)
+----
+4 7 4 28
+
+## Unnest with ordering on unrelated column is preserved
+query TT
+EXPLAIN WITH unnested AS (SELECT
+    ROW_NUMBER() OVER () AS generated_id,
+    unnest(array[value]) as ar
+  FROM range(1,5)) SELECT array_agg(ar) FROM unnested group by generated_id;
+----
+logical_plan
+01)Projection: array_agg(unnested.ar)
+02)--Aggregate: groupBy=[[unnested.generated_id]], aggr=[[array_agg(unnested.ar)]]
+03)----SubqueryAlias: unnested
+04)------Projection: generated_id, __unnest_placeholder(make_array(range().value),depth=1) AS UNNEST(make_array(range().value)) AS ar
+05)--------Unnest: lists[__unnest_placeholder(make_array(range().value))|depth=1] structs[]
+06)----------Projection: row_number() ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING AS generated_id, make_array(range().value) AS __unnest_placeholder(make_array(range().value))
+07)------------WindowAggr: windowExpr=[[row_number() ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING]]
+08)--------------TableScan: range() projection=[value]
+physical_plan
+01)ProjectionExec: expr=[array_agg(unnested.ar)@1 as array_agg(unnested.ar)]
+02)--AggregateExec: mode=FinalPartitioned, gby=[generated_id@0 as generated_id], aggr=[array_agg(unnested.ar)], ordering_mode=Sorted
+03)----RepartitionExec: partitioning=Hash([generated_id@0], 4), input_partitions=4, preserve_order=true, sort_exprs=generated_id@0 ASC NULLS LAST
+04)------AggregateExec: mode=Partial, gby=[generated_id@0 as generated_id], aggr=[array_agg(unnested.ar)], ordering_mode=Sorted
+05)--------ProjectionExec: expr=[generated_id@0 as generated_id, __unnest_placeholder(make_array(range().value),depth=1)@1 as ar]
+06)----------UnnestExec
+07)------------ProjectionExec: expr=[row_number() ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING@1 as generated_id, make_array(value@0) as __unnest_placeholder(make_array(range().value))]
+08)--------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1, maintains_sort_order=true
+09)----------------BoundedWindowAggExec: wdw=[row_number() ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING: Field { "row_number() ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING": UInt64 }, frame: ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING], mode=[Sorted]
+10)------------------LazyMemoryExec: partitions=1, batch_generators=[range: start=1, end=5, batch_size=8192]
+
+# Unnest array where data is already ordered by column2 (100, 200, 300, 400)
+statement ok
+COPY (
+  SELECT * FROM VALUES
+    ([1,2,3], 100),
+    ([3],     200),
+    ([],      300),
+    ([3,1],   400)
+  ORDER BY column2
+ ) TO 'test_files/scratch/unnest/ordered_array.parquet';
+
+statement ok
+CREATE EXTERNAL TABLE t
+STORED AS PARQUET
+LOCATION 'test_files/scratch/unnest/ordered_array.parquet'
+WITH ORDER (column2)
+
+query ?I
+SELECT * FROM t;
+----
+[1, 2, 3] 100
+[3] 200
+[] 300
+[3, 1] 400
+
+# Data is sorted on column2 already, so no need to sort again
+query II
+SELECT UNNEST(column1), column2 FROM t ORDER BY column2;
+----
+1 100
+2 100
+3 100
+3 200
+3 400
+1 400
+
+# Explain should not have a SortExec
+query TT
+EXPLAIN SELECT UNNEST(column1), column2 FROM t ORDER BY column2;
+----
+logical_plan
+01)Sort: t.column2 ASC NULLS LAST
+02)--Projection: __unnest_placeholder(t.column1,depth=1) AS UNNEST(t.column1), t.column2
+03)----Unnest: lists[__unnest_placeholder(t.column1)|depth=1] structs[]
+04)------Projection: t.column1 AS __unnest_placeholder(t.column1), t.column2
+05)--------TableScan: t projection=[column1, column2]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(t.column1,depth=1)@0 as UNNEST(t.column1), column2@1 as column2]
+02)--UnnestExec
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/unnest/ordered_array.parquet]]}, projection=[column1@0 as __unnest_placeholder(t.column1), column2], output_ordering=[column2@1 ASC NULLS LAST], file_type=parquet
+
+# Explain should have a SortExec at the top because we order by the output of the unnest (i.e. discarding the ordering)
+query TT
+EXPLAIN SELECT UNNEST(column1) as unnested, column2 FROM t ORDER BY 1;
+----
+logical_plan
+01)Sort: unnested ASC NULLS LAST
+02)--Projection: __unnest_placeholder(t.column1,depth=1) AS UNNEST(t.column1) AS unnested, t.column2
+03)----Unnest: lists[__unnest_placeholder(t.column1)|depth=1] structs[]
+04)------Projection: t.column1 AS __unnest_placeholder(t.column1), t.column2
+05)--------TableScan: t projection=[column1, column2]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(t.column1,depth=1)@0 as unnested, column2@1 as column2]
+02)--SortExec: expr=[__unnest_placeholder(t.column1,depth=1)@0 ASC NULLS LAST], preserve_partitioning=[false]
+03)----UnnestExec
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/unnest/ordered_array.parquet]]}, projection=[column1@0 as __unnest_placeholder(t.column1), column2], output_ordering=[column2@1 ASC NULLS LAST], file_type=parquet
+
+# cleanup
+statement ok
+drop table t;
+
+# Unnest tuple where the data is already sorted by column 1
+statement ok
+COPY (
+  SELECT * FROM VALUES
+    (100, [3,2,1], 'a'),
+    (200, [1,2,3], 'b'),
+    (300, [3,1,2], 'c')
+  ORDER BY column1
+ ) TO 'test_files/scratch/unnest/ordered_tuples.parquet';
+
+statement ok
+CREATE EXTERNAL TABLE t
+STORED AS PARQUET
+LOCATION 'test_files/scratch/unnest/ordered_tuples.parquet'
+WITH ORDER (column1)
+
+query I?T
+SELECT * FROM t;
+----
+100 [3, 2, 1] a
+200 [1, 2, 3] b
+300 [3, 1, 2] c
+
+# Put the columns in a tuple and unnest, we need to sort because we discard ordering of unnested columns
+query TT
+EXPLAIN WITH unnested AS (
+  SELECT unnest((column1, column2, column3))
+  FROM t
+) SELECT * FROM unnested order by 1;
+----
+logical_plan
+01)Sort: unnested.struct(t.column1,t.column2,t.column3).c0 ASC NULLS LAST
+02)--SubqueryAlias: unnested
+03)----Projection: __unnest_placeholder(struct(t.column1,t.column2,t.column3)).c0 AS struct(t.column1,t.column2,t.column3).c0, __unnest_placeholder(struct(t.column1,t.column2,t.column3)).c1 AS struct(t.column1,t.column2,t.column3).c1, __unnest_placeholder(struct(t.column1,t.column2,t.column3)).c2 AS struct(t.column1,t.column2,t.column3).c2
+04)------Unnest: lists[] structs[__unnest_placeholder(struct(t.column1,t.column2,t.column3))]
+05)--------Projection: struct(t.column1, t.column2, t.column3) AS __unnest_placeholder(struct(t.column1,t.column2,t.column3))
+06)----------TableScan: t projection=[column1, column2, column3]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(struct(t.column1,t.column2,t.column3)).c0@0 as struct(t.column1,t.column2,t.column3).c0, __unnest_placeholder(struct(t.column1,t.column2,t.column3)).c1@1 as struct(t.column1,t.column2,t.column3).c1, __unnest_placeholder(struct(t.column1,t.column2,t.column3)).c2@2 as struct(t.column1,t.column2,t.column3).c2]
+02)--SortExec: expr=[__unnest_placeholder(struct(t.column1,t.column2,t.column3)).c0@0 ASC NULLS LAST], preserve_partitioning=[false]
+03)----UnnestExec
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/unnest/ordered_tuples.parquet]]}, projection=[struct(column1@0, column2@1, column3@2) as __unnest_placeholder(struct(t.column1,t.column2,t.column3))], file_type=parquet
+
+# cleanup
+statement ok
+drop table t;
+
+# Unnest struct where data is already ordered by column2 (100, 200, 300, 400)
+statement ok
+COPY (
+  SELECT * FROM VALUES
+    (named_struct('s1', 1, 's2', 2, 's3', 3), 100),
+    (named_struct('s1', 1, 's2', 3, 's3', 2), 200),
+    (named_struct('s1', 2, 's2', 1, 's3', 3), 300),
+    (named_struct('s1', 3, 's2', 2, 's3', 1), 400)
+  ORDER BY column2
+ ) TO 'test_files/scratch/unnest/ordered_struct.parquet';
+
+statement ok
+CREATE EXTERNAL TABLE t
+STORED AS PARQUET
+LOCATION 'test_files/scratch/unnest/ordered_struct.parquet'
+WITH ORDER (column2)
+
+query ?I
+SELECT * FROM t;
+----
+{s1: 1, s2: 2, s3: 3} 100
+{s1: 1, s2: 3, s3: 2} 200
+{s1: 2, s2: 1, s3: 3} 300
+{s1: 3, s2: 2, s3: 1} 400
+
+# data is sorted on column2 already, so no need to sort again
+query IIII
+SELECT UNNEST(column1), column2 FROM t ORDER BY column2;
+----
+1 2 3 100
+1 3 2 200
+2 1 3 300
+3 2 1 400
+
+# Explain should not have a SortExec
+query TT
+EXPLAIN SELECT UNNEST(column1), column2 FROM t ORDER BY column2;
+----
+logical_plan
+01)Sort: t.column2 ASC NULLS LAST
+02)--Projection: __unnest_placeholder(t.column1).s1 AS t.column1.s1, __unnest_placeholder(t.column1).s2 AS t.column1.s2, __unnest_placeholder(t.column1).s3 AS t.column1.s3, t.column2
+03)----Unnest: lists[] structs[__unnest_placeholder(t.column1)]
+04)------Projection: t.column1 AS __unnest_placeholder(t.column1), t.column2
+05)--------TableScan: t projection=[column1, column2]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(t.column1).s1@0 as t.column1.s1, __unnest_placeholder(t.column1).s2@1 as t.column1.s2, __unnest_placeholder(t.column1).s3@2 as t.column1.s3, column2@3 as column2]
+02)--UnnestExec
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/unnest/ordered_struct.parquet]]}, projection=[column1@0 as __unnest_placeholder(t.column1), column2], output_ordering=[column2@1 ASC NULLS LAST], file_type=parquet
+
+# cleanup
+statement ok
+drop table t;
+
+# Unnest nested array (unnesting twice), struct, and array, where data is already ordered by column4 (100, 200, 300, 400)
+statement ok
+COPY (
+  SELECT * FROM VALUES
+    ([[1],[2],[3]], [1,2,3], named_struct('s1', 1, 's2', 2, 's3', 3),  100),
+    ([[1],[3],[2]], [3],     named_struct('s1', 1, 's2', 3, 's3', 2),  200),
+    ([[2],[1],[3]], [],      named_struct('s1', 2, 's2', 1, 's3', 3),  300),
+    ([[3],[2],[1]], [3,1],   named_struct('s1', 3, 's2', 2, 's3', 1),  400)
+  ORDER BY column4
+ ) TO 'test_files/scratch/unnest/ordered_struct_arrays.parquet';
+
+statement ok
+CREATE EXTERNAL TABLE t
+STORED AS PARQUET
+LOCATION 'test_files/scratch/unnest/ordered_struct_arrays.parquet'
+WITH ORDER (column4)
+
+query ???I
+SELECT * FROM t;
+----
+[[1], [2], [3]] [1, 2, 3] {s1: 1, s2: 2, s3: 3} 100
+[[1], [3], [2]] [3] {s1: 1, s2: 3, s3: 2} 200
+[[2], [1], [3]] [] {s1: 2, s2: 1, s3: 3} 300
+[[3], [2], [1]] [3, 1] {s1: 3, s2: 2, s3: 1} 400
+
+# data is sorted on column4 already, so no need to sort again
+query IIIIII
+SELECT UNNEST(UNNEST(column1)), UNNEST(column2), UNNEST(column3), column4 FROM t ORDER BY column4;
+----
+1 1 1 2 3 100
+NULL 2 1 2 3 100
+NULL 3 1 2 3 100
+2 1 1 2 3 100
+NULL 2 1 2 3 100
+NULL 3 1 2 3 100
+3 1 1 2 3 100
+NULL 2 1 2 3 100
+NULL 3 1 2 3 100
+1 3 1 3 2 200
+3 3 1 3 2 200
+2 3 1 3 2 200
+2 NULL 2 1 3 300
+1 NULL 2 1 3 300
+3 NULL 2 1 3 300
+3 3 3 2 1 400
+NULL 1 3 2 1 400
+2 3 3 2 1 400
+NULL 1 3 2 1 400
+1 3 3 2 1 400
+NULL 1 3 2 1 400
+
+# Explain should not have a SortExec
+query TT
+EXPLAIN SELECT UNNEST(UNNEST(column1)), UNNEST(column2), UNNEST(column3), column4 FROM t ORDER BY column4;
+----
+logical_plan
+01)Sort: t.column4 ASC NULLS LAST
+02)--Projection: __unnest_placeholder(t.column1,depth=2) AS UNNEST(UNNEST(t.column1)), __unnest_placeholder(t.column2,depth=1) AS UNNEST(t.column2), __unnest_placeholder(t.column3).s1 AS t.column3.s1, __unnest_placeholder(t.column3).s2 AS t.column3.s2, __unnest_placeholder(t.column3).s3 AS t.column3.s3, t.column4
+03)----Unnest: lists[__unnest_placeholder(t.column1)|depth=2, __unnest_placeholder(t.column2)|depth=1] structs[__unnest_placeholder(t.column3)]
+04)------Projection: t.column1 AS __unnest_placeholder(t.column1), t.column2 AS __unnest_placeholder(t.column2), t.column3 AS __unnest_placeholder(t.column3), t.column4
+05)--------TableScan: t projection=[column1, column2, column3, column4]
+physical_plan
+01)ProjectionExec: expr=[__unnest_placeholder(t.column1,depth=2)@0 as UNNEST(UNNEST(t.column1)), __unnest_placeholder(t.column2,depth=1)@1 as UNNEST(t.column2), __unnest_placeholder(t.column3).s1@2 as t.column3.s1, __unnest_placeholder(t.column3).s2@3 as t.column3.s2, __unnest_placeholder(t.column3).s3@4 as t.column3.s3, column4@5 as column4]
+02)--UnnestExec
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/unnest/ordered_struct_arrays.parquet]]}, projection=[column1@0 as __unnest_placeholder(t.column1), column2@1 as __unnest_placeholder(t.column2), column3@2 as __unnest_placeholder(t.column3), column4], output_ordering=[column4@3 ASC NULLS LAST], file_type=parquet
+
+# cleanup
+statement ok
+drop table t;
+
+########################################
+# Unnest ListView / LargeListView Tests #
+########################################
+
+## Basic unnest ListView in select list
+query I
+select unnest(arrow_cast([1,2,3], 'ListView(Int64)'));
+----
+1
+2
+3
+
+## Basic unnest ListView in from clause
+query I
+select * from unnest(arrow_cast([1,2,3], 'ListView(Int64)'));
+----
+1
+2
+3
+
+## Basic unnest LargeListView in select list
+query I
+select unnest(arrow_cast([1,2,3], 'LargeListView(Int64)'));
+----
+1
+2
+3
+
+## Basic unnest LargeListView in from clause
+query I
+select * from unnest(arrow_cast([1,2,3], 'LargeListView(Int64)'));
+----
+1
+2
+3
+
+## Unnest ListView with range
+query I
+select unnest(arrow_cast(range(1, 3), 'ListView(Int64)'));
+----
+1
+2
+
+## Unnest LargeListView with range
+query I
+select * from unnest(arrow_cast(range(1, 3), 'LargeListView(Int64)'));
+----
+1
+2
+
+## Multiple unnest with ListView columns from a table
+query III
+select
+    unnest(column1),
+    unnest(arrow_cast(column2, 'ListView(Int64)')),
+    unnest(arrow_cast(column4, 'LargeListView(Int64)'))
+from unnest_table where column4 is not null;
+----
+1 7 13
+2 NULL 14
+3 NULL NULL
+4 8 15
+5 9 16
+NULL 10 NULL
+NULL NULL 17
+NULL NULL 18
+
+## Unnest ListView with null elements
+query I
+select unnest(arrow_cast([1, null, 3], 'ListView(Int64)'));
+----
+1
+NULL
+3
+
+## Unnest empty ListView
+query I
+select unnest(arrow_cast([], 'ListView(Int64)'));
+----
+
+## Unnest ListView of strings
+query T
+select unnest(arrow_cast(['a','b','c'], 'ListView(Utf8)'));
+----
+a
+b
+c
+
+## Unnest LargeListView of strings
+query T
+select unnest(arrow_cast(['a','b','c'], 'LargeListView(Utf8)'));
+----
+a
+b
+c
+
+###############################################
+# Unused UNNEST output projection-pruning cases #
+###############################################
+
+statement ok
+CREATE TABLE unused_unnest_pruning AS
+SELECT * FROM (
+    VALUES
+        (1, make_array(10, 20)),
+        (2, make_array()),
+        (3, arrow_cast(NULL, 'List(Int64)'))
+) AS t(id, arr);
+
+# Reproducer for the optimization gap: the unused `elem` output is duplicate-insensitive
+# below this GROUP BY, but the current plan still keeps Unnest/UnnestExec.
+query I
+SELECT id
+FROM (
+    SELECT id, UNNEST(make_array(1, 2, 3)) AS elem
+    FROM unused_unnest_pruning
+)
+GROUP BY id
+ORDER BY id;
+----
+1
+2
+3
+
+query TT
+EXPLAIN SELECT id
+FROM (
+    SELECT id, UNNEST(make_array(1, 2, 3)) AS elem
+    FROM unused_unnest_pruning
+)
+GROUP BY id;
+----
+logical_plan
+<slt:ignore>Unnest:<slt:ignore>
+physical_plan
+<slt:ignore>UnnestExec<slt:ignore>
+
+# Counterexample: removing UNNEST here would change cardinality.
+query I rowsort
+SELECT id
+FROM (
+    SELECT id, UNNEST(make_array(1, 2, 3)) AS elem
+    FROM unused_unnest_pruning
+);
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+# Counterexample with data-dependent empty/null arrays: current select-list
+# UNNEST semantics drop rows for the empty and NULL arrays in this dataset.
+# This documents the preserve-nulls/cardinality contract that follow-up optimizer
+# rules must preserve; removing UNNEST here would return ids 2 and 3 too.
+query II rowsort
+SELECT id, elem
+FROM (
+    SELECT id, UNNEST(arr) AS elem
+    FROM unused_unnest_pruning
+);
+----
+1 10
+1 20
+
+query I
+SELECT COUNT(*)
+FROM (
+    SELECT id, UNNEST(arr) AS elem
+    FROM unused_unnest_pruning
+);
+----
+2
+
+statement ok
+DROP TABLE unused_unnest_pruning;
+
+## Regression: pushing a leaf-extracted projection (containing get_field,
+## which has MoveTowardsLeafNodes placement) through an `Unnest` used to
+## trip `Assertion failed: expr.is_empty(): Unnest` inside
+## `PushDownLeafProjections`. The optimizer must not try to pushdown these
+## projections through an `Unnest` and should produce a valid plan.
+
+statement ok
+CREATE TABLE struct_and_list_table
+AS VALUES
+    (struct(1, 2), [10, 20, 30]),
+    (struct(3, 4), [40, 50]);
+
+query I
+SELECT sum(get_field(s, 'c0'))
+FROM (SELECT s, unnest(arr)
+      FROM (SELECT column1 AS s, column2 AS arr
+            FROM struct_and_list_table));
+----
+9
+
+statement ok
+DROP TABLE struct_and_list_table;
+
+## Regression: get_field directly references the struct produced by unnest.
+## This covers the case where the leaf-extracted expression depends on the
+## unnested column itself rather than a sibling input column below the Unnest.
+
+statement ok
+CREATE TABLE list_struct_table
+AS VALUES
+    ([struct(1, 'a'), struct(2, 'b')]),
+    ([struct(3, 'c')]);
+
+query IT
+SELECT get_field(unnest(column1), 'c0'), get_field(unnest(column1), 'c1')
+FROM list_struct_table;
+----
+1 a
+2 b
+3 c
+
+statement ok
+DROP TABLE list_struct_table;
+
+####################################
+# `unnest_outer` Tests
+#
+# `unnest_outer(col)` is the outer-unnest peer to `unnest(col)`. Rows whose
+# input list is `NULL` or empty produce a single output row containing
+# `NULL`; rows with values are exploded element-by-element the same way as
+# plain `unnest`.
+#
+# Column types on the tables below are inferred from the `VALUES` rows.
+# DataFusion's SQL parser does not accept PostgreSQL `TYPE[]` array-column
+# syntax inside `CREATE TABLE ... AS VALUES`, so tables are declared as
+# CTAS over a `VALUES` subquery with aliased column names.
+####################################
+
+## unnest vs unnest_outer on an integer list
+
+statement ok
+CREATE TABLE int_lists AS
+SELECT column1 AS id, column2 AS xs FROM (VALUES
+    (1, [10, 20, 30]),
+    (4, [40]),
+    (5, [NULL, 50]),
+    (2, arrow_cast(make_array(), 'List(Int64)')),
+    (3, NULL)
+);
+
+## Plain `unnest`: drops both NULL and empty input rows.
+## Inner NULL elements survive.
+query II
+SELECT id, unnest(xs) AS x FROM int_lists ORDER BY id, x;
+----
+1 10
+1 20
+1 30
+4 40
+5 50
+5 NULL
+
+## `unnest_outer`: NULL and empty input lists each produce one NULL row.
+query II
+SELECT id, unnest_outer(xs) AS x FROM int_lists ORDER BY id, x;
+----
+1 10
+1 20
+1 30
+2 NULL
+3 NULL
+4 40
+5 50
+5 NULL
+
+## String list with inner NULLs: inner NULL elements must survive (they are
+## not the same as "empty"), while NULL and empty input lists become a
+## single NULL output row.
+
+statement ok
+CREATE TABLE str_lists AS
+SELECT column1 AS id, column2 AS tags FROM (VALUES
+    ('A', ['x', 'y']),
+    ('B', ['p', NULL, 'q']),
+    ('C', arrow_cast(make_array(), 'List(Utf8)')),
+    ('D', NULL)
+);
+
+query TT
+SELECT id, unnest_outer(tags) AS tag FROM str_lists ORDER BY id, tag;
+----
+A x
+A y
+B p
+B q
+B NULL
+C NULL
+D NULL
+
+## Mixed list lengths — verify row-wise expansion.
+
+statement ok
+CREATE TABLE varied_lists AS
+SELECT column1 AS id, column2 AS xs FROM (VALUES
+    (1, [1, 2, 3, 4]),
+    (2, [5]),
+    (3, arrow_cast(make_array(), 'List(Int64)')),
+    (4, NULL)
+);
+
+query II
+SELECT id, unnest_outer(xs) AS x FROM varied_lists ORDER BY id, x;
+----
+1 1
+1 2
+1 3
+1 4
+2 5
+3 NULL
+4 NULL
+
+## Aliased output column.
+query II
+SELECT id, unnest_outer(xs) AS unwrapped FROM int_lists WHERE id = 2;
+----
+2 NULL
+
+## Mixing `unnest` and `unnest_outer` in one SELECT is a planning error.
+## `UnnestOptions` is per-`UnnestExec`, so we refuse to silently pick one mode.
+
+statement error DataFusion error: Error during planning: Cannot mix `unnest\(\.\.\.\)` with `unnest_outer\(\.\.\.\)` in the same SELECT
+SELECT unnest(xs), unnest_outer(xs) FROM int_lists;
+
+## Chained `unnest` → `unnest_outer` via subquery.
+## `unnest(xs)` (inner) drops NULL and empty outer rows, then
+## `unnest_outer(ys)` (outer) preserves NULL and empty sub-lists from the
+## inner unnest.
+
+statement ok
+CREATE TABLE nested_lists AS
+SELECT column1 AS id, column2 AS xs FROM (VALUES
+    (100, [[1, 2, 3], NULL, [4, 5]]),
+    (200, [[7], arrow_cast(make_array(), 'List(Int64)')]),
+    (300, NULL)
+);
+
+query II
+SELECT id, unnest_outer(ys) AS y
+FROM (SELECT id, unnest(xs) AS ys FROM nested_lists)
+ORDER BY id, y;
+----
+100 1
+100 2
+100 3
+100 4
+100 5
+100 NULL
+200 7
+200 NULL
+
+statement ok
+DROP TABLE nested_lists;
+
+## `unnest_outer` agrees with `unnest` when no NULL or empty rows exist.
+
+statement ok
+CREATE TABLE dense_lists AS
+SELECT column1 AS id, column2 AS xs FROM (VALUES
+    (1, [10, 20]),
+    (2, [30]),
+    (3, [40, 50, 60])
+);
+
+query II
+SELECT id, unnest(xs) AS x FROM dense_lists ORDER BY id, x;
+----
+1 10
+1 20
+2 30
+3 40
+3 50
+3 60
+
+query II
+SELECT id, unnest_outer(xs) AS x FROM dense_lists ORDER BY id, x;
+----
+1 10
+1 20
+2 30
+3 40
+3 50
+3 60
+
+## Cleanup
+
+statement ok
+DROP TABLE int_lists;
+
+statement ok
+DROP TABLE str_lists;
+
+statement ok
+DROP TABLE varied_lists;
+
+statement ok
+DROP TABLE dense_lists;

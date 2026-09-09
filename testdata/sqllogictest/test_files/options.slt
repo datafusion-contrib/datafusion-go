@@ -1,0 +1,284 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+#######
+## Tests for config options
+#######
+
+
+statement ok
+create table a(c0 int) as values (1), (2);
+
+query TT
+explain SELECT * FROM a WHERE c0 < 1;
+----
+logical_plan
+01)Filter: a.c0 < Int32(1)
+02)--TableScan: a projection=[c0]
+physical_plan
+01)FilterExec: c0@0 < 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+##
+# test_disable_coalesce
+##
+
+statement ok
+set datafusion.execution.coalesce_batches = false
+
+# expect no coalescence
+query TT
+explain SELECT * FROM a WHERE c0 < 1;
+----
+logical_plan
+01)Filter: a.c0 < Int32(1)
+02)--TableScan: a projection=[c0]
+physical_plan
+01)FilterExec: c0@0 < 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement ok
+set datafusion.execution.coalesce_batches = true
+
+
+##
+# test_custom_batch_size
+##
+
+statement ok
+set datafusion.execution.batch_size = 1234;
+
+# expect batch size to be 1234
+query TT
+explain SELECT * FROM a WHERE c0 < 1;
+----
+logical_plan
+01)Filter: a.c0 < Int32(1)
+02)--TableScan: a projection=[c0]
+physical_plan
+01)FilterExec: c0@0 < 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+statement ok
+set datafusion.execution.batch_size = 8192;
+
+statement ok
+drop table a
+
+# test datafusion.sql_parser.parse_float_as_decimal
+#
+# default option value is false
+query RR
+select 10000000000000000000.01, -10000000000000000000.01
+----
+10000000000000000000 -10000000000000000000 
+
+query TT
+select arrow_typeof(10000000000000000000.01), arrow_typeof(-10000000000000000000.01)
+----
+Float64 Float64
+
+# select 0, i64::MIN, i64::MIN-1, i64::MAX, i64::MAX + 1, u64::MAX, u64::MAX + 1
+query IIRIIIR
+select 0, -9223372036854775808, -9223372036854775809, 9223372036854775807, 
+    9223372036854775808, 18446744073709551615, 18446744073709551616
+----
+0 -9223372036854775808 -9223372036854776000 9223372036854775807 9223372036854775808 18446744073709551615 18446744073709552000
+
+query TTTTTTT
+select arrow_typeof(0), arrow_typeof(-9223372036854775808), arrow_typeof(-9223372036854775809),  
+    arrow_typeof(9223372036854775807), arrow_typeof(9223372036854775808), 
+    arrow_typeof(18446744073709551615), arrow_typeof(18446744073709551616)
+----
+Int64 Int64 Float64 Int64 UInt64 UInt64 Float64
+
+
+statement ok
+set datafusion.sql_parser.parse_float_as_decimal = true;
+
+query RR
+select 10000000000000000000.01, -10000000000000000000.01
+----
+10000000000000000000.01 -10000000000000000000.01
+
+query TT
+select arrow_typeof(10000000000000000000.01), arrow_typeof(-10000000000000000000.01)
+----
+Decimal128(22, 2) Decimal128(22, 2)
+
+# select 0, i64::MIN, i64::MIN-1, i64::MAX, i64::MAX + 1, u64::MAX, u64::MAX + 1
+query IIRIIIR
+select 0, -9223372036854775808, -9223372036854775809, 9223372036854775807, 
+    9223372036854775808, 18446744073709551615, 18446744073709551616
+----
+0 -9223372036854775808 -9223372036854775809 9223372036854775807 9223372036854775808 18446744073709551615 18446744073709551616
+
+query TTTTTTT
+select arrow_typeof(0), arrow_typeof(-9223372036854775808), arrow_typeof(-9223372036854775809),  
+    arrow_typeof(9223372036854775807), arrow_typeof(9223372036854775808), 
+    arrow_typeof(18446744073709551615), arrow_typeof(18446744073709551616)
+----
+Int64 Int64 Decimal128(19, 0) Int64 UInt64 UInt64 Decimal128(20, 0)
+
+# special cases
+query RRRR
+select .0 as c1, 0. as c2, 0000. as c3, 00000.00 as c4
+----
+0 0 0 0
+
+query TTTT
+select arrow_typeof(.0) as c1, arrow_typeof(0.) as c2, arrow_typeof(0000.) as c3, arrow_typeof(00000.00) as c4
+----
+Decimal128(1, 1) Decimal128(1, 0) Decimal128(1, 0) Decimal128(2, 2)
+
+query RR
+select 999999999999999999999999999999999999, -999999999999999999999999999999999999
+----
+999999999999999999999999999999999999 -999999999999999999999999999999999999
+
+query TT
+select arrow_typeof(999999999999999999999999999999999999), arrow_typeof(-999999999999999999999999999999999999)
+----
+Decimal128(36, 0) Decimal128(36, 0)
+
+query RR
+select 99999999999999999999999999999999999999, -99999999999999999999999999999999999999
+----
+99999999999999999999999999999999999999 -99999999999999999999999999999999999999
+
+query TT
+select arrow_typeof(99999999999999999999999999999999999999), arrow_typeof(-99999999999999999999999999999999999999)
+----
+Decimal128(38, 0) Decimal128(38, 0)
+
+query RR
+select 9999999999999999999999999999999999.9999, -9999999999999999999999999999999999.9999 
+----
+9999999999999999999999999999999999.9999 -9999999999999999999999999999999999.9999 
+
+query TT
+select arrow_typeof(9999999999999999999999999999999999.9999), arrow_typeof(-9999999999999999999999999999999999.9999)
+----
+Decimal128(38, 4) Decimal128(38, 4) 
+
+# leading zeroes
+query RRR
+select 00009999999999999999999999999999999999.9999, -00009999999999999999999999999999999999.9999, 0018446744073709551616
+----
+9999999999999999999999999999999999.9999 -9999999999999999999999999999999999.9999 18446744073709551616
+
+query TTT
+select arrow_typeof(00009999999999999999999999999999999999.9999), 
+    arrow_typeof(-00009999999999999999999999999999999999.9999),
+    arrow_typeof(0018446744073709551616)
+----
+Decimal128(38, 4) Decimal128(38, 4) Decimal128(20, 0)
+
+# scientific notation
+query RTRTRT
+select 1.23e3, arrow_typeof(1.23e3),
+    +1.23e1, arrow_typeof(+1.23e1),
+    -1234.56e-3, arrow_typeof(-1234.56e-3)
+----
+1230 Decimal128(3, -1) 12.3 Decimal128(3, 1) -1.23456 Decimal128(6, 5)
+
+query RTRTRT
+select 1.23e-2, arrow_typeof(1.23e-2),
+    1.23456e0, arrow_typeof(1.23456e0),
+    -.0123e2, arrow_typeof(-.0123e2)
+----
+0.0123 Decimal128(4, 4) 1.23456 Decimal128(6, 5) -1.23 Decimal128(3, 2)
+
+# Decimal256 cases
+query RT
+select 123456789.0123456789012345678901234567890,
+    arrow_typeof(123456789.0123456789012345678901234567890)
+----
+123456789.012345678901234567890123456789 Decimal256(40, 31)
+
+query RT
+select -123456789.0123456789012345678901234567890,
+    arrow_typeof(-123456789.0123456789012345678901234567890)
+----
+-123456789.012345678901234567890123456789 Decimal256(40, 31)
+
+# max precision and scale of Decimal256
+query RTRT
+select -1e-76, arrow_typeof(-1e-76),
+    -1.234567e-70, arrow_typeof(-1.234567e-70)
+----
+-0.0000000000000000000000000000000000000000000000000000000000000000000000000001 Decimal256(76, 76) -0.0000000000000000000000000000000000000000000000000000000000000000000001234567 Decimal256(76, 76)
+
+# Decimal256::MAX for nonnegative scale
+query RT
+select 9999999999999999999999999999999999999999999999999999999999999999999999999999,
+    arrow_typeof(9999999999999999999999999999999999999999999999999999999999999999999999999999);
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999 Decimal256(76, 0)
+
+# Decimal256::MIN
+query RT
+select -9999999999999999999999999999999999999999999999999999999999999999999999999999,
+    arrow_typeof(-9999999999999999999999999999999999999999999999999999999999999999999999999999);
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999 Decimal256(76, 0)
+
+# boundaries between decimal128 and decimal256
+query RTRT
+select 1e-38, arrow_typeof(1e-38),
+    1e-39, arrow_typeof(1e-39);
+----
+0.00000000000000000000000000000000000001 Decimal128(38, 38) 0.000000000000000000000000000000000000001 Decimal256(39, 39)
+
+query RTRT
+select -1e-38, arrow_typeof(-1e-38),
+    -1e-39, arrow_typeof(-1e-39);
+----
+-0.00000000000000000000000000000000000001 Decimal128(38, 38) -0.000000000000000000000000000000000000001 Decimal256(39, 39)
+
+# unsupported precision
+query error Decimal precision 77 exceeds the maximum supported precision: 76
+select -1e-77;
+
+query error Decimal precision 79 exceeds the maximum supported precision: 76
+select 1.000000000000000000000000000000000000000000000000000000000000000000000000000001;
+
+# negative scales
+query TR
+select arrow_typeof(1e77), 1e77
+----
+Decimal128(1, -77) 100000000000000000000000000000000000000000000000000000000000000000000000000000
+
+query T
+select arrow_typeof(1e128)
+----
+Decimal128(1, -128)
+
+query error Decimal scale \-129 exceeds the minimum supported scale: \-128
+select 1e129
+
+# simple arithmetic
+query RTRT
+select 1e40 + 1e40, arrow_typeof(1e40 + 1e40),
+    1e-40 + -1e-40, arrow_typeof(1e-40 + -1e-40)
+----
+20000000000000000000000000000000000000000 Decimal128(2, -40) 0 Decimal256(41, 40)
+
+# Restore option to default value
+statement ok
+set datafusion.sql_parser.parse_float_as_decimal = false;

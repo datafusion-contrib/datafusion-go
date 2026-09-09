@@ -10,6 +10,8 @@ FUZZ_TIME ?= 30s
 RUST_FUZZ_SECONDS ?= 30
 RUST_FUZZ_FLAGS ?=
 RUST_ASAN_TOOLCHAIN ?= nightly-2026-06-10
+SQLLOGIC_TARGET_DIR ?= rust/target/sqllogictest
+SQLLOGIC_RUN ?= ^TestSQLLogic$$
 
 ifeq ($(GOOS),windows)
 NATIVE_SHARED_NAME := datafusion_go.dll
@@ -63,7 +65,7 @@ rust.test:
 	$(RUST_BUILD_ENV) cargo test --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG)
 
 rust.lint:
-	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/Cargo.toml --all-targets --features test-sqllogictest -- -D warnings
 	$(RUST_BUILD_ENV) cargo clippy --manifest-path rust/fuzz/Cargo.toml --all-targets -- -D warnings
 	cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 
@@ -137,6 +139,7 @@ verify.release.assets:
 go.lint: generate.check
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run --build-tags=datafusion_test_coverage
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run --build-tags=datafusion_test_sqllogic
 
 go.vet:
 	go vet ./...
@@ -240,3 +243,26 @@ test.coverage:
 	$(RUST_BUILD_ENV) sh scripts/test_coverage.sh $(NATIVE_SHARED_NAME) $(NATIVE_SHARED)
 
 test.extended: test.sqlite test.install test.sequences test.fuzz rust.fuzz test.native.asan test.coverage
+
+# The optional upstream fixture dependencies and test callbacks live in their
+# own build directory. Release and source-link artifacts remain independent.
+.PHONY: sqllogic.sync sqllogic.driver.sync sqllogic.check sqllogic.tools.test rust.sqllogic test.sqllogic
+sqllogic.sync:
+	python3 scripts/sqllogictest.py sync
+
+sqllogic.driver.sync:
+	python3 scripts/sqllogictest.py sync-driver
+
+sqllogic.check:
+	python3 scripts/sqllogictest.py check
+
+sqllogic.tools.test:
+	python3 -m unittest discover -s scripts -p 'sqllogictest_tools_test.py' -v
+
+rust.sqllogic: generate.check sqllogic.check
+	$(RUST_BUILD_ENV) cargo build --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG) --target-dir $(SQLLOGIC_TARGET_DIR) --features test-sqllogictest --locked
+
+test.sqllogic: rust.sqllogic sqllogic.tools.test
+	$(RUST_BUILD_ENV) cargo test --manifest-path rust/Cargo.toml --release $(RUST_TARGET_FLAG) --target-dir $(SQLLOGIC_TARGET_DIR) --features test-sqllogictest --locked --lib sqllogictest::
+	DATAFUSION_GO_LIBRARY=$(abspath $(SQLLOGIC_TARGET_DIR))/$(if $(CARGO_BUILD_TARGET),$(CARGO_BUILD_TARGET)/)release/$(NATIVE_SHARED_NAME) go test -count=1 -tags=datafusion_test_sqllogic -run '^TestSQLLogicHarness$$' .
+	DATAFUSION_GO_LIBRARY=$(abspath $(SQLLOGIC_TARGET_DIR))/$(if $(CARGO_BUILD_TARGET),$(CARGO_BUILD_TARGET)/)release/$(NATIVE_SHARED_NAME) python3 scripts/sqllogictest.py run --run '$(SQLLOGIC_RUN)'

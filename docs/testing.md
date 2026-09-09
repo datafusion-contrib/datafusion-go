@@ -47,6 +47,25 @@ Add a minimized fixture for each query regression. Fix the expected result
 from an independently understood example before changing the implementation.
 Do not regenerate expected values from the driver being tested.
 
+## Complete upstream SQL corpus
+
+`make test.sqllogic` runs the unchanged SQLLogicTest corpus from the DataFusion
+release in `versions.toml`, through the public Go Arrow API. A separate native
+test library supplies upstream fixtures and result comparisons. SQL execution
+and Arrow batch consumption happen in Go. The test dependencies and callbacks
+are absent from release libraries.
+
+The target verifies pinned fixture and dataset hashes, generates deterministic
+TPC-H data, tests the assertion harness, and writes per-file, per-record, and
+documentation coverage reports. It fails on missing cases or unsupported
+results. Comment-only Spark stubs and postgres-only records have explicit
+counts, rather than appearing as passing DataFusion SQL. The documented
+function and SQL section inventory keeps gaps visible beyond the upstream suite.
+
+See [the corpus instructions](../testdata/sqllogictest/README.md) for requirements,
+focused runs, corpus updates, and the limits of each coverage metric. CI runs
+this target on Linux, macOS, and Windows.
+
 ## Lifecycle and failure sequences
 
 `TestLifecycleSequences` models catalog visibility and retained batch values.

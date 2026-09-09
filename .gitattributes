@@ -10,3 +10,4 @@ rust/include/datafusion_go.h text eol=lf
 internal/native/abi_generated.h text eol=lf
 rust/src/abi/contract_generated.rs text eol=lf
 rust/tests/abi_layout.c text eol=lf
+testdata/sqllogictest/** text eol=lf

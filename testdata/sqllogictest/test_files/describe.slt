@@ -1,0 +1,185 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+
+##########
+# Describe internal tables when information_schema is true
+##########
+
+statement ok
+set datafusion.catalog.information_schema = true
+
+statement ok
+CREATE external table aggregate_simple(c1 real, c2 double, c3 boolean) STORED as CSV LOCATION '../core/tests/data/aggregate_simple.csv' OPTIONS ('format.has_header' 'true');
+
+query TTT rowsort
+DESCRIBE aggregate_simple;
+----
+c1 Float32 YES
+c2 Float64 YES
+c3 Boolean YES
+
+statement ok
+DROP TABLE aggregate_simple;
+
+##########
+# Describe internal tables when information_schema is false
+##########
+
+statement ok
+set datafusion.catalog.information_schema = false
+
+statement ok
+CREATE external table aggregate_simple(c1 real, c2 double, c3 boolean) STORED as CSV LOCATION '../core/tests/data/aggregate_simple.csv' OPTIONS ('format.has_header' 'true');
+
+query TTT rowsort
+DESCRIBE aggregate_simple;
+----
+c1 Float32 YES
+c2 Float64 YES
+c3 Boolean YES
+
+statement ok
+DROP TABLE aggregate_simple;
+
+##########
+# Describe file (we can only describe file if the default catalog is `DynamicFileCatalog`)
+##########
+
+statement error Error during planning: table 'datafusion.public.../core/tests/data/aggregate_simple.csv' not found
+DESCRIBE '../core/tests/data/aggregate_simple.csv';
+
+##########
+# Describe command
+##########
+
+statement ok
+CREATE EXTERNAL TABLE alltypes_tiny_pages STORED AS PARQUET LOCATION '../../parquet-testing/data/alltypes_tiny_pages.parquet';
+
+query TTT
+describe alltypes_tiny_pages;
+----
+id Int32 YES
+bool_col Boolean YES
+tinyint_col Int8 YES
+smallint_col Int16 YES
+int_col Int32 YES
+bigint_col Int64 YES
+float_col Float32 YES
+double_col Float64 YES
+date_string_col Utf8View YES
+string_col Utf8View YES
+timestamp_col Timestamp(ns) YES
+year Int32 YES
+month Int32 YES
+
+# Test DESC alias functionality
+statement ok
+CREATE TABLE test_desc_table (id INT, name VARCHAR);
+
+# Test DESC works the same as DESCRIBE
+query TTT
+DESC test_desc_table;
+----
+id Int32 YES
+name Utf8View YES
+
+query TTT
+DESCRIBE test_desc_table;
+----
+id Int32 YES
+name Utf8View YES
+
+# Test with qualified table names
+statement ok
+CREATE TABLE public.test_qualified (col1 INT);
+
+query TTT
+DESC public.test_qualified;
+----
+col1 Int32 YES
+
+# Test error cases
+statement error
+DESC nonexistent_table;
+
+##########
+# Describe statement
+##########
+
+# Test describing the schema of a simple statement
+query TTT
+DESCRIBE SELECT 1;
+----
+Int64(1) Int64 NO
+
+# Insert some data into the existing test table...
+statement ok
+INSERT INTO test_desc_table (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie'), (4, 'Alice');
+
+# ... and describe the schema of a more complex query
+query TTT
+DESCRIBE SELECT name, COUNT(*) AS name_count FROM test_desc_table
+    GROUP BY name HAVING COUNT(*) > 1 ORDER BY name_count DESC;
+----
+name Utf8View YES
+name_count Int64 NO
+
+# Describing a statement that's not a query is not supported
+statement error Describing statements other than SELECT not supported
+DESCRIBE CREATE TABLE test_desc_table (id INT, name VARCHAR);
+
+##########
+# VALUES nullability inference
+#
+# Inferred VALUES schemas should be non-nullable when no row contributes a
+# NULL in that column position, and nullable when at least one does.
+##########
+
+# All-non-null VALUES: every column is non-nullable.
+query TTT rowsort
+DESCRIBE SELECT * FROM (VALUES (1, 'a'), (2, 'b')) AS t(x, y);
+----
+x Int64 NO
+y Utf8 NO
+
+# Untyped NULL in one row makes that column nullable; sibling all-non-null
+# columns remain non-nullable.
+query TTT rowsort
+DESCRIBE SELECT * FROM (VALUES (1, 'a'), (NULL, 'b')) AS t(x, y);
+----
+x Int64 YES
+y Utf8 NO
+
+# Typed NULL has the same effect as untyped NULL on column nullability.
+query TTT
+DESCRIBE SELECT * FROM (VALUES (1), (CAST(NULL AS BIGINT))) AS t(x);
+----
+x Int64 YES
+
+# All-NULL column is nullable; the inferred type is Null.
+query TTT
+DESCRIBE SELECT * FROM (VALUES (NULL), (NULL)) AS t(x);
+----
+x Null YES
+
+# A Null-typed value sourced from a non-nullable expression must still
+# produce a nullable column: a DataType::Null field is always nullable.
+query TTT
+DESCRIBE SELECT * FROM (VALUES (arrow_cast(1, 'Null'))) AS t(x);
+----
+x Null YES

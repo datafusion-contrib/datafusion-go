@@ -1,0 +1,185 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+statement ok
+CREATE TABLE test(
+  int_field  INT,
+  bool_field BOOLEAN,
+  text_field TEXT,
+  more_ints  INT
+) as VALUES
+  (1,    true,  'abc',  2),
+  (2,    false, 'def',  2),
+  (3,    NULL,  'ghij', 3),
+  (NULL, NULL,   NULL,  4),
+  (4,    false, 'zxc',  5),
+  (NULL, true,   NULL,  6)
+;
+
+# Arrays tests
+query I
+SELECT NVL(int_field, 2) FROM test;
+----
+1
+2
+3
+2
+4
+2
+
+
+query B
+SELECT NVL(bool_field, false) FROM test;
+----
+true
+false
+false
+false
+false
+true
+
+
+query T
+SELECT NVL(text_field, 'zxb') FROM test;
+----
+abc
+def
+ghij
+zxb
+zxc
+zxb
+
+
+query I
+SELECT IFNULL(int_field, more_ints) FROM test;
+----
+1
+2
+3
+4
+4
+6
+
+
+query I
+SELECT NVL(3, int_field) FROM test;
+----
+3
+3
+3
+3
+3
+3
+
+
+# Scalar values tests
+query I
+SELECT NVL(1, 1);
+----
+1
+
+query I
+SELECT NVL(1, 3);
+----
+1
+
+query B
+SELECT NVL(NULL, NULL);
+----
+NULL
+
+query T
+SELECT NVL(arrow_cast(text_field, 'Utf8View'), 'zxb') FROM test;
+----
+abc
+def
+ghij
+zxb
+zxc
+zxb
+
+query T
+SELECT NVL(arrow_cast('a', 'Utf8View'), 'zxb');
+----
+a
+
+query T
+SELECT NVL('zxb', arrow_cast('a', 'Utf8View'));
+----
+zxb
+
+query T
+SELECT NVL(NULL, arrow_cast('a', 'Utf8View'));
+----
+a
+
+query T
+SELECT NVL(arrow_cast('a', 'Utf8View'), NULL);
+----
+a
+
+# nvl is implemented as a case, and short-circuits evaluation
+# so the following query should not error
+query I
+SELECT NVL(1, 1/0);
+----
+1
+
+# but this one should
+query error DataFusion error: Arrow error: Divide by zero error
+SELECT NVL(NULL, 1/0);
+
+# Expect the query plan to show nvl as a case expression
+query I
+select NVL(int_field, 9999) FROM test;
+----
+1
+2
+3
+9999
+4
+9999
+
+# Expect the query plan to show nvl as a case expression
+query TT
+EXPLAIN select NVL(int_field, 9999) FROM test;
+----
+logical_plan
+01)Projection: CASE WHEN __common_expr_1 IS NOT NULL THEN __common_expr_1 ELSE Int64(9999) END AS nvl(test.int_field,Int64(9999))
+02)--Projection: CAST(test.int_field AS Int64) AS __common_expr_1
+03)----TableScan: test projection=[int_field]
+physical_plan
+01)ProjectionExec: expr=[CASE WHEN __common_expr_1@0 IS NOT NULL THEN __common_expr_1@0 ELSE 9999 END as nvl(test.int_field,Int64(9999))]
+02)--ProjectionExec: expr=[CAST(int_field@0 AS Int64) as __common_expr_1]
+03)----DataSourceExec: partitions=1, partition_sizes=[1]

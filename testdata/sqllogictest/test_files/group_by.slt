@@ -1,0 +1,5783 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+
+statement ok
+CREATE TABLE tab0(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+CREATE TABLE tab1(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+INSERT INTO tab0 VALUES(83,0,38)
+
+statement ok
+INSERT INTO tab0 VALUES(26,0,79)
+
+statement ok
+INSERT INTO tab0 VALUES(43,81,24)
+
+statement ok
+INSERT INTO tab1 VALUES(22,6,8)
+
+statement ok
+INSERT INTO tab1 VALUES(28,57,45)
+
+statement ok
+INSERT INTO tab1 VALUES(82,44,71)
+
+statement ok
+INSERT INTO tab2 VALUES(15,61,87)
+
+statement ok
+INSERT INTO tab2 VALUES(91,59,79)
+
+statement ok
+INSERT INTO tab2 VALUES(92,41,58)
+
+query I rowsort
+SELECT - tab1.col0 * 84 + + 38 AS col2 FROM tab1 GROUP BY tab1.col0
+----
+-1810
+-2314
+-6850
+
+query I rowsort
+SELECT + cor0.col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT DISTINCT - ( + col1 ) + - 51 AS col0 FROM tab1 AS cor0 GROUP BY col1
+----
+-108
+-57
+-95
+
+query I rowsort
+SELECT col1 * cor0.col1 * 56 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+194936
+208376
+94136
+
+query I rowsort label-4
+SELECT ALL + tab2.col1 / tab2.col1 FROM tab2 GROUP BY col1
+----
+1
+1
+1
+
+query I rowsort
+SELECT ALL + tab1.col0 FROM tab1 GROUP BY col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT DISTINCT tab1.col0 AS col1 FROM tab1 GROUP BY tab1.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ALL col2 FROM tab1 GROUP BY col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT ALL + cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+26
+43
+83
+
+query III rowsort
+SELECT DISTINCT * FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2, cor0.col0
+----
+26 0 79
+43 81 24
+83 0 38
+
+query III rowsort
+SELECT * FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2, cor0.col0
+----
+26 0 79
+43 81 24
+83 0 38
+
+query I rowsort
+SELECT - 9 * cor0.col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+-369
+-531
+-549
+
+query I rowsort
+SELECT DISTINCT - 21 FROM tab2 GROUP BY col2
+----
+-21
+
+query I rowsort
+SELECT DISTINCT - 97 AS col2 FROM tab1 GROUP BY col0
+----
+-97
+
+query I rowsort
+SELECT + ( - 1 ) AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+-1
+-1
+-1
+
+query I rowsort
+SELECT - + cor0.col1 FROM tab0, tab0 cor0 GROUP BY cor0.col1
+----
+-81
+0
+
+query I rowsort
+SELECT + cor0.col0 + 36 AS col2 FROM tab0 AS cor0 GROUP BY col0
+----
+119
+62
+79
+
+query I rowsort
+SELECT cor0.col1 AS col1 FROM tab0 AS cor0 GROUP BY col1
+----
+0
+81
+
+query I rowsort
+SELECT DISTINCT + cor0.col1 FROM tab2 cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT ALL + cor0.col0 + - col0 col1 FROM tab1 AS cor0 GROUP BY col0
+----
+0
+0
+0
+
+query I rowsort
+SELECT ALL 54 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+54
+54
+54
+
+query I rowsort
+SELECT 40 AS col1 FROM tab1 cor0 GROUP BY cor0.col0
+----
+40
+40
+40
+
+query I rowsort
+SELECT DISTINCT ( cor0.col0 ) AS col0 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT 62 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+62
+62
+62
+
+query I rowsort
+SELECT 23 FROM tab2 GROUP BY tab2.col2
+----
+23
+23
+23
+
+query I rowsort
+SELECT + ( - tab0.col0 ) col2 FROM tab0, tab0 AS cor0 GROUP BY tab0.col0
+----
+-26
+-43
+-83
+
+query I rowsort
+SELECT + cor0.col1 FROM tab1 AS cor0 GROUP BY cor0.col1
+----
+44
+57
+6
+
+query I rowsort
+SELECT cor0.col1 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col2
+----
+41
+59
+61
+
+query I rowsort
+SELECT DISTINCT + 80 + cor0.col2 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+104
+118
+159
+
+query I rowsort
+SELECT DISTINCT 30 * - 9 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+-270
+
+query I rowsort
+SELECT DISTINCT - col2 FROM tab1 AS cor0 GROUP BY col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT ALL - col2 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT DISTINCT + 82 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+82
+
+query I rowsort
+SELECT 79 * 19 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+1501
+1501
+1501
+
+query I rowsort
+SELECT ALL ( + 68 ) FROM tab1 cor0 GROUP BY cor0.col2
+----
+68
+68
+68
+
+query I rowsort
+SELECT - col0 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+-22
+-28
+-82
+
+query I rowsort
+SELECT + 81 col2 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+81
+81
+81
+
+query I rowsort
+SELECT ALL cor0.col2 AS col1 FROM tab2 cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT ALL + cor0.col0 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT - cor0.col2 AS col0 FROM tab0 cor0 GROUP BY cor0.col2
+----
+-24
+-38
+-79
+
+query I rowsort
+SELECT cor0.col0 FROM tab1 AS cor0 GROUP BY col0, cor0.col1, cor0.col1
+----
+22
+28
+82
+
+query I rowsort
+SELECT 58 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+58
+58
+
+query I rowsort
+SELECT ALL cor0.col1 + - 20 AS col1 FROM tab0 cor0 GROUP BY cor0.col1
+----
+-20
+61
+
+query I rowsort
+SELECT ALL + col1 col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT DISTINCT - - 56 FROM tab2, tab0 AS cor0 GROUP BY cor0.col1
+----
+56
+
+query I rowsort
+SELECT - 10 AS col0 FROM tab2, tab1 AS cor0, tab2 AS cor1 GROUP BY cor1.col0
+----
+-10
+-10
+-10
+
+query I rowsort
+SELECT 31 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+31
+31
+31
+
+query I rowsort
+SELECT col2 AS col0 FROM tab0 cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT + 70 AS col1 FROM tab0 GROUP BY col0
+----
+70
+70
+70
+
+query I rowsort
+SELECT DISTINCT cor0.col1 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT - cor0.col1 FROM tab2, tab2 AS cor0 GROUP BY cor0.col1
+----
+-41
+-59
+-61
+
+query I rowsort
+SELECT DISTINCT + tab0.col0 col1 FROM tab0 GROUP BY tab0.col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT DISTINCT - cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+-24
+-38
+-79
+
+query I rowsort
+SELECT + cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT - 5 AS col2 FROM tab2, tab2 AS cor0, tab2 AS cor1 GROUP BY tab2.col1
+----
+-5
+-5
+-5
+
+query I rowsort
+SELECT DISTINCT 0 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+0
+
+query I rowsort
+SELECT DISTINCT - - tab2.col0 FROM tab2 GROUP BY col0
+----
+15
+91
+92
+
+query III rowsort
+SELECT DISTINCT * FROM tab2 AS cor0 GROUP BY cor0.col0, col1, cor0.col2
+----
+15 61 87
+91 59 79
+92 41 58
+
+query I rowsort label-58
+SELECT 9 / + cor0.col0 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+0
+0
+0
+
+query I rowsort
+SELECT ( - 72 ) AS col1 FROM tab1 cor0 GROUP BY cor0.col0, cor0.col2
+----
+-72
+-72
+-72
+
+query I rowsort
+SELECT cor0.col0 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ( col0 ) FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort label-62
+SELECT ALL 59 / 26 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+2
+2
+2
+
+query I rowsort
+SELECT 15 FROM tab1 AS cor0 GROUP BY col2, col2
+----
+15
+15
+15
+
+query I rowsort
+SELECT CAST ( NULL AS INTEGER ) FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col2
+----
+NULL
+NULL
+NULL
+
+query I rowsort
+SELECT ALL - 79 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+-79
+-79
+-79
+
+query I rowsort
+SELECT ALL 69 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+69
+69
+69
+
+query I rowsort
+SELECT ALL 37 col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+37
+37
+
+query I rowsort
+SELECT ALL 55 * 15 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+825
+825
+825
+
+query I rowsort
+SELECT ( 63 ) FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+63
+63
+63
+
+query I rowsort
+SELECT - cor0.col2 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT - col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+-58
+-79
+-87
+
+query I rowsort
+SELECT ALL 81 * 11 FROM tab2 AS cor0 GROUP BY col1, cor0.col0
+----
+891
+891
+891
+
+query I rowsort
+SELECT ALL 9 FROM tab2 AS cor0 GROUP BY col2
+----
+9
+9
+9
+
+query I rowsort
+SELECT DISTINCT ( - 31 ) col1 FROM tab1 GROUP BY tab1.col0
+----
+-31
+
+query I rowsort label-75
+SELECT + + cor0.col0 / - cor0.col0 FROM tab1, tab0 AS cor0 GROUP BY cor0.col0
+----
+-1
+-1
+-1
+
+query I rowsort
+SELECT cor0.col2 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT ALL cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT ALL + - ( - tab0.col2 ) AS col0 FROM tab0 GROUP BY tab0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT 72 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+72
+72
+
+query I rowsort
+SELECT - 20 - + col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+-101
+-20
+
+query I rowsort
+SELECT - - 63 FROM tab1 GROUP BY tab1.col0
+----
+63
+63
+63
+
+query I rowsort
+SELECT cor0.col2 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col2, col1
+----
+45
+71
+8
+
+query I rowsort
+SELECT + cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT DISTINCT cor0.col1 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col1
+----
+44
+57
+6
+
+query I rowsort
+SELECT cor0.col0 - col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+0
+0
+0
+
+query I rowsort
+SELECT 50 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+50
+50
+50
+
+query I rowsort
+SELECT - 18 AS col0 FROM tab1 cor0 GROUP BY cor0.col2
+----
+-18
+-18
+-18
+
+query I rowsort
+SELECT + cor0.col2 * cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+1444
+576
+6241
+
+query I rowsort
+SELECT ALL 91 / cor0.col1 FROM tab2 AS cor0 GROUP BY col1, cor0.col1
+----
+1
+1
+2
+
+query I rowsort
+SELECT cor0.col2 AS col2 FROM tab0 AS cor0 GROUP BY col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT ALL + 85 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+85
+85
+85
+
+query I rowsort
+SELECT + 49 AS col2 FROM tab0 cor0 GROUP BY cor0.col0
+----
+49
+49
+49
+
+query I rowsort
+SELECT cor0.col2 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT - col0 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+-15
+-91
+-92
+
+query I rowsort
+SELECT DISTINCT - 87 AS col1 FROM tab0 AS cor0 GROUP BY col0
+----
+-87
+
+query I rowsort
+SELECT + 39 FROM tab0 AS cor0 GROUP BY col1
+----
+39
+39
+
+query I rowsort
+SELECT ALL cor0.col2 * + col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+3364
+6241
+7569
+
+query I rowsort
+SELECT 40 FROM tab0 GROUP BY tab0.col1
+----
+40
+40
+
+query I rowsort
+SELECT tab1.col2 AS col0 FROM tab1 GROUP BY tab1.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT tab2.col0 FROM tab2 GROUP BY tab2.col0
+----
+15
+91
+92
+
+query I rowsort
+SELECT + col0 * + col0 FROM tab0 GROUP BY tab0.col0
+----
+1849
+676
+6889
+
+query I rowsort
+SELECT ALL cor0.col2 + cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+158
+48
+76
+
+query I rowsort
+SELECT DISTINCT cor0.col2 FROM tab1 cor0 GROUP BY cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT ALL + cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT cor0.col2 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort label-106
+SELECT - 53 / cor0.col0 col0 FROM tab1 cor0 GROUP BY cor0.col0
+----
+-1
+-2
+0
+
+query I rowsort
+SELECT cor0.col1 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT DISTINCT + cor0.col1 col0 FROM tab2 cor0 GROUP BY cor0.col1, cor0.col0
+----
+41
+59
+61
+
+query I rowsort
+SELECT - cor0.col2 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT cor0.col1 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT 25 AS col1 FROM tab2 cor0 GROUP BY cor0.col0
+----
+25
+25
+25
+
+query I rowsort
+SELECT cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT DISTINCT + 6 FROM tab1 cor0 GROUP BY col2, cor0.col0
+----
+6
+
+query I rowsort
+SELECT cor0.col2 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT ALL 72 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+72
+72
+72
+
+query I rowsort
+SELECT ALL + 73 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+73
+73
+73
+
+query I rowsort
+SELECT tab1.col0 AS col2 FROM tab1 GROUP BY col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT + cor0.col1 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT DISTINCT - cor0.col1 col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+-81
+0
+
+query I rowsort
+SELECT cor0.col0 * 51 FROM tab1 AS cor0 GROUP BY col0
+----
+1122
+1428
+4182
+
+query I rowsort
+SELECT ALL + 89 FROM tab2, tab1 AS cor0, tab1 AS cor1 GROUP BY cor0.col2
+----
+89
+89
+89
+
+query I rowsort
+SELECT ALL + cor0.col0 - + cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+0
+0
+0
+
+query I rowsort
+SELECT ALL 71 AS col0 FROM tab0 GROUP BY col1
+----
+71
+71
+
+query I rowsort
+SELECT - ( + cor0.col0 ) AS col1 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+-26
+-43
+-83
+
+query I rowsort
+SELECT 62 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+62
+62
+62
+
+query I rowsort
+SELECT ALL - 97 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+-97
+-97
+-97
+
+query I rowsort
+SELECT DISTINCT + 29 * ( cor0.col0 ) + + 47 FROM tab1 cor0 GROUP BY cor0.col0
+----
+2425
+685
+859
+
+query I rowsort
+SELECT DISTINCT col2 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT ALL 40 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+40
+40
+40
+
+query I rowsort
+SELECT cor0.col1 + cor0.col1 AS col2 FROM tab2 cor0 GROUP BY cor0.col1
+----
+118
+122
+82
+
+query I rowsort
+SELECT ( + cor0.col1 ) FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT cor0.col1 * + cor0.col1 col1 FROM tab1 AS cor0 GROUP BY cor0.col1
+----
+1936
+3249
+36
+
+query I rowsort
+SELECT ALL + cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT - 9 FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col1, col2
+----
+-9
+-9
+-9
+
+query I rowsort
+SELECT ALL - 7 * cor0.col1 FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col1
+----
+-308
+-399
+-42
+
+query I rowsort
+SELECT - 21 AS col2 FROM tab1 cor0 GROUP BY cor0.col1, cor0.col1
+----
+-21
+-21
+-21
+
+query I rowsort
+SELECT DISTINCT tab1.col2 FROM tab1 GROUP BY tab1.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT DISTINCT - 76 FROM tab2 GROUP BY tab2.col2
+----
+-76
+
+query I rowsort
+SELECT DISTINCT - cor0.col1 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+-41
+-59
+-61
+
+query I rowsort
+SELECT cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT ALL - cor0.col2 + - 55 AS col1 FROM tab0 AS cor0 GROUP BY col2
+----
+-134
+-79
+-93
+
+query I rowsort
+SELECT - + 28 FROM tab0, tab2 cor0 GROUP BY tab0.col1
+----
+-28
+-28
+
+query I rowsort
+SELECT ALL col1 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT ALL + 35 * 14 AS col1 FROM tab2 GROUP BY tab2.col1
+----
+490
+490
+490
+
+query I rowsort
+SELECT ALL cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1
+----
+15
+91
+92
+
+query I rowsort
+SELECT DISTINCT - cor0.col2 * 18 + + 56 FROM tab2 AS cor0 GROUP BY col2
+----
+-1366
+-1510
+-988
+
+query I rowsort
+SELECT cor0.col0 FROM tab0 cor0 GROUP BY col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT ALL - 38 AS col1 FROM tab2 GROUP BY tab2.col2
+----
+-38
+-38
+-38
+
+query I rowsort
+SELECT - 79 FROM tab0, tab0 cor0, tab0 AS cor1 GROUP BY cor1.col0
+----
+-79
+-79
+-79
+
+query I rowsort
+SELECT + cor0.col2 FROM tab1 cor0 GROUP BY cor0.col2, cor0.col1
+----
+45
+71
+8
+
+query I rowsort
+SELECT cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT cor0.col2 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+24
+38
+79
+
+query I rowsort
+SELECT + - 57 AS col1 FROM tab2 GROUP BY tab2.col2
+----
+-57
+-57
+-57
+
+query I rowsort
+SELECT ALL - cor0.col1 FROM tab2 cor0 GROUP BY cor0.col1
+----
+-41
+-59
+-61
+
+query I rowsort
+SELECT DISTINCT cor0.col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT - cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+-26
+-43
+-83
+
+query I rowsort
+SELECT ( - cor0.col1 ) FROM tab1 AS cor0 GROUP BY cor0.col1
+----
+-44
+-57
+-6
+
+query I rowsort
+SELECT DISTINCT - cor0.col2 FROM tab0 cor0 GROUP BY cor0.col2, cor0.col2
+----
+-24
+-38
+-79
+
+query I rowsort
+SELECT DISTINCT tab1.col1 * ( + tab1.col1 ) FROM tab1 GROUP BY col1
+----
+1936
+3249
+36
+
+query I rowsort
+SELECT - cor0.col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+-41
+-59
+-61
+
+query III rowsort
+SELECT * FROM tab2 AS cor0 GROUP BY cor0.col1, cor0.col2, cor0.col0
+----
+15 61 87
+91 59 79
+92 41 58
+
+query I rowsort
+SELECT + 83 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+83
+83
+83
+
+query I rowsort
+SELECT + ( 97 ) + - tab0.col1 FROM tab0, tab1 AS cor0 GROUP BY tab0.col1
+----
+16
+97
+
+query I rowsort
+SELECT 61 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+61
+61
+61
+
+query I rowsort
+SELECT ALL cor0.col2 FROM tab0 cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT cor0.col2 FROM tab0, tab1 AS cor0 GROUP BY cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT + - 3 FROM tab2 GROUP BY col1
+----
+-3
+-3
+-3
+
+query I rowsort
+SELECT DISTINCT + 96 FROM tab2 GROUP BY tab2.col1
+----
+96
+
+query I rowsort
+SELECT ALL 81 FROM tab1 AS cor0 GROUP BY cor0.col1
+----
+81
+81
+81
+
+query I rowsort
+SELECT cor0.col0 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT - + 51 col2 FROM tab2, tab2 AS cor0 GROUP BY cor0.col1
+----
+-51
+-51
+-51
+
+query I rowsort
+SELECT cor0.col1 + - cor0.col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+0
+0
+0
+
+query I rowsort
+SELECT 35 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col1
+----
+35
+35
+35
+
+query I rowsort
+SELECT + tab2.col1 col0 FROM tab2 GROUP BY tab2.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT 37 AS col1 FROM tab0 AS cor0 GROUP BY col0
+----
+37
+37
+37
+
+query I rowsort
+SELECT + cor0.col1 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+query I rowsort
+SELECT cor0.col1 FROM tab2, tab1 AS cor0 GROUP BY cor0.col1
+----
+44
+57
+6
+
+query I rowsort
+SELECT ALL - col0 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+-22
+-28
+-82
+
+query I rowsort
+SELECT + 77 AS col1 FROM tab1 AS cor0 CROSS JOIN tab0 AS cor1 GROUP BY cor0.col2
+----
+77
+77
+77
+
+query I rowsort
+SELECT ALL cor0.col0 col1 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT + cor0.col2 * + cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+1032
+2054
+3154
+
+query I rowsort
+SELECT DISTINCT 39 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+39
+
+query III rowsort
+SELECT DISTINCT * FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col2, cor0.col1
+----
+22 6 8
+28 57 45
+82 44 71
+
+query I rowsort
+SELECT ALL + 28 FROM tab2 cor0 GROUP BY cor0.col0
+----
+28
+28
+28
+
+query I rowsort
+SELECT cor0.col0 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ALL cor0.col2 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT + ( col0 ) * col0 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+225
+8281
+8464
+
+query I rowsort label-188
+SELECT - 21 - + 57 / cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+-21
+-22
+-23
+
+query I rowsort
+SELECT + 37 + cor0.col0 * cor0.col2 FROM tab2 AS cor0 GROUP BY cor0.col2, col0
+----
+1342
+5373
+7226
+
+query I rowsort
+SELECT ALL cor0.col2 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+45
+71
+8
+
+query III rowsort
+SELECT * FROM tab1 AS cor0 GROUP BY col2, cor0.col1, cor0.col0
+----
+22 6 8
+28 57 45
+82 44 71
+
+query I rowsort
+SELECT ( cor0.col2 ) AS col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT DISTINCT 28 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+28
+
+query I rowsort
+SELECT ALL - 18 FROM tab0, tab1 AS cor0 GROUP BY cor0.col0
+----
+-18
+-18
+-18
+
+query I rowsort
+SELECT DISTINCT cor0.col2 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT + col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT - cor0.col0 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col0
+----
+-22
+-28
+-82
+
+query I rowsort
+SELECT 29 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col0
+----
+29
+29
+29
+
+query I rowsort
+SELECT - + cor0.col0 - 39 AS col0 FROM tab0, tab0 cor0 GROUP BY cor0.col0
+----
+-122
+-65
+-82
+
+query I rowsort
+SELECT ALL 45 AS col0 FROM tab0 GROUP BY tab0.col0
+----
+45
+45
+45
+
+query I rowsort
+SELECT + 74 AS col1 FROM tab1 GROUP BY tab1.col0
+----
+74
+74
+74
+
+query I rowsort
+SELECT cor0.col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort label-203
+SELECT - cor0.col2 + CAST ( 80 AS INTEGER ) FROM tab1 AS cor0 GROUP BY col2
+----
+35
+72
+9
+
+query I rowsort
+SELECT DISTINCT - cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+-81
+0
+
+query I rowsort
+SELECT - 51 * + cor0.col2 FROM tab0, tab2 cor0, tab1 AS cor1 GROUP BY cor0.col2
+----
+-2958
+-4029
+-4437
+
+query I rowsort
+SELECT ALL + col0 * cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+225
+8281
+8464
+
+query I rowsort
+SELECT DISTINCT ( col0 ) FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+26
+43
+83
+
+query I rowsort
+SELECT 87 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+87
+87
+87
+
+query I rowsort
+SELECT + cor0.col0 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT DISTINCT + 45 col0 FROM tab1 AS cor0 GROUP BY col0
+----
+45
+
+query I rowsort label-211
+SELECT ALL CAST ( NULL AS INTEGER ) FROM tab2 AS cor0 GROUP BY col1
+----
+NULL
+NULL
+NULL
+
+query I rowsort
+SELECT ALL cor0.col1 + col1 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+0
+162
+
+query I rowsort
+SELECT - cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+-81
+0
+
+query I rowsort
+SELECT DISTINCT + 99 * 76 + + tab2.col1 AS col2 FROM tab2 GROUP BY col1
+----
+7565
+7583
+7585
+
+query I rowsort
+SELECT ALL 54 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+54
+54
+54
+
+query I rowsort
+SELECT + cor0.col2 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col2, cor0.col0
+----
+58
+79
+87
+
+query I rowsort
+SELECT cor0.col0 + + 87 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+109
+115
+169
+
+query I rowsort
+SELECT cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0, cor0.col1, cor0.col0
+----
+15
+91
+92
+
+query I rowsort
+SELECT ALL col0 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT DISTINCT - cor0.col0 - + cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+-182
+-184
+-30
+
+query I rowsort
+SELECT ALL - 68 * + cor0.col1 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col1
+----
+-5508
+0
+
+query I rowsort
+SELECT col2 AS col2 FROM tab0 AS cor0 GROUP BY cor0.col1, cor0.col2
+----
+24
+38
+79
+
+query I rowsort
+SELECT ALL - 11 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+-11
+-11
+-11
+
+query I rowsort
+SELECT 66 AS col1 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+66
+66
+66
+
+query I rowsort
+SELECT - cor0.col2 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+-58
+-79
+-87
+
+query I rowsort
+SELECT ALL 37 FROM tab2, tab0 AS cor0 GROUP BY cor0.col1
+----
+37
+37
+
+query I rowsort
+SELECT DISTINCT + 20 col2 FROM tab0 GROUP BY tab0.col1
+----
+20
+
+query I rowsort
+SELECT 42 FROM tab0 cor0 GROUP BY col2
+----
+42
+42
+42
+
+query I rowsort
+SELECT ALL - cor0.col1 AS col1 FROM tab1 cor0 GROUP BY cor0.col1
+----
+-44
+-57
+-6
+
+query I rowsort
+SELECT - col2 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+-58
+-79
+-87
+
+query I rowsort
+SELECT DISTINCT + 86 FROM tab1 GROUP BY tab1.col2
+----
+86
+
+query I rowsort
+SELECT + cor0.col1 AS col1 FROM tab2, tab0 cor0 GROUP BY cor0.col1
+----
+0
+81
+
+query I rowsort
+SELECT - 13 FROM tab0 cor0 GROUP BY cor0.col1
+----
+-13
+-13
+
+query I rowsort
+SELECT tab1.col0 AS col1 FROM tab1 GROUP BY tab1.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ALL cor0.col1 * cor0.col1 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+1681
+3481
+3721
+
+query I rowsort
+SELECT - cor0.col0 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+-15
+-91
+-92
+
+query I rowsort
+SELECT cor0.col2 FROM tab1 AS cor0 GROUP BY cor0.col0, cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT ALL - 67 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+-67
+-67
+-67
+
+query I rowsort
+SELECT + 75 AS col2 FROM tab1 cor0 GROUP BY cor0.col0
+----
+75
+75
+75
+
+query I rowsort
+SELECT ALL cor0.col1 FROM tab0 AS cor0 GROUP BY col0, cor0.col1
+----
+0
+0
+81
+
+query I rowsort
+SELECT ALL + cor0.col1 FROM tab0 AS cor0 GROUP BY col1
+----
+0
+81
+
+query I rowsort
+SELECT DISTINCT - 38 - - cor0.col0 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+-12
+45
+5
+
+query I rowsort
+SELECT + cor0.col0 + - col0 + 21 AS col0 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+21
+21
+21
+
+query I rowsort
+SELECT + cor0.col0 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col0, cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ALL - cor0.col0 FROM tab0 AS cor0 GROUP BY cor0.col0, cor0.col0
+----
+-26
+-43
+-83
+
+query III rowsort
+SELECT * FROM tab0 AS cor0 GROUP BY cor0.col2, cor0.col1, cor0.col0
+----
+26 0 79
+43 81 24
+83 0 38
+
+query I rowsort
+SELECT DISTINCT + + tab2.col2 FROM tab2, tab1 AS cor0 GROUP BY tab2.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT cor0.col0 AS col1 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+15
+91
+92
+
+query I rowsort
+SELECT col0 AS col0 FROM tab2 AS cor0 GROUP BY cor0.col0
+----
+15
+91
+92
+
+query I rowsort
+SELECT - cor0.col0 AS col1 FROM tab1 AS cor0 GROUP BY col0
+----
+-22
+-28
+-82
+
+query I rowsort
+SELECT DISTINCT ( + 71 ) col1 FROM tab1 GROUP BY tab1.col2
+----
+71
+
+query I rowsort
+SELECT + 96 * 29 col1 FROM tab2, tab1 AS cor0 GROUP BY tab2.col0
+----
+2784
+2784
+2784
+
+query I rowsort
+SELECT + 3 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+3
+3
+3
+
+query I rowsort
+SELECT 37 FROM tab0 AS cor0 GROUP BY col0
+----
+37
+37
+37
+
+query I rowsort
+SELECT 82 FROM tab0 cor0 GROUP BY cor0.col1
+----
+82
+82
+
+query I rowsort
+SELECT cor0.col2 FROM tab2 cor0 GROUP BY cor0.col2
+----
+58
+79
+87
+
+query I rowsort
+SELECT DISTINCT - 87 FROM tab1, tab2 AS cor0, tab2 AS cor1 GROUP BY tab1.col0
+----
+-87
+
+query I rowsort
+SELECT 55 FROM tab1 AS cor0 GROUP BY cor0.col2, cor0.col1
+----
+55
+55
+55
+
+query I rowsort
+SELECT DISTINCT 35 FROM tab0 cor0 GROUP BY cor0.col2, cor0.col0
+----
+35
+
+query I rowsort
+SELECT cor0.col0 FROM tab2 cor0 GROUP BY col0
+----
+15
+91
+92
+
+query I rowsort
+SELECT - cor0.col2 AS col1 FROM tab1 AS cor0 GROUP BY col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT ALL ( cor0.col2 ) AS col1 FROM tab2, tab1 AS cor0 GROUP BY cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT DISTINCT - col2 FROM tab1 GROUP BY tab1.col2
+----
+-45
+-71
+-8
+
+query I rowsort
+SELECT 38 FROM tab1 AS cor0 GROUP BY cor0.col1, cor0.col1
+----
+38
+38
+38
+
+query I rowsort
+SELECT - 16 * - cor0.col0 * 47 FROM tab0 AS cor0 GROUP BY cor0.col0
+----
+19552
+32336
+62416
+
+query I rowsort
+SELECT - 31 FROM tab2 AS cor0 GROUP BY cor0.col2
+----
+-31
+-31
+-31
+
+query I rowsort
+SELECT ( + 34 ) AS col1 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+34
+34
+34
+
+query I rowsort
+SELECT cor0.col2 AS col0 FROM tab1 AS cor0 GROUP BY cor0.col2
+----
+45
+71
+8
+
+query I rowsort
+SELECT DISTINCT 21 FROM tab0 AS cor0 GROUP BY cor0.col2
+----
+21
+
+query I rowsort
+SELECT 62 AS col2 FROM tab0 cor0 GROUP BY cor0.col1, cor0.col2
+----
+62
+62
+62
+
+query I rowsort
+SELECT cor0.col0 FROM tab1 cor0 GROUP BY cor0.col0, cor0.col1
+----
+22
+28
+82
+
+query I rowsort
+SELECT DISTINCT cor0.col0 FROM tab2 AS cor0 GROUP BY cor0.col0, col1
+----
+15
+91
+92
+
+query I rowsort
+SELECT DISTINCT cor0.col0 AS col2 FROM tab1 AS cor0 GROUP BY cor0.col0
+----
+22
+28
+82
+
+query I rowsort
+SELECT ALL - ( 30 ) * + cor0.col1 AS col2 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+-1230
+-1770
+-1830
+
+query I rowsort
+SELECT DISTINCT 94 AS col1 FROM tab0 AS cor0 GROUP BY cor0.col1
+----
+94
+
+query I rowsort
+SELECT DISTINCT + col1 FROM tab2 AS cor0 GROUP BY cor0.col1
+----
+41
+59
+61
+
+# Group By All tests
+statement ok
+CREATE TABLE tab3(col0 INTEGER, col1 INTEGER, col2 INTEGER, col3 INTEGER)
+
+statement ok
+INSERT INTO tab3 VALUES(0,1,12,-1)
+
+statement ok
+INSERT INTO tab3 VALUES(0,2,13,-1)
+
+statement ok
+INSERT INTO tab3 VALUES(0,1,10,-2)
+
+statement ok
+INSERT INTO tab3 VALUES(0,2,15,-2)
+
+statement ok
+INSERT INTO tab3 VALUES(1, NULL, 10, -2)
+
+query IRI rowsort
+SELECT col1, AVG(col2), col0 FROM tab3 GROUP BY ALL
+----
+1 11 0
+2 14 0
+NULL 10 1
+
+query IIR rowsort
+SELECT sub.col1, sub.col0, AVG(sub.col2) AS avg_col2
+FROM (
+  SELECT col1, col0, col2
+  FROM tab3
+  WHERe col3 = -1
+  GROUP BY ALL
+) AS sub
+GROUP BY ALL;
+----
+1 0 12
+2 0 13
+
+query IIR rowsort
+SELECT sub.col1, sub.col0, sub."avg(tab3.col2)" AS avg_col2
+FROM (
+  SELECT col1, avg(col2), col0 FROM tab3 GROUP BY ALL
+) AS sub
+GROUP BY ALL;
+----
+1 0 11
+2 0 14
+NULL 1 10
+
+query IIII rowsort
+SELECT col0, col1, COUNT(col2), SUM(col3) FROM tab3 GROUP BY ALL
+----
+0 1 2 -3
+0 2 2 -3
+1 NULL 1 -2
+
+query I
+SELECT COUNT(*) AS c FROM tab3 GROUP BY ALL
+----
+5
+
+# query below should work in multi partition, successfully.
+query II
+SELECT l.col0, LAST_VALUE(r.col1 ORDER BY r.col0) as last_col1
+FROM tab0 as l
+JOIN tab0 as r
+ON l.col0 = r.col0
+GROUP BY l.col0, l.col1, l.col2
+ORDER BY l.col0;
+----
+26 0
+43 81
+83 0
+
+# assert that above query works in indeed multi partitions
+# physical plan for this query should contain RepartitionExecs.
+# Aggregation should be in two stages, Partial + FinalPartitioned stages.
+query TT
+EXPLAIN SELECT l.col0, LAST_VALUE(r.col1 ORDER BY r.col0) as last_col1
+FROM tab0 as l
+JOIN tab0 as r
+ON l.col0 = r.col0
+GROUP BY l.col0, l.col1, l.col2
+ORDER BY l.col0;
+----
+logical_plan
+01)Sort: l.col0 ASC NULLS LAST
+02)--Projection: l.col0, last_value(r.col1) ORDER BY [r.col0 ASC NULLS LAST] AS last_col1
+03)----Aggregate: groupBy=[[l.col0, l.col1, l.col2]], aggr=[[last_value(r.col1) ORDER BY [r.col0 ASC NULLS LAST]]]
+04)------Inner Join: l.col0 = r.col0
+05)--------SubqueryAlias: l
+06)----------TableScan: tab0 projection=[col0, col1, col2]
+07)--------SubqueryAlias: r
+08)----------TableScan: tab0 projection=[col0, col1]
+physical_plan
+01)SortPreservingMergeExec: [col0@0 ASC NULLS LAST]
+02)--SortExec: expr=[col0@0 ASC NULLS LAST], preserve_partitioning=[true]
+03)----ProjectionExec: expr=[col0@0 as col0, last_value(r.col1) ORDER BY [r.col0 ASC NULLS LAST]@3 as last_col1]
+04)------AggregateExec: mode=FinalPartitioned, gby=[col0@0 as col0, col1@1 as col1, col2@2 as col2], aggr=[last_value(r.col1) ORDER BY [r.col0 ASC NULLS LAST]]
+05)--------RepartitionExec: partitioning=Hash([col0@0, col1@1, col2@2], 4), input_partitions=4
+06)----------AggregateExec: mode=Partial, gby=[col0@0 as col0, col1@1 as col1, col2@2 as col2], aggr=[last_value(r.col1) ORDER BY [r.col0 ASC NULLS LAST]]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)--------------HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(col0@0, col0@0)], projection=[col0@2, col1@3, col2@4, col0@0, col1@1]
+09)----------------DataSourceExec: partitions=1, partition_sizes=[3]
+10)----------------DataSourceExec: partitions=1, partition_sizes=[3]
+
+# Columns in the table are a,b,c,d. Source is DataSourceExec which is ordered by
+# a,b,c column. Column a has cardinality 2, column b has cardinality 4.
+# Column c has cardinality 100 (unique entries). Column d has cardinality 5.
+statement ok
+CREATE UNBOUNDED EXTERNAL TABLE annotated_data_infinite2 (
+  a0 INTEGER,
+  a INTEGER,
+  b INTEGER,
+  c INTEGER,
+  d INTEGER
+)
+STORED AS CSV
+WITH ORDER (a ASC, b ASC, c ASC)
+LOCATION '../core/tests/data/window_2.csv'
+OPTIONS ('format.has_header' 'true');
+
+# Create a table with 2 ordered columns.
+# In the next step, we will expect to observe the removed sort execs.
+statement ok
+CREATE EXTERNAL TABLE multiple_ordered_table (
+  a0 INTEGER,
+  a INTEGER,
+  b INTEGER,
+  c INTEGER,
+  d INTEGER
+)
+STORED AS CSV
+WITH ORDER (a ASC, b ASC)
+WITH ORDER (c ASC)
+LOCATION '../core/tests/data/window_2.csv'
+OPTIONS ('format.has_header' 'true');
+
+# Expected a sort exec for b DESC
+query TT
+EXPLAIN SELECT a FROM multiple_ordered_table ORDER BY b DESC;
+----
+logical_plan
+01)Projection: multiple_ordered_table.a
+02)--Sort: multiple_ordered_table.b DESC NULLS FIRST
+03)----TableScan: multiple_ordered_table projection=[a, b]
+physical_plan
+01)ProjectionExec: expr=[a@0 as a]
+02)--SortExec: expr=[b@1 DESC], preserve_partitioning=[false]
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, b], output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST], file_type=csv, has_header=true
+
+# Final plan shouldn't have SortExec c ASC,
+# because table already satisfies this ordering.
+query TT
+EXPLAIN SELECT a FROM multiple_ordered_table ORDER BY c ASC;
+----
+logical_plan
+01)Projection: multiple_ordered_table.a
+02)--Sort: multiple_ordered_table.c ASC NULLS LAST
+03)----TableScan: multiple_ordered_table projection=[a, c]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a], output_ordering=[a@0 ASC NULLS LAST], file_type=csv, has_header=true
+
+# Final plan shouldn't have SortExec a ASC, b ASC,
+# because table already satisfies this ordering.
+query TT
+EXPLAIN SELECT a FROM multiple_ordered_table ORDER BY a ASC, b ASC;
+----
+logical_plan
+01)Projection: multiple_ordered_table.a
+02)--Sort: multiple_ordered_table.a ASC NULLS LAST, multiple_ordered_table.b ASC NULLS LAST
+03)----TableScan: multiple_ordered_table projection=[a, b]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a], output_ordering=[a@0 ASC NULLS LAST], file_type=csv, has_header=true
+
+# test_window_agg_sort
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+# test_source_sorted_groupby
+query TT
+EXPLAIN SELECT a, b,
+ SUM(c) as summation1
+ FROM annotated_data_infinite2
+ GROUP BY b, a
+----
+logical_plan
+01)Projection: annotated_data_infinite2.a, annotated_data_infinite2.b, sum(annotated_data_infinite2.c) AS summation1
+02)--Aggregate: groupBy=[[annotated_data_infinite2.b, annotated_data_infinite2.a]], aggr=[[sum(CAST(annotated_data_infinite2.c AS Int64))]]
+03)----TableScan: annotated_data_infinite2 projection=[a, b, c]
+physical_plan
+01)ProjectionExec: expr=[a@1 as a, b@0 as b, sum(annotated_data_infinite2.c)@2 as summation1]
+02)--AggregateExec: mode=Single, gby=[b@1 as b, a@0 as a], aggr=[sum(annotated_data_infinite2.c)], ordering_mode=Sorted
+03)----StreamingTableExec: partition_sizes=1, projection=[a, b, c], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST, c@2 ASC NULLS LAST]
+
+
+query III
+ SELECT a, b,
+ SUM(c) as summation1
+ FROM annotated_data_infinite2
+ GROUP BY b, a
+----
+0 0 300
+0 1 925
+1 2 1550
+1 3 2175
+
+
+# test_source_sorted_groupby2
+# If ordering is not important for the aggregation function, we should ignore the ordering requirement. Hence
+# "ORDER BY a DESC" should have no effect.
+query TT
+EXPLAIN SELECT a, d,
+ SUM(c ORDER BY a DESC) as summation1
+ FROM annotated_data_infinite2
+ GROUP BY d, a
+----
+logical_plan
+01)Projection: annotated_data_infinite2.a, annotated_data_infinite2.d, sum(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST] AS summation1
+02)--Aggregate: groupBy=[[annotated_data_infinite2.d, annotated_data_infinite2.a]], aggr=[[sum(CAST(annotated_data_infinite2.c AS Int64)) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]]]
+03)----TableScan: annotated_data_infinite2 projection=[a, c, d]
+physical_plan
+01)ProjectionExec: expr=[a@1 as a, d@0 as d, sum(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]@2 as summation1]
+02)--AggregateExec: mode=Single, gby=[d@2 as d, a@0 as a], aggr=[sum(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]], ordering_mode=PartiallySorted([1])
+03)----StreamingTableExec: partition_sizes=1, projection=[a, c, d], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST]
+
+query III
+SELECT a, d,
+ SUM(c ORDER BY a DESC) as summation1
+ FROM annotated_data_infinite2
+ GROUP BY d, a
+----
+0 0 292
+0 2 196
+0 1 315
+0 4 164
+0 3 258
+1 0 622
+1 3 299
+1 1 1043
+1 4 913
+1 2 848
+
+# test_source_sorted_groupby3
+
+query TT
+EXPLAIN SELECT a, b, FIRST_VALUE(c ORDER BY a DESC) as first_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+logical_plan
+01)Projection: annotated_data_infinite2.a, annotated_data_infinite2.b, first_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST] AS first_c
+02)--Aggregate: groupBy=[[annotated_data_infinite2.a, annotated_data_infinite2.b]], aggr=[[first_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]]]
+03)----TableScan: annotated_data_infinite2 projection=[a, b, c]
+physical_plan
+01)ProjectionExec: expr=[a@0 as a, b@1 as b, first_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]@2 as first_c]
+02)--AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[first_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]], ordering_mode=Sorted
+03)----StreamingTableExec: partition_sizes=1, projection=[a, b, c], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST, c@2 ASC NULLS LAST]
+
+query III
+SELECT a, b, FIRST_VALUE(c ORDER BY a DESC) as first_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+0 0 0
+0 1 25
+1 2 50
+1 3 75
+
+# test_source_sorted_groupby4
+
+query TT
+EXPLAIN SELECT a, b, LAST_VALUE(c ORDER BY a DESC) as last_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+logical_plan
+01)Projection: annotated_data_infinite2.a, annotated_data_infinite2.b, last_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST] AS last_c
+02)--Aggregate: groupBy=[[annotated_data_infinite2.a, annotated_data_infinite2.b]], aggr=[[last_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]]]
+03)----TableScan: annotated_data_infinite2 projection=[a, b, c]
+physical_plan
+01)ProjectionExec: expr=[a@0 as a, b@1 as b, last_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]@2 as last_c]
+02)--AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[last_value(annotated_data_infinite2.c) ORDER BY [annotated_data_infinite2.a DESC NULLS FIRST]], ordering_mode=Sorted
+03)----StreamingTableExec: partition_sizes=1, projection=[a, b, c], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST, c@2 ASC NULLS LAST]
+
+query III
+SELECT a, b, LAST_VALUE(c ORDER BY a DESC, c ASC) as last_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+0 0 24
+0 1 49
+1 2 74
+1 3 99
+
+# when LAST_VALUE, or FIRST_VALUE value do not contain ordering requirement
+# queries should still work, However, result depends on the scanning order and
+# not deterministic
+query TT
+EXPLAIN SELECT a, b, LAST_VALUE(c) as last_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+logical_plan
+01)Projection: annotated_data_infinite2.a, annotated_data_infinite2.b, last_value(annotated_data_infinite2.c) AS last_c
+02)--Aggregate: groupBy=[[annotated_data_infinite2.a, annotated_data_infinite2.b]], aggr=[[last_value(annotated_data_infinite2.c)]]
+03)----TableScan: annotated_data_infinite2 projection=[a, b, c]
+physical_plan
+01)ProjectionExec: expr=[a@0 as a, b@1 as b, last_value(annotated_data_infinite2.c)@2 as last_c]
+02)--AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[last_value(annotated_data_infinite2.c)], ordering_mode=Sorted
+03)----StreamingTableExec: partition_sizes=1, projection=[a, b, c], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST, c@2 ASC NULLS LAST]
+
+query III
+SELECT a, b, LAST_VALUE(c order by c) as last_c
+  FROM annotated_data_infinite2
+  GROUP BY a, b
+----
+0 0 24
+0 1 49
+1 2 74
+1 3 99
+
+query TT
+EXPLAIN SELECT *
+FROM annotated_data_infinite2
+ORDER BY a, b, d;
+----
+logical_plan
+01)Sort: annotated_data_infinite2.a ASC NULLS LAST, annotated_data_infinite2.b ASC NULLS LAST, annotated_data_infinite2.d ASC NULLS LAST
+02)--TableScan: annotated_data_infinite2 projection=[a0, a, b, c, d]
+physical_plan
+01)PartialSortExec: expr=[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST, d@4 ASC NULLS LAST], common_prefix_length=[2]
+02)--StreamingTableExec: partition_sizes=1, projection=[a0, a, b, c, d], infinite_source=true, output_ordering=[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST, c@3 ASC NULLS LAST]
+
+query TT
+EXPLAIN SELECT *
+FROM annotated_data_infinite2
+ORDER BY a, b, d
+LIMIT 50;
+----
+logical_plan
+01)Sort: annotated_data_infinite2.a ASC NULLS LAST, annotated_data_infinite2.b ASC NULLS LAST, annotated_data_infinite2.d ASC NULLS LAST, fetch=50
+02)--TableScan: annotated_data_infinite2 projection=[a0, a, b, c, d]
+physical_plan
+01)PartialSortExec: TopK(fetch=50), expr=[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST, d@4 ASC NULLS LAST], common_prefix_length=[2]
+02)--StreamingTableExec: partition_sizes=1, projection=[a0, a, b, c, d], infinite_source=true, output_ordering=[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST, c@3 ASC NULLS LAST]
+
+query TT
+EXPLAIN SELECT *
+FROM multiple_ordered_table
+ORDER BY a, b, d;
+----
+logical_plan
+01)Sort: multiple_ordered_table.a ASC NULLS LAST, multiple_ordered_table.b ASC NULLS LAST, multiple_ordered_table.d ASC NULLS LAST
+02)--TableScan: multiple_ordered_table projection=[a0, a, b, c, d]
+physical_plan
+01)SortExec: expr=[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST, d@4 ASC NULLS LAST], preserve_partitioning=[false]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a0, a, b, c, d], output_orderings=[[a@1 ASC NULLS LAST, b@2 ASC NULLS LAST], [c@3 ASC NULLS LAST]], file_type=csv, has_header=true
+
+query TT
+EXPLAIN SELECT a, b, ARRAY_AGG(d ORDER BY d)
+FROM annotated_data_infinite2
+GROUP BY a, b;
+----
+logical_plan
+01)Aggregate: groupBy=[[annotated_data_infinite2.a, annotated_data_infinite2.b]], aggr=[[array_agg(annotated_data_infinite2.d) ORDER BY [annotated_data_infinite2.d ASC NULLS LAST]]]
+02)--TableScan: annotated_data_infinite2 projection=[a, b, d]
+physical_plan
+01)AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[array_agg(annotated_data_infinite2.d) ORDER BY [annotated_data_infinite2.d ASC NULLS LAST]], ordering_mode=Sorted
+02)--PartialSortExec: expr=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST, d@2 ASC NULLS LAST], common_prefix_length=[2]
+03)----StreamingTableExec: partition_sizes=1, projection=[a, b, d], infinite_source=true, output_ordering=[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST]
+
+# as can be seen in the result below d is indeed ordered.
+query II?
+SELECT a, b, ARRAY_AGG(d ORDER BY d)
+FROM annotated_data_infinite2
+GROUP BY a, b;
+----
+0 0 [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4]
+0 1 [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4]
+1 2 [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 4, 4, 4, 4]
+1 3 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 4, 4, 4, 4, 4, 4]
+
+query III
+SELECT a, b, d
+FROM annotated_data_infinite2
+ORDER BY a, b, d;
+----
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 1
+0 0 1
+0 0 1
+0 0 1
+0 0 1
+0 0 2
+0 0 2
+0 0 2
+0 0 2
+0 0 2
+0 0 2
+0 0 3
+0 0 3
+0 0 3
+0 0 4
+0 0 4
+0 0 4
+0 0 4
+0 1 0
+0 1 0
+0 1 0
+0 1 0
+0 1 0
+0 1 0
+0 1 1
+0 1 1
+0 1 1
+0 1 1
+0 1 1
+0 1 1
+0 1 1
+0 1 2
+0 1 2
+0 1 2
+0 1 2
+0 1 3
+0 1 3
+0 1 3
+0 1 3
+0 1 3
+0 1 4
+0 1 4
+0 1 4
+1 2 0
+1 2 0
+1 2 0
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 1
+1 2 2
+1 2 2
+1 2 2
+1 2 2
+1 2 3
+1 2 3
+1 2 4
+1 2 4
+1 2 4
+1 2 4
+1 2 4
+1 2 4
+1 3 0
+1 3 0
+1 3 0
+1 3 0
+1 3 0
+1 3 1
+1 3 1
+1 3 1
+1 3 1
+1 3 1
+1 3 2
+1 3 2
+1 3 2
+1 3 2
+1 3 2
+1 3 2
+1 3 2
+1 3 3
+1 3 3
+1 3 4
+1 3 4
+1 3 4
+1 3 4
+1 3 4
+1 3 4
+
+statement ok
+drop table annotated_data_infinite2;
+
+# create a table for testing
+statement ok
+CREATE TABLE sales_global (zip_code INT,
+          country VARCHAR(3),
+          sn INT,
+          ts TIMESTAMP,
+          currency VARCHAR(3),
+          amount FLOAT
+        ) as VALUES
+          (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+          (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+          (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+          (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+          (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0),
+          (0, 'GRC', 4, '2022-01-03 10:00:00'::timestamp, 'EUR', 80.0)
+
+# create a new table named exchange rates
+statement ok
+CREATE TABLE exchange_rates (
+    sn INTEGER,
+    ts TIMESTAMP,
+    currency_from VARCHAR(3),
+    currency_to VARCHAR(3),
+    rate DECIMAL(10,2)
+) as VALUES
+    (0, '2022-01-01 06:00:00'::timestamp, 'EUR', 'USD', 1.10),
+    (1, '2022-01-01 08:00:00'::timestamp, 'TRY', 'USD', 0.10),
+    (2, '2022-01-01 11:30:00'::timestamp, 'EUR', 'USD', 1.12),
+    (3, '2022-01-02 12:00:00'::timestamp, 'TRY', 'USD', 0.11),
+    (4, '2022-01-03 10:00:00'::timestamp, 'EUR', 'USD', 1.12)
+
+# test_ordering_sensitive_aggregation
+# ordering sensitive requirement should add a SortExec in the final plan. To satisfy amount ASC
+# in the aggregation
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+query TT
+EXPLAIN SELECT country, (ARRAY_AGG(amount ORDER BY amount ASC)) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS amounts
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@1 as amounts]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+03)----SortExec: expr=[amount@1 ASC NULLS LAST], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+query T?
+SELECT country, (ARRAY_AGG(amount ORDER BY amount ASC)) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+GRC [30.0, 80.0]
+FRA [50.0, 200.0]
+TUR [75.0, 100.0]
+
+# test_ordering_sensitive_aggregation2
+# We should be able to satisfy the finest requirement among all aggregators, when we have multiple aggregators.
+# Hence final plan should have SortExec: expr=[amount@1 DESC] to satisfy array_agg requirement.
+query TT
+EXPLAIN SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+          SUM(s.amount) AS sum1
+        FROM sales_global AS s
+        GROUP BY s.country
+----
+logical_plan
+01)Projection: s.country, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST] AS amounts, sum(s.amount) AS sum1
+02)--Aggregate: groupBy=[[s.country]], aggr=[[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(CAST(s.amount AS Float64))]]
+03)----SubqueryAlias: s
+04)------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST]@1 as amounts, sum(s.amount)@2 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(s.amount)]
+03)----SortExec: expr=[amount@1 DESC], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?R rowsort
+SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+    SUM(s.amount) AS sum1
+  FROM sales_global AS s
+  GROUP BY s.country
+----
+FRA [200.0, 50.0] 250
+GRC [80.0, 30.0] 110
+TUR [100.0, 75.0] 175
+
+# test_ordering_sensitive_aggregation3
+# When different aggregators have conflicting requirements, we cannot satisfy all of them in current implementation.
+# test below should raise Plan Error.
+query ??? rowsort
+SELECT ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+    ARRAY_AGG(s.amount ORDER BY s.amount ASC) AS amounts2,
+    ARRAY_AGG(s.amount ORDER BY s.sn ASC) AS amounts3
+  FROM sales_global AS s
+  GROUP BY s.country
+----
+[100.0, 75.0] [75.0, 100.0] [75.0, 100.0]
+[200.0, 50.0] [50.0, 200.0] [50.0, 200.0]
+[80.0, 30.0] [30.0, 80.0] [30.0, 80.0]
+
+# test_ordering_sensitive_aggregation4
+# If aggregators can work with bounded memory (Sorted or PartiallySorted mode), we should append requirement to
+# the existing ordering. This enables us to still work with bounded memory, and also satisfy aggregation requirement.
+# This test checks for whether we can satisfy aggregation requirement in Sorted mode.
+query TT
+EXPLAIN SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+        SUM(s.amount) AS sum1
+          FROM (SELECT *
+            FROM sales_global
+            ORDER BY country
+            LIMIT 10) AS s
+          GROUP BY s.country
+----
+logical_plan
+01)Projection: s.country, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST] AS amounts, sum(s.amount) AS sum1
+02)--Aggregate: groupBy=[[s.country]], aggr=[[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(CAST(s.amount AS Float64))]]
+03)----SubqueryAlias: s
+04)------Sort: sales_global.country ASC NULLS LAST, fetch=10
+05)--------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST]@1 as amounts, sum(s.amount)@2 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(s.amount)], ordering_mode=Sorted
+03)----SortExec: TopK(fetch=10), expr=[country@0 ASC NULLS LAST, amount@1 DESC], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+query T?R rowsort
+SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+  SUM(s.amount) AS sum1
+    FROM (SELECT *
+      FROM sales_global
+      ORDER BY country) AS s
+    GROUP BY s.country
+----
+FRA [200.0, 50.0] 250
+GRC [80.0, 30.0] 110
+TUR [100.0, 75.0] 175
+
+# test_ordering_sensitive_aggregation5
+# If aggregators can work with bounded memory (Sorted or PartiallySorted mode), we should be append requirement to
+# the existing ordering. This enables us to still work with bounded memory, and also satisfy aggregation requirement.
+# This test checks for whether we can satisfy aggregation requirement in PartiallySorted mode.
+query TT
+EXPLAIN SELECT s.country, s.zip_code, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+        SUM(s.amount) AS sum1
+          FROM (SELECT *
+            FROM sales_global
+            ORDER BY country
+            LIMIT 10) AS s
+          GROUP BY s.country, s.zip_code
+----
+logical_plan
+01)Projection: s.country, s.zip_code, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST] AS amounts, sum(s.amount) AS sum1
+02)--Aggregate: groupBy=[[s.country, s.zip_code]], aggr=[[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(CAST(s.amount AS Float64))]]
+03)----SubqueryAlias: s
+04)------Sort: sales_global.country ASC NULLS LAST, fetch=10
+05)--------TableScan: sales_global projection=[zip_code, country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, zip_code@1 as zip_code, array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST]@2 as amounts, sum(s.amount)@3 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@1 as country, zip_code@0 as zip_code], aggr=[array_agg(s.amount) ORDER BY [s.amount DESC NULLS FIRST], sum(s.amount)], ordering_mode=PartiallySorted([0])
+03)----SortExec: TopK(fetch=10), expr=[country@1 ASC NULLS LAST, amount@2 DESC], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TI?R rowsort
+SELECT s.country, s.zip_code, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+    SUM(s.amount) AS sum1
+      FROM (SELECT *
+        FROM sales_global
+        ORDER BY country) AS s
+      GROUP BY s.country, s.zip_code
+----
+FRA 1 [200.0, 50.0] 250
+GRC 0 [80.0, 30.0] 110
+TUR 1 [100.0, 75.0] 175
+
+# test_ordering_sensitive_aggregation6
+# If aggregators can work with bounded memory (FullySorted or PartiallySorted mode), we should be append requirement to
+# the existing ordering. When group by expressions contain aggregation requirement, we shouldn't append redundant expression.
+# Hence in the final plan SortExec should be SortExec: expr=[country@0 DESC] not SortExec: expr=[country@0 ASC NULLS LAST,country@0 DESC]
+query TT
+EXPLAIN SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.country DESC) AS amounts,
+        SUM(s.amount) AS sum1
+          FROM (SELECT *
+            FROM sales_global
+            ORDER BY country
+            LIMIT 10) AS s
+          GROUP BY s.country
+----
+logical_plan
+01)Projection: s.country, array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST] AS amounts, sum(s.amount) AS sum1
+02)--Aggregate: groupBy=[[s.country]], aggr=[[array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST], sum(CAST(s.amount AS Float64))]]
+03)----SubqueryAlias: s
+04)------Sort: sales_global.country ASC NULLS LAST, fetch=10
+05)--------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST]@1 as amounts, sum(s.amount)@2 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST], sum(s.amount)], ordering_mode=Sorted
+03)----SortExec: TopK(fetch=10), expr=[country@0 ASC NULLS LAST], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?R rowsort
+SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.amount DESC) AS amounts,
+  SUM(s.amount) AS sum1
+    FROM (SELECT *
+      FROM sales_global
+      ORDER BY country) AS s
+    GROUP BY s.country
+----
+FRA [200.0, 50.0] 250
+GRC [80.0, 30.0] 110
+TUR [100.0, 75.0] 175
+
+# test_ordering_sensitive_aggregation7
+# Lexicographical ordering requirement can be given as
+# argument to the aggregate functions
+query TT
+EXPLAIN SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.country DESC, s.amount DESC) AS amounts,
+        SUM(s.amount) AS sum1
+          FROM (SELECT *
+            FROM sales_global
+            ORDER BY country
+            LIMIT 10) AS s
+          GROUP BY s.country
+----
+logical_plan
+01)Projection: s.country, array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST, s.amount DESC NULLS FIRST] AS amounts, sum(s.amount) AS sum1
+02)--Aggregate: groupBy=[[s.country]], aggr=[[array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST, s.amount DESC NULLS FIRST], sum(CAST(s.amount AS Float64))]]
+03)----SubqueryAlias: s
+04)------Sort: sales_global.country ASC NULLS LAST, fetch=10
+05)--------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST, s.amount DESC NULLS FIRST]@1 as amounts, sum(s.amount)@2 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(s.amount) ORDER BY [s.country DESC NULLS FIRST, s.amount DESC NULLS FIRST], sum(s.amount)], ordering_mode=Sorted
+03)----SortExec: TopK(fetch=10), expr=[country@0 ASC NULLS LAST, amount@1 DESC], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+query T?R rowsort
+SELECT s.country, ARRAY_AGG(s.amount ORDER BY s.country DESC, s.amount DESC) AS amounts,
+  SUM(s.amount) AS sum1
+    FROM (SELECT *
+      FROM sales_global
+      ORDER BY country) AS s
+    GROUP BY s.country
+----
+FRA [200.0, 50.0] 250
+GRC [80.0, 30.0] 110
+TUR [100.0, 75.0] 175
+
+# test_reverse_aggregate_expr
+# Some of the Aggregators can be reversed, by this way we can still run aggregators without re-ordering
+# that have contradictory requirements at first glance.
+
+statement ok
+CREATE TABLE null_group (
+          a INT, b INT, c INT, d INT
+) as VALUES
+  (6, 6, null, null),
+  (6, 6, 1, null),
+  (6, 6, null, 1)
+
+query III rowsort
+select c, d, first_value(a order by b) from null_group group by c, d;
+----
+1 NULL 6
+NULL 1 6
+NULL NULL 6
+
+
+
+statement ok
+CREATE TABLE first_null (
+          k INT,
+          val INT,
+          o int
+        ) as VALUES
+          (0, NULL, -9),
+          (0, 1, 1),
+          (1, 1, 1);
+
+query II rowsort
+select k, first_value(val order by o) IGNORE NULLS from first_null group by k;
+----
+0 1
+1 1
+
+query II rowsort
+select k, first_value(val order by o) respect NULLS from first_null group by k;
+----
+0 NULL
+1 1
+
+
+statement ok
+CREATE TABLE last_null (
+          k INT,
+          val INT,
+          o int
+        ) as VALUES
+          (0, NULL, 9),
+          (0, 1, 1),
+          (1, 1, 1);
+
+query II rowsort
+select k, last_value(val order by o) IGNORE NULLS from last_null group by k;
+----
+0 1
+1 1
+
+query II rowsort
+select k, last_value(val order by o) respect NULLS from last_null group by k;
+----
+0 NULL
+1 1
+
+
+query TT
+EXPLAIN SELECT country, ARRAY_AGG(amount ORDER BY amount DESC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS fv2
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@1 as amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@2 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@3 as fv2]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]
+03)----SortExec: expr=[amount@1 DESC], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?RR rowsort
+SELECT country, ARRAY_AGG(amount ORDER BY amount DESC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+----
+FRA [200.0, 50.0] 50 50
+GRC [80.0, 30.0] 30 30
+TUR [100.0, 75.0] 75 75
+
+# test_reverse_aggregate_expr2
+# Some of the Aggregators can be reversed, by this way we can still run aggregators without re-ordering
+# that have contradictory requirements at first glance.
+query TT
+EXPLAIN SELECT country, ARRAY_AGG(amount ORDER BY amount ASC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS fv2
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@1 as amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@2 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@3 as fv2]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+03)----SortExec: expr=[amount@1 ASC NULLS LAST], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?RR
+SELECT country, ARRAY_AGG(amount ORDER BY amount ASC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+----
+GRC [30.0, 80.0] 30 30
+FRA [50.0, 200.0] 50 50
+TUR [75.0, 100.0] 75 75
+
+# test_reverse_aggregate_expr3
+# Some of the Aggregators can be reversed, by this way we can still run aggregators without re-ordering
+# that have contradictory requirements at first glance. This algorithm shouldn't depend
+# on the order of the aggregation expressions.
+query TT
+EXPLAIN SELECT country, FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2,
+  ARRAY_AGG(amount ORDER BY amount ASC) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS fv2, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS amounts
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[country, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@1 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@2 as fv2, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@3 as amounts]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+03)----SortExec: expr=[amount@1 ASC NULLS LAST], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TRR?
+SELECT country, FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2,
+  ARRAY_AGG(amount ORDER BY amount ASC) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+GRC 30 30 [30.0, 80.0]
+FRA 50 50 [50.0, 200.0]
+TUR 75 75 [75.0, 100.0]
+
+# test_reverse_aggregate_expr4
+# Ordering requirement by the ordering insensitive aggregators shouldn't have effect on
+# final plan. Hence seemingly conflicting requirements by SUM and ARRAY_AGG shouldn't raise error.
+query TT
+EXPLAIN SELECT country, SUM(amount ORDER BY ts DESC) AS sum1,
+  ARRAY_AGG(amount ORDER BY amount ASC) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS sum1, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS amounts
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[sum(CAST(sales_global.amount AS Float64)) ORDER BY [sales_global.ts DESC NULLS FIRST], array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[country, ts, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@1 as sum1, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@2 as amounts]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+03)----SortExec: expr=[amount@2 ASC NULLS LAST], preserve_partitioning=[false]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TR?
+SELECT country, SUM(amount ORDER BY ts DESC) AS sum1,
+  ARRAY_AGG(amount ORDER BY amount ASC) AS amounts
+  FROM sales_global
+  GROUP BY country
+----
+GRC 110 [30.0, 80.0]
+FRA 250 [50.0, 200.0]
+TUR 175 [75.0, 100.0]
+
+# test_reverse_aggregate_expr5
+# If all of the ordering sensitive aggregation functions are reversible
+# we should be able to reverse requirements, if this helps to remove a SortExec.
+# Hence in query below, FIRST_VALUE, and LAST_VALUE should be reversed to calculate its result according to `ts ASC` ordering.
+# Please note that after `ts ASC` ordering because of inner query. There is no SortExec in the final plan.
+query TT
+EXPLAIN SELECT country, FIRST_VALUE(amount ORDER BY ts DESC) as fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) as lv1,
+  SUM(amount ORDER BY ts DESC) as sum1
+  FROM (SELECT *
+    FROM sales_global
+    ORDER BY ts ASC)
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS lv1, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS sum1
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], sum(CAST(sales_global.amount AS Float64)) ORDER BY [sales_global.ts DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[country, ts, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@1 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@2 as lv1, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@3 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+03)----DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TRRR rowsort
+SELECT country, FIRST_VALUE(amount ORDER BY ts DESC) as fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) as lv1,
+  SUM(amount ORDER BY ts DESC) as sum1
+  FROM (SELECT *
+    FROM sales_global
+    ORDER BY ts ASC)
+  GROUP BY country
+----
+FRA 200 50 250
+GRC 80 30 110
+TUR 100 75 175
+
+# If existing ordering doesn't satisfy requirement, we should do calculations
+# on naive requirement (by convention, otherwise the final plan will be unintuitive),
+# even if reverse ordering is possible.
+# hence, below query should add `SortExec(ts DESC)` to the final plan.
+query TT
+EXPLAIN SELECT country, FIRST_VALUE(amount ORDER BY ts DESC) as fv1,
+    LAST_VALUE(amount ORDER BY ts DESC) as lv1,
+    SUM(amount ORDER BY ts DESC) as sum1
+  FROM sales_global
+  GROUP BY country
+----
+logical_plan
+01)Projection: sales_global.country, first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS lv1, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS sum1
+02)--Aggregate: groupBy=[[sales_global.country]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], sum(CAST(sales_global.amount AS Float64)) ORDER BY [sales_global.ts DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[country, ts, amount]
+physical_plan
+01)ProjectionExec: expr=[country@0 as country, first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@1 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@2 as lv1, sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@3 as sum1]
+02)--AggregateExec: mode=Single, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST], sum(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+03)----DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TRRR rowsort
+SELECT country, FIRST_VALUE(amount ORDER BY ts DESC) as fv1,
+    LAST_VALUE(amount ORDER BY ts DESC) as lv1,
+    SUM(amount ORDER BY ts DESC) as sum1
+  FROM sales_global
+  GROUP BY country
+----
+FRA 200 50 250
+GRC 80 30 110
+TUR 100 75 175
+
+query TT
+EXPLAIN SELECT s.zip_code, s.country, s.sn, s.ts, s.currency, LAST_VALUE(e.amount ORDER BY e.sn) AS last_rate
+FROM sales_global AS s
+JOIN sales_global AS e
+  ON s.currency = e.currency AND
+  s.ts >= e.ts
+GROUP BY s.sn, s.zip_code, s.country, s.ts, s.currency
+ORDER BY s.sn
+----
+logical_plan
+01)Sort: s.sn ASC NULLS LAST
+02)--Projection: s.zip_code, s.country, s.sn, s.ts, s.currency, last_value(e.amount) ORDER BY [e.sn ASC NULLS LAST] AS last_rate
+03)----Aggregate: groupBy=[[s.sn, s.zip_code, s.country, s.ts, s.currency]], aggr=[[last_value(e.amount) ORDER BY [e.sn ASC NULLS LAST]]]
+04)------Projection: s.zip_code, s.country, s.sn, s.ts, s.currency, e.sn, e.amount
+05)--------Inner Join: s.currency = e.currency Filter: s.ts >= e.ts
+06)----------SubqueryAlias: s
+07)------------TableScan: sales_global projection=[zip_code, country, sn, ts, currency]
+08)----------SubqueryAlias: e
+09)------------TableScan: sales_global projection=[sn, ts, currency, amount]
+physical_plan
+01)ProjectionExec: expr=[zip_code@1 as zip_code, country@2 as country, sn@0 as sn, ts@3 as ts, currency@4 as currency, last_value(e.amount) ORDER BY [e.sn ASC NULLS LAST]@5 as last_rate]
+02)--SortExec: expr=[sn@0 ASC NULLS LAST], preserve_partitioning=[false]
+03)----AggregateExec: mode=Single, gby=[sn@2 as sn, zip_code@0 as zip_code, country@1 as country, ts@3 as ts, currency@4 as currency], aggr=[last_value(e.amount) ORDER BY [e.sn ASC NULLS LAST]]
+04)------HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(currency@2, currency@4)], filter=ts@0 >= ts@1, projection=[zip_code@4, country@5, sn@6, ts@7, currency@8, sn@0, amount@3]
+05)--------DataSourceExec: partitions=1, partition_sizes=[1]
+06)--------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query ITIPTR rowsort
+SELECT s.zip_code, s.country, s.sn, s.ts, s.currency, LAST_VALUE(e.amount ORDER BY e.sn) AS last_rate
+FROM sales_global AS s
+JOIN sales_global AS e
+  ON s.currency = e.currency AND
+  s.ts >= e.ts
+GROUP BY s.sn, s.zip_code, s.country, s.ts, s.currency
+ORDER BY s.sn
+----
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 4 2022-01-03T10:00:00 EUR 80
+1 FRA 1 2022-01-01T08:00:00 EUR 50
+1 FRA 3 2022-01-02T12:00:00 EUR 200
+1 TUR 2 2022-01-01T11:30:00 TRY 75
+1 TUR 4 2022-01-03T10:00:00 TRY 100
+
+# Run order-sensitive aggregators in multiple partitions
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+# order-sensitive FIRST_VALUE and LAST_VALUE aggregators should work in
+# multi-partitions without group by also.
+query TT
+EXPLAIN SELECT country, FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts ASC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+logical_plan
+01)Sort: sales_global.country ASC NULLS LAST
+02)--Projection: sales_global.country, first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv2
+03)----Aggregate: groupBy=[[sales_global.country]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]]
+04)------TableScan: sales_global projection=[country, ts, amount]
+physical_plan
+01)SortPreservingMergeExec: [country@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[country@0 as country, first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@1 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@2 as fv2]
+03)----SortExec: expr=[country@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+05)--------RepartitionExec: partitioning=Hash([country@0], 8), input_partitions=1
+06)----------AggregateExec: mode=Partial, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TRR
+SELECT country, FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts ASC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+FRA 50 200
+GRC 30 80
+TUR 75 100
+
+# Conversion in between FIRST_VALUE and LAST_VALUE to resolve
+# contradictory requirements should work in multi partitions.
+query TT
+EXPLAIN SELECT country, FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+logical_plan
+01)Sort: sales_global.country ASC NULLS LAST
+02)--Projection: sales_global.country, first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS fv2
+03)----Aggregate: groupBy=[[sales_global.country]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]]
+04)------TableScan: sales_global projection=[country, ts, amount]
+physical_plan
+01)SortPreservingMergeExec: [country@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[country@0 as country, first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@1 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@2 as fv2]
+03)----SortExec: expr=[country@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+05)--------RepartitionExec: partitioning=Hash([country@0], 8), input_partitions=1
+06)----------AggregateExec: mode=Partial, gby=[country@0 as country], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+query TRR
+SELECT country, FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+FRA 50 50
+GRC 30 30
+TUR 75 75
+
+# make sure that batch size is small. So that query below runs in multi partitions
+# row number of the sales_global is 5. Hence we choose batch size 4 to make is smaller.
+statement ok
+set datafusion.execution.batch_size = 4;
+
+# order-sensitive FIRST_VALUE and LAST_VALUE aggregators should work in
+# multi-partitions without group by also.
+query TT
+EXPLAIN SELECT FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts ASC) AS fv2
+  FROM sales_global
+----
+logical_plan
+01)Projection: first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv2
+02)--Aggregate: groupBy=[[]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[ts, amount]
+physical_plan
+01)ProjectionExec: expr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@0 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@1 as fv2]
+02)--AggregateExec: mode=Final, gby=[], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+06)----------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query RR
+SELECT FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts ASC) AS fv2
+  FROM sales_global
+----
+30 80
+
+# Conversion in between FIRST_VALUE and LAST_VALUE to resolve
+# contradictory requirements should work in multi partitions.
+query TT
+EXPLAIN SELECT FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) AS fv2
+  FROM sales_global
+----
+logical_plan
+01)Projection: first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS fv2
+02)--Aggregate: groupBy=[[]], aggr=[[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[ts, amount]
+physical_plan
+01)ProjectionExec: expr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@0 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@1 as fv2]
+02)--AggregateExec: mode=Final, gby=[], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[first_value(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+06)----------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query RR
+SELECT FIRST_VALUE(amount ORDER BY ts ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY ts DESC) AS fv2
+  FROM sales_global
+----
+30 30
+
+# ARRAY_AGG should work in multiple partitions
+query TT
+EXPLAIN SELECT ARRAY_AGG(amount ORDER BY ts ASC) AS array_agg1
+  FROM sales_global
+----
+logical_plan
+01)Projection: array_agg(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST] AS array_agg1
+02)--Aggregate: groupBy=[[]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[ts, amount]
+physical_plan
+01)ProjectionExec: expr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]@0 as array_agg1]
+02)--AggregateExec: mode=Final, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts ASC NULLS LAST]]
+05)--------SortExec: expr=[ts@0 ASC NULLS LAST], preserve_partitioning=[true]
+06)----------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query ?
+SELECT ARRAY_AGG(amount ORDER BY ts ASC) AS array_agg1
+  FROM sales_global
+----
+[30.0, 50.0, 75.0, 200.0, 100.0, 80.0]
+
+# ARRAY_AGG should work in multiple partitions
+query TT
+EXPLAIN SELECT ARRAY_AGG(amount ORDER BY ts DESC) AS array_agg1
+  FROM sales_global
+----
+logical_plan
+01)Projection: array_agg(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST] AS array_agg1
+02)--Aggregate: groupBy=[[]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]]
+03)----TableScan: sales_global projection=[ts, amount]
+physical_plan
+01)ProjectionExec: expr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]@0 as array_agg1]
+02)--AggregateExec: mode=Final, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.ts DESC NULLS FIRST]]
+05)--------SortExec: expr=[ts@0 DESC], preserve_partitioning=[true]
+06)----------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query ?
+SELECT ARRAY_AGG(amount ORDER BY ts DESC) AS array_agg1
+  FROM sales_global
+----
+[100.0, 80.0, 200.0, 75.0, 50.0, 30.0]
+
+# ARRAY_AGG should work in multiple partitions
+query TT
+EXPLAIN SELECT ARRAY_AGG(amount ORDER BY amount ASC) AS array_agg1
+  FROM sales_global
+----
+logical_plan
+01)Projection: array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS array_agg1
+02)--Aggregate: groupBy=[[]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]]
+03)----TableScan: sales_global projection=[amount]
+physical_plan
+01)ProjectionExec: expr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@0 as array_agg1]
+02)--AggregateExec: mode=Final, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+05)--------SortExec: expr=[amount@0 ASC NULLS LAST], preserve_partitioning=[true]
+06)----------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+07)------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query ?
+SELECT ARRAY_AGG(amount ORDER BY amount ASC) AS array_agg1
+  FROM sales_global
+----
+[30.0, 50.0, 75.0, 80.0, 100.0, 200.0]
+
+# ARRAY_AGG should work in multiple partitions
+query TT
+EXPLAIN SELECT country, ARRAY_AGG(amount ORDER BY amount ASC) AS array_agg1
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+logical_plan
+01)Sort: sales_global.country ASC NULLS LAST
+02)--Projection: sales_global.country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS array_agg1
+03)----Aggregate: groupBy=[[sales_global.country]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]]
+04)------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)SortPreservingMergeExec: [country@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[country@0 as country, array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@1 as array_agg1]
+03)----SortExec: expr=[country@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+05)--------RepartitionExec: partitioning=Hash([country@0], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]]
+07)------------SortExec: expr=[amount@1 ASC NULLS LAST], preserve_partitioning=[true]
+08)--------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+09)----------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?
+SELECT country, ARRAY_AGG(amount ORDER BY amount ASC) AS array_agg1
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+FRA [50.0, 200.0]
+GRC [30.0, 80.0]
+TUR [75.0, 100.0]
+
+# ARRAY_AGG, FIRST_VALUE, LAST_VALUE should work in multiple partitions
+query TT
+EXPLAIN SELECT country, ARRAY_AGG(amount ORDER BY amount DESC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+logical_plan
+01)Sort: sales_global.country ASC NULLS LAST
+02)--Projection: sales_global.country, array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST] AS fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST] AS fv2
+03)----Aggregate: groupBy=[[sales_global.country]], aggr=[[array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]]
+04)------TableScan: sales_global projection=[country, amount]
+physical_plan
+01)SortPreservingMergeExec: [country@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[country@0 as country, array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@1 as amounts, first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST]@2 as fv1, last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]@3 as fv2]
+03)----SortExec: expr=[country@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], first_value(sales_global.amount) ORDER BY [sales_global.amount ASC NULLS LAST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]
+05)--------RepartitionExec: partitioning=Hash([country@0], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[country@0 as country], aggr=[array_agg(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST], last_value(sales_global.amount) ORDER BY [sales_global.amount DESC NULLS FIRST]]
+07)------------SortExec: expr=[amount@1 DESC], preserve_partitioning=[true]
+08)--------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+09)----------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query T?RR
+SELECT country, ARRAY_AGG(amount ORDER BY amount DESC) AS amounts,
+  FIRST_VALUE(amount ORDER BY amount ASC) AS fv1,
+  LAST_VALUE(amount ORDER BY amount DESC) AS fv2
+  FROM sales_global
+  GROUP BY country
+  ORDER BY country
+----
+FRA [200.0, 50.0] 50 50
+GRC [80.0, 30.0] 30 30
+TUR [100.0, 75.0] 75 75
+
+# make sure that query below runs in multi partitions
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+query ?
+SELECT ARRAY_AGG(e.rate ORDER BY e.sn)
+FROM sales_global AS s
+JOIN exchange_rates AS e
+ON s.currency = e.currency_from AND
+   e.currency_to = 'USD' AND
+   s.ts >= e.ts
+GROUP BY s.sn
+ORDER BY s.sn;
+----
+[1.10]
+[1.10]
+[0.10]
+[1.10, 1.12]
+[1.10, 0.10, 1.12, 0.11, 1.12]
+
+
+query I
+SELECT FIRST_VALUE(C order by c ASC) as first_c
+FROM multiple_ordered_table
+GROUP BY d
+ORDER BY first_c
+----
+0
+1
+4
+9
+15
+
+query ITIPTR rowsort
+SELECT s.zip_code, s.country, s.sn, s.ts, s.currency, LAST_VALUE(e.amount ORDER BY e.sn) AS last_rate
+FROM sales_global AS s
+JOIN sales_global AS e
+  ON s.currency = e.currency AND
+  s.ts >= e.ts
+GROUP BY s.sn, s.zip_code, s.country, s.ts, s.currency
+ORDER BY s.sn, s.zip_code
+----
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 4 2022-01-03T10:00:00 EUR 80
+1 FRA 1 2022-01-01T08:00:00 EUR 50
+1 FRA 3 2022-01-02T12:00:00 EUR 200
+1 TUR 2 2022-01-01T11:30:00 TRY 75
+1 TUR 4 2022-01-03T10:00:00 TRY 100
+
+# create a table for testing
+statement ok
+CREATE TABLE sales_global_with_pk (zip_code INT,
+          country VARCHAR(3),
+          sn INT,
+          ts TIMESTAMP,
+          currency VARCHAR(3),
+          amount FLOAT,
+          primary key(sn)
+        ) as VALUES
+          (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+          (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+          (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+          (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+          (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# create a table for testing, with primary key alternate syntax
+statement ok
+CREATE TABLE sales_global_with_pk_alternate (zip_code INT,
+          country VARCHAR(3),
+          sn INT primary key,
+          ts TIMESTAMP,
+          currency VARCHAR(3),
+          amount FLOAT
+        ) as VALUES
+          (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+          (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+          (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+          (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+          (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# we do not currently support foreign key constraints.
+statement error DataFusion error: Error during planning: Foreign key constraints are not currently supported
+CREATE TABLE sales_global_with_foreign_key (zip_code INT,
+  country VARCHAR(3),
+  sn INT references sales_global_with_pk_alternate(sn),
+  ts TIMESTAMP,
+  currency VARCHAR(3),
+  amount FLOAT
+) as VALUES
+  (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+  (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+  (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+  (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+  (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# we do not currently support foreign key
+statement error DataFusion error: Error during planning: Foreign key constraints are not currently supported
+CREATE TABLE sales_global_with_foreign_key (zip_code INT,
+  country VARCHAR(3),
+  sn INT REFERENCES sales_global_with_pk_alternate(sn),
+  ts TIMESTAMP,
+  currency VARCHAR(3),
+  amount FLOAT
+) as VALUES
+  (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+  (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+  (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+  (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+  (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# we do not currently support foreign key
+# foreign key can be defined with a different syntax.
+# we should get the same error.
+statement error DataFusion error: Error during planning: Foreign key constraints are not currently supported
+CREATE TABLE sales_global_with_foreign_key (zip_code INT,
+  country VARCHAR(3),
+  sn INT,
+  ts TIMESTAMP,
+  currency VARCHAR(3),
+  amount FLOAT,
+  FOREIGN KEY (sn)
+  REFERENCES sales_global_with_pk_alternate(sn)
+) as VALUES
+  (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+  (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+  (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+  (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+  (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# create a table for testing, where primary key is composite
+statement ok
+CREATE TABLE sales_global_with_composite_pk (zip_code INT,
+          country VARCHAR(3),
+          sn INT,
+          ts TIMESTAMP,
+          currency VARCHAR(3),
+          amount FLOAT,
+          primary key(sn, ts)
+        ) as VALUES
+          (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+          (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+          (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+          (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+          (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# create a table for testing, where sn is unique key
+statement ok
+CREATE TABLE sales_global_with_unique (zip_code INT,
+          country VARCHAR(3),
+          sn INT,
+          ts TIMESTAMP,
+          currency VARCHAR(3),
+          amount FLOAT,
+          unique(sn)
+        ) as VALUES
+          (0, 'GRC', 0, '2022-01-01 06:00:00'::timestamp, 'EUR', 30.0),
+          (1, 'FRA', 1, '2022-01-01 08:00:00'::timestamp, 'EUR', 50.0),
+          (1, 'TUR', 2, '2022-01-01 11:30:00'::timestamp, 'TRY', 75.0),
+          (1, 'FRA', 3, '2022-01-02 12:00:00'::timestamp, 'EUR', 200.0),
+          (1, 'TUR', 4, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0),
+          (1, 'TUR', NULL, '2022-01-03 10:00:00'::timestamp, 'TRY', 100.0)
+
+# when group by contains primary key expression
+# we can use all the expressions in the table during selection
+# (not just group by expressions + aggregation result)
+query TT
+EXPLAIN SELECT s.sn, s.amount, 2*s.sn
+  FROM sales_global_with_pk AS s
+  GROUP BY sn
+  ORDER BY sn
+----
+logical_plan
+01)Sort: s.sn ASC NULLS LAST
+02)--Projection: s.sn, s.amount, Int64(2) * CAST(s.sn AS Int64)
+03)----Aggregate: groupBy=[[s.sn, s.amount]], aggr=[[]]
+04)------SubqueryAlias: s
+05)--------TableScan: sales_global_with_pk projection=[sn, amount]
+physical_plan
+01)SortPreservingMergeExec: [sn@0 ASC NULLS LAST]
+02)--SortExec: expr=[sn@0 ASC NULLS LAST], preserve_partitioning=[true]
+03)----ProjectionExec: expr=[sn@0 as sn, amount@1 as amount, 2 * CAST(sn@0 AS Int64) as Int64(2) * s.sn]
+04)------AggregateExec: mode=FinalPartitioned, gby=[sn@0 as sn, amount@1 as amount], aggr=[]
+05)--------RepartitionExec: partitioning=Hash([sn@0, amount@1], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[sn@0 as sn, amount@1 as amount], aggr=[]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+08)--------------DataSourceExec: partitions=1, partition_sizes=[2]
+
+query IRI
+SELECT s.sn, s.amount, 2*s.sn
+  FROM sales_global_with_pk AS s
+  GROUP BY sn
+  ORDER BY sn
+----
+0 30 0
+1 50 2
+2 75 4
+3 200 6
+4 100 8
+
+# we should be able to re-write group by expression
+# using functional dependencies for complex expressions also.
+# In this case, we use 2*s.amount instead of s.amount.
+query IRI
+SELECT s.sn, 2*s.amount, 2*s.sn
+  FROM sales_global_with_pk AS s
+  GROUP BY sn
+  ORDER BY sn
+----
+0 60 0
+1 100 2
+2 150 4
+3 400 6
+4 200 8
+
+query IRI
+SELECT s.sn, s.amount, 2*s.sn
+  FROM sales_global_with_pk_alternate AS s
+  GROUP BY sn
+  ORDER BY sn
+----
+0 30 0
+1 50 2
+2 75 4
+3 200 6
+4 100 8
+
+# Join should propagate primary key successfully
+query TT
+EXPLAIN SELECT r.sn, SUM(l.amount), r.amount
+  FROM sales_global_with_pk AS l
+  JOIN sales_global_with_pk AS r
+  ON l.sn >= r.sn
+  GROUP BY r.sn
+  ORDER BY r.sn
+----
+logical_plan
+01)Sort: r.sn ASC NULLS LAST
+02)--Projection: r.sn, sum(l.amount), r.amount
+03)----Aggregate: groupBy=[[r.sn, r.amount]], aggr=[[sum(CAST(l.amount AS Float64))]]
+04)------Projection: l.amount, r.sn, r.amount
+05)--------Inner Join:  Filter: l.sn >= r.sn
+06)----------SubqueryAlias: l
+07)------------TableScan: sales_global_with_pk projection=[sn, amount]
+08)----------SubqueryAlias: r
+09)------------TableScan: sales_global_with_pk projection=[sn, amount]
+physical_plan
+01)SortPreservingMergeExec: [sn@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[sn@0 as sn, sum(l.amount)@2 as sum(l.amount), amount@1 as amount]
+03)----SortExec: expr=[sn@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[sn@0 as sn, amount@1 as amount], aggr=[sum(l.amount)]
+05)--------RepartitionExec: partitioning=Hash([sn@0, amount@1], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[sn@1 as sn, amount@2 as amount], aggr=[sum(l.amount)]
+07)------------NestedLoopJoinExec: join_type=Inner, filter=sn@0 >= sn@1, projection=[amount@1, sn@2, amount@3]
+08)--------------DataSourceExec: partitions=1, partition_sizes=[2]
+09)--------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+10)----------------DataSourceExec: partitions=1, partition_sizes=[2]
+
+query IRR
+SELECT r.sn, SUM(l.amount), r.amount
+  FROM sales_global_with_pk AS l
+  JOIN sales_global_with_pk AS r
+  ON l.sn >= r.sn
+  GROUP BY r.sn
+  ORDER BY r.sn
+----
+0 455 30
+1 425 50
+2 375 75
+3 300 200
+4 100 100
+
+# when primary key consists of composite columns
+# to associate it with other fields, aggregate should contain all the composite columns
+query IRR
+SELECT r.sn, SUM(l.amount), r.amount
+  FROM sales_global_with_composite_pk AS l
+  JOIN sales_global_with_composite_pk AS r
+  ON l.sn >= r.sn
+  GROUP BY r.sn, r.ts
+  ORDER BY r.sn
+----
+0 455 30
+1 425 50
+2 375 75
+3 300 200
+4 100 100
+
+# when primary key consists of composite columns
+# to associate it with other fields, aggregate should contain all the composite columns
+# if any of the composite column is missing, we cannot use associated indices, inside select expression
+# below query should fail
+statement error DataFusion error: Error during planning: Column in SELECT must be in GROUP BY or an aggregate function: While expanding wildcard, column "r\.amount" must appear in the GROUP BY clause or must be part of an aggregate function, currently only "r\.sn, sum\(l\.amount\)" appears in the SELECT clause satisfies this requirement
+SELECT r.sn, SUM(l.amount), r.amount
+  FROM sales_global_with_composite_pk AS l
+  JOIN sales_global_with_composite_pk AS r
+  ON l.sn >= r.sn
+  GROUP BY r.sn
+  ORDER BY r.sn
+
+# left join should propagate right side constraint,
+# if right side is a primary key (unique and doesn't contain null)
+query IRR
+SELECT r.sn, r.amount, SUM(r.amount)
+  FROM (SELECT *
+    FROM sales_global_with_pk as l
+    LEFT JOIN sales_global_with_pk as r
+    ON l.amount >= r.amount + 10)
+  GROUP BY r.sn
+ORDER BY r.sn
+----
+0 30 120
+1 50 150
+2 75 150
+4 100 100
+NULL NULL NULL
+
+# left join shouldn't propagate right side constraint,
+# if right side is a unique key (unique and can contain null)
+# Please note that, above query and this one is same except the constraint in the table.
+statement error DataFusion error: Error during planning: Column in SELECT must be in GROUP BY or an aggregate function: While expanding wildcard, column "r\.amount" must appear in the GROUP BY clause or must be part of an aggregate function, currently only "r\.sn, sum\(r\.amount\)" appears in the SELECT clause satisfies this requirement
+SELECT r.sn, r.amount, SUM(r.amount)
+  FROM (SELECT *
+    FROM sales_global_with_unique as l
+    LEFT JOIN sales_global_with_unique as r
+    ON l.amount >= r.amount + 10)
+  GROUP BY r.sn
+ORDER BY r.sn
+
+# left semi join should propagate constraint of left side as is.
+query IRR
+SELECT l.sn, l.amount, SUM(l.amount)
+  FROM (SELECT *
+    FROM sales_global_with_unique as l
+    LEFT SEMI JOIN sales_global_with_unique as r
+    ON l.amount >= r.amount + 10)
+  GROUP BY l.sn
+ORDER BY l.sn
+----
+1 50 50
+2 75 75
+3 200 200
+4 100 100
+NULL 100 100
+
+# Similarly, left anti join should propagate constraint of left side as is.
+query IRR
+SELECT l.sn, l.amount, SUM(l.amount)
+  FROM (SELECT *
+    FROM sales_global_with_unique as l
+    LEFT ANTI JOIN sales_global_with_unique as r
+    ON l.amount >= r.amount + 10)
+  GROUP BY l.sn
+ORDER BY l.sn
+----
+0 30 30
+
+# Should support grouping by list column
+query ?I
+SELECT column1, COUNT(*) as column2 FROM (VALUES (['a', 'b'], 1), (['c', 'd', 'e'], 2), (['a', 'b'], 3)) as values0 GROUP BY column1 ORDER BY column2;
+----
+[c, d, e] 1
+[a, b] 2
+
+
+# primary key should be aware from which columns it is associated
+statement error DataFusion error: Error during planning: Column in SELECT must be in GROUP BY or an aggregate function: While expanding wildcard, column "r\.sn" must appear in the GROUP BY clause or must be part of an aggregate function, currently only "l\.sn, l\.zip_code, l\.country, l\.ts, l\.currency, l\.amount, sum\(l\.amount\)" appears in the SELECT clause satisfies this requirement
+SELECT l.sn, r.sn, SUM(l.amount), r.amount
+  FROM sales_global_with_pk AS l
+  JOIN sales_global_with_pk AS r
+  ON l.sn >= r.sn
+  GROUP BY l.sn
+  ORDER BY l.sn
+
+# window should propagate primary key successfully
+query TT
+EXPLAIN SELECT *
+  FROM(SELECT *, SUM(l.amount) OVER(ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as sum_amount
+    FROM sales_global_with_pk AS l
+  ) as l
+  GROUP BY l.sn
+  ORDER BY l.sn
+----
+logical_plan
+01)Sort: l.sn ASC NULLS LAST
+02)--Projection: l.zip_code, l.country, l.sn, l.ts, l.currency, l.amount, l.sum_amount
+03)----Aggregate: groupBy=[[l.sn, l.zip_code, l.country, l.ts, l.currency, l.amount, l.sum_amount]], aggr=[[]]
+04)------SubqueryAlias: l
+05)--------Projection: l.zip_code, l.country, l.sn, l.ts, l.currency, l.amount, sum(l.amount) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING AS sum_amount
+06)----------WindowAggr: windowExpr=[[sum(CAST(l.amount AS Float64)) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING]]
+07)------------SubqueryAlias: l
+08)--------------TableScan: sales_global_with_pk projection=[zip_code, country, sn, ts, currency, amount]
+physical_plan
+01)SortPreservingMergeExec: [sn@2 ASC NULLS LAST]
+02)--ProjectionExec: expr=[zip_code@1 as zip_code, country@2 as country, sn@0 as sn, ts@3 as ts, currency@4 as currency, amount@5 as amount, sum_amount@6 as sum_amount]
+03)----SortExec: expr=[sn@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[sn@0 as sn, zip_code@1 as zip_code, country@2 as country, ts@3 as ts, currency@4 as currency, amount@5 as amount, sum_amount@6 as sum_amount], aggr=[]
+05)--------RepartitionExec: partitioning=Hash([sn@0, zip_code@1, country@2, ts@3, currency@4, amount@5, sum_amount@6], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[sn@2 as sn, zip_code@0 as zip_code, country@1 as country, ts@3 as ts, currency@4 as currency, amount@5 as amount, sum_amount@6 as sum_amount], aggr=[]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+08)--------------ProjectionExec: expr=[zip_code@0 as zip_code, country@1 as country, sn@2 as sn, ts@3 as ts, currency@4 as currency, amount@5 as amount, sum(l.amount) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING@6 as sum_amount]
+09)----------------BoundedWindowAggExec: wdw=[sum(l.amount) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING: Field { "sum(l.amount) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING": nullable Float64 }, frame: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING], mode=[Sorted]
+10)------------------DataSourceExec: partitions=1, partition_sizes=[2]
+
+
+query ITIPTRR
+SELECT *
+  FROM(SELECT *, SUM(l.amount) OVER(ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) as sum_amount
+    FROM sales_global_with_pk AS l
+  ) as l
+  GROUP BY l.sn
+  ORDER BY l.sn
+----
+0 GRC 0 2022-01-01T06:00:00 EUR 30 80
+1 FRA 1 2022-01-01T08:00:00 EUR 50 155
+1 TUR 2 2022-01-01T11:30:00 TRY 75 325
+1 FRA 3 2022-01-02T12:00:00 EUR 200 375
+1 TUR 4 2022-01-03T10:00:00 TRY 100 300
+
+# join should propagate primary key correctly
+query IRP
+SELECT l.sn, SUM(l.amount), l.ts
+FROM
+  (SELECT *
+  FROM sales_global_with_pk AS l
+  JOIN sales_global_with_pk AS r ON l.sn >= r.sn)
+GROUP BY l.sn
+ORDER BY l.sn
+----
+0 30 2022-01-01T06:00:00
+1 100 2022-01-01T08:00:00
+2 225 2022-01-01T11:30:00
+3 800 2022-01-02T12:00:00
+4 500 2022-01-03T10:00:00
+
+# Projection propagates primary keys correctly
+# (we can use r.ts at the final projection, because it
+# is associated with primary key r.sn)
+query IRP
+SELECT r.sn, SUM(r.amount), r.ts
+FROM
+  (SELECT r.ts, r.sn, r.amount
+   FROM
+     (SELECT *
+      FROM sales_global_with_pk AS l
+      JOIN sales_global_with_pk AS r ON l.sn >= r.sn))
+GROUP BY r.sn
+ORDER BY r.sn
+----
+0 150 2022-01-01T06:00:00
+1 200 2022-01-01T08:00:00
+2 225 2022-01-01T11:30:00
+3 400 2022-01-02T12:00:00
+4 100 2022-01-03T10:00:00
+
+# after join, new window expressions shouldn't be associated with primary keys
+statement error DataFusion error: Error during planning: Column in SELECT must be in GROUP BY or an aggregate function: While expanding wildcard, column "rn1" must appear in the GROUP BY clause or must be part of an aggregate function, currently only "r\.sn, r\.ts, r\.amount, sum\(r\.amount\)" appears in the SELECT clause satisfies this requirement
+SELECT r.sn, SUM(r.amount), rn1
+FROM
+  (SELECT r.ts, r.sn, r.amount,
+          ROW_NUMBER() OVER() AS rn1
+   FROM
+     (SELECT *
+      FROM sales_global_with_pk AS l
+      JOIN sales_global_with_pk AS r ON l.sn >= r.sn))
+GROUP BY r.sn
+
+# aggregate should propagate primary key successfully
+query IPR
+SELECT sn, ts, sum1
+FROM (
+  SELECT ts, sn, SUM(amount) as sum1
+  FROM sales_global_with_pk
+  GROUP BY sn)
+GROUP BY sn
+ORDER BY sn
+----
+0 2022-01-01T06:00:00 30
+1 2022-01-01T08:00:00 50
+2 2022-01-01T11:30:00 75
+3 2022-01-02T12:00:00 200
+4 2022-01-03T10:00:00 100
+
+# aggregate should be able to introduce functional dependence
+# (when group by contains single expression, group by expression
+# becomes determinant, after aggregation; since we are sure that
+# it will consist of unique values.)
+# please note that ts is not primary key, still
+# we can use sum1, after outer aggregation because
+# after inner aggregation, ts becomes determinant
+# of functional dependence.
+query PR
+SELECT ts, sum1
+FROM (
+  SELECT ts, SUM(amount) as sum1
+  FROM sales_global_with_pk
+  GROUP BY ts)
+GROUP BY ts
+ORDER BY ts
+----
+2022-01-01T06:00:00 30
+2022-01-01T08:00:00 50
+2022-01-01T11:30:00 75
+2022-01-02T12:00:00 200
+2022-01-03T10:00:00 100
+
+# aggregate should update its functional dependence
+# mode, if it is guaranteed that, after aggregation
+# group by expressions will be unique.
+query IRI
+SELECT *
+FROM (
+  SELECT *, ROW_NUMBER() OVER(ORDER BY l.sn) AS rn1
+  FROM (
+    SELECT l.sn, SUM(l.amount)
+    FROM (
+      SELECT l.sn, l.amount, SUM(l.amount) as sum1
+      FROM
+        (SELECT *
+        FROM sales_global_with_pk AS l
+        JOIN sales_global_with_pk AS r ON l.sn >= r.sn)
+      GROUP BY l.sn)
+    GROUP BY l.sn)
+  )
+GROUP BY l.sn
+ORDER BY l.sn
+----
+0 30 1
+1 50 2
+2 75 3
+3 200 4
+4 100 5
+
+# create a table
+statement ok
+CREATE TABLE FOO (x int, y int) AS VALUES (1, 2), (2, 3), (1, 3);
+
+# make sure that query runs in multi partitions
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+query I
+SELECT LAST_VALUE(x)
+FROM FOO;
+----
+1
+
+query II
+SELECT x, LAST_VALUE(x)
+FROM FOO
+GROUP BY x
+ORDER BY x;
+----
+1 1
+2 2
+
+query II
+SELECT y, LAST_VALUE(x order by x desc)
+FROM FOO
+GROUP BY y
+ORDER BY y;
+----
+2 1
+3 1
+
+# Make sure to choose a batch size smaller than, row number of the table.
+# In this case we choose 2 (Row number of the table is 3).
+# otherwise we won't see parallelism in tests.
+statement ok
+set datafusion.execution.batch_size = 2;
+
+# plan of the query above should contain partial
+# and final aggregation stages
+query TT
+EXPLAIN SELECT LAST_VALUE(x)
+  FROM FOO;
+----
+logical_plan
+01)Aggregate: groupBy=[[]], aggr=[[last_value(foo.x)]]
+02)--TableScan: foo projection=[x]
+physical_plan
+01)AggregateExec: mode=Final, gby=[], aggr=[last_value(foo.x)]
+02)--CoalescePartitionsExec
+03)----AggregateExec: mode=Partial, gby=[], aggr=[last_value(foo.x)]
+04)------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+05)--------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query I
+SELECT FIRST_VALUE(x)
+FROM FOO;
+----
+1
+
+# similarly plan of the above query should
+# contain partial and final aggregation stages.
+query TT
+EXPLAIN SELECT FIRST_VALUE(x)
+  FROM FOO;
+----
+logical_plan
+01)Aggregate: groupBy=[[]], aggr=[[first_value(foo.x)]]
+02)--TableScan: foo projection=[x]
+physical_plan
+01)AggregateExec: mode=Final, gby=[], aggr=[first_value(foo.x)]
+02)--CoalescePartitionsExec
+03)----AggregateExec: mode=Partial, gby=[], aggr=[first_value(foo.x)]
+04)------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+05)--------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# Since both ordering requirements are satisfied, there shouldn't be
+# any SortExec in the final plan.
+query TT
+EXPLAIN SELECT FIRST_VALUE(a ORDER BY a ASC) as first_a,
+  LAST_VALUE(c ORDER BY c DESC) as last_c
+FROM multiple_ordered_table
+GROUP BY d;
+----
+logical_plan
+01)Projection: first_value(multiple_ordered_table.a) ORDER BY [multiple_ordered_table.a ASC NULLS LAST] AS first_a, last_value(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST] AS last_c
+02)--Aggregate: groupBy=[[multiple_ordered_table.d]], aggr=[[first_value(multiple_ordered_table.a) ORDER BY [multiple_ordered_table.a ASC NULLS LAST], last_value(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST]]]
+03)----TableScan: multiple_ordered_table projection=[a, c, d]
+physical_plan
+01)ProjectionExec: expr=[first_value(multiple_ordered_table.a) ORDER BY [multiple_ordered_table.a ASC NULLS LAST]@1 as first_a, last_value(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST]@2 as last_c]
+02)--AggregateExec: mode=FinalPartitioned, gby=[d@0 as d], aggr=[first_value(multiple_ordered_table.a) ORDER BY [multiple_ordered_table.a ASC NULLS LAST], last_value(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST]]
+03)----RepartitionExec: partitioning=Hash([d@0], 8), input_partitions=8
+04)------AggregateExec: mode=Partial, gby=[d@2 as d], aggr=[first_value(multiple_ordered_table.a) ORDER BY [multiple_ordered_table.a ASC NULLS LAST], first_value(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c ASC NULLS LAST]]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+06)----------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, c, d], output_orderings=[[a@0 ASC NULLS LAST], [c@1 ASC NULLS LAST]], file_type=csv, has_header=true
+
+query II rowsort
+SELECT FIRST_VALUE(a ORDER BY a ASC) as first_a,
+  LAST_VALUE(c ORDER BY c DESC) as last_c
+FROM multiple_ordered_table
+GROUP BY d;
+----
+0 0
+0 1
+0 15
+0 4
+0 9
+
+query III rowsort
+SELECT d, FIRST_VALUE(c ORDER BY a DESC, c DESC) as first_a,
+  LAST_VALUE(c ORDER BY c DESC) as last_c
+FROM multiple_ordered_table
+GROUP BY d;
+----
+0 95 0
+1 90 4
+2 97 1
+3 99 15
+4 98 9
+
+query TT
+EXPLAIN SELECT c
+FROM multiple_ordered_table
+ORDER BY c ASC;
+----
+logical_plan
+01)Sort: multiple_ordered_table.c ASC NULLS LAST
+02)--TableScan: multiple_ordered_table projection=[c]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[c], output_ordering=[c@0 ASC NULLS LAST], file_type=csv, has_header=true
+
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+query TT
+EXPLAIN SELECT LAST_VALUE(l.d ORDER BY l.a) AS amount_usd
+FROM multiple_ordered_table AS l
+INNER JOIN (
+    SELECT *, ROW_NUMBER() OVER (ORDER BY r.a) as row_n FROM multiple_ordered_table AS r
+)
+ON l.d = r.d AND
+      l.a >= r.a - 10
+GROUP BY row_n
+ORDER BY row_n
+----
+logical_plan
+01)Projection: amount_usd
+02)--Sort: row_n ASC NULLS LAST
+03)----Projection: last_value(l.d) ORDER BY [l.a ASC NULLS LAST] AS amount_usd, row_n
+04)------Aggregate: groupBy=[[row_n]], aggr=[[last_value(l.d) ORDER BY [l.a ASC NULLS LAST]]]
+05)--------Projection: l.a, l.d, row_n
+06)----------Inner Join: l.d = r.d Filter: CAST(l.a AS Int64) >= CAST(r.a AS Int64) - Int64(10)
+07)------------SubqueryAlias: l
+08)--------------TableScan: multiple_ordered_table projection=[a, d]
+09)------------Projection: r.a, r.d, row_number() ORDER BY [r.a ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW AS row_n
+10)--------------WindowAggr: windowExpr=[[row_number() ORDER BY [r.a ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW]]
+11)----------------SubqueryAlias: r
+12)------------------TableScan: multiple_ordered_table projection=[a, d]
+physical_plan
+01)ProjectionExec: expr=[last_value(l.d) ORDER BY [l.a ASC NULLS LAST]@1 as amount_usd]
+02)--AggregateExec: mode=Single, gby=[row_n@2 as row_n], aggr=[last_value(l.d) ORDER BY [l.a ASC NULLS LAST]], ordering_mode=Sorted
+03)----HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(d@1, d@1)], filter=CAST(a@0 AS Int64) >= CAST(a@1 AS Int64) - 10, projection=[a@0, d@1, row_n@4]
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, d], output_ordering=[a@0 ASC NULLS LAST], file_type=csv, has_header=true
+05)------ProjectionExec: expr=[a@0 as a, d@1 as d, row_number() ORDER BY [r.a ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW@2 as row_n]
+06)--------BoundedWindowAggExec: wdw=[row_number() ORDER BY [r.a ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW: Field { "row_number() ORDER BY [r.a ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW": UInt64 }, frame: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW], mode=[Sorted]
+07)----------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, d], output_ordering=[a@0 ASC NULLS LAST], file_type=csv, has_header=true
+
+# reset partition number to 8.
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+# Create an external table with primary key
+# column c
+statement ok
+CREATE EXTERNAL TABLE multiple_ordered_table_with_pk (
+  a0 INTEGER,
+  a INTEGER,
+  b INTEGER,
+  c INTEGER,
+  d INTEGER,
+  primary key(c)
+)
+STORED AS CSV
+WITH ORDER (a ASC, b ASC)
+WITH ORDER (c ASC)
+LOCATION '../core/tests/data/window_2.csv'
+OPTIONS ('format.has_header' 'true');
+
+# We can use column b during selection
+# even if it is not among group by expressions
+# because column c is primary key.
+query TT
+EXPLAIN SELECT c, b, SUM(d)
+FROM multiple_ordered_table_with_pk
+GROUP BY c;
+----
+logical_plan
+01)Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+02)--TableScan: multiple_ordered_table_with_pk projection=[b, c, d]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[c@0 as c, b@1 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+02)--RepartitionExec: partitioning=Hash([c@0, b@1], 8), input_partitions=8, preserve_order=true, sort_exprs=c@0 ASC NULLS LAST
+03)----AggregateExec: mode=Partial, gby=[c@1 as c, b@0 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+04)------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[b, c, d], output_ordering=[c@1 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+# drop table multiple_ordered_table_with_pk
+statement ok
+drop table multiple_ordered_table_with_pk;
+
+# Create an external table with primary key
+# column c, in this case use alternative syntax
+# for defining primary key
+statement ok
+CREATE EXTERNAL TABLE multiple_ordered_table_with_pk (
+  a0 INTEGER,
+  a INTEGER,
+  b INTEGER,
+  c INTEGER primary key,
+  d INTEGER
+)
+STORED AS CSV
+WITH ORDER (a ASC, b ASC)
+WITH ORDER (c ASC)
+LOCATION '../core/tests/data/window_2.csv'
+OPTIONS ('format.has_header' 'true');
+
+# We can use column b during selection
+# even if it is not among group by expressions
+# because column c is primary key.
+query TT
+EXPLAIN SELECT c, b, SUM(d)
+FROM multiple_ordered_table_with_pk
+GROUP BY c;
+----
+logical_plan
+01)Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+02)--TableScan: multiple_ordered_table_with_pk projection=[b, c, d]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[c@0 as c, b@1 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+02)--RepartitionExec: partitioning=Hash([c@0, b@1], 8), input_partitions=8, preserve_order=true, sort_exprs=c@0 ASC NULLS LAST
+03)----AggregateExec: mode=Partial, gby=[c@1 as c, b@0 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+04)------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[b, c, d], output_ordering=[c@1 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+query TT
+EXPLAIN SELECT c, sum1
+  FROM
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c)
+GROUP BY c;
+----
+logical_plan
+01)Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, sum1]], aggr=[[]]
+02)--Projection: multiple_ordered_table_with_pk.c, sum(multiple_ordered_table_with_pk.d) AS sum1
+03)----Aggregate: groupBy=[[multiple_ordered_table_with_pk.c]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+04)------TableScan: multiple_ordered_table_with_pk projection=[c, d]
+physical_plan
+01)AggregateExec: mode=Single, gby=[c@0 as c, sum1@1 as sum1], aggr=[], ordering_mode=PartiallySorted([0])
+02)--ProjectionExec: expr=[c@0 as c, sum(multiple_ordered_table_with_pk.d)@1 as sum1]
+03)----AggregateExec: mode=Single, gby=[c@0 as c], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[c, d], output_ordering=[c@0 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+query TT
+EXPLAIN SELECT c, sum1, SUM(b) OVER() as sumb
+  FROM
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c);
+----
+logical_plan
+01)Projection: multiple_ordered_table_with_pk.c, sum1, sum(multiple_ordered_table_with_pk.b) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING AS sumb
+02)--WindowAggr: windowExpr=[[sum(CAST(multiple_ordered_table_with_pk.b AS Int64)) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING]]
+03)----Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b, sum(multiple_ordered_table_with_pk.d) AS sum1
+04)------Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+05)--------TableScan: multiple_ordered_table_with_pk projection=[b, c, d]
+physical_plan
+01)ProjectionExec: expr=[c@0 as c, sum1@2 as sum1, sum(multiple_ordered_table_with_pk.b) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING@3 as sumb]
+02)--WindowAggExec: wdw=[sum(multiple_ordered_table_with_pk.b) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING: Ok(Field { name: "sum(multiple_ordered_table_with_pk.b) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING", data_type: Int64, nullable: true }), frame: WindowFrame { units: Rows, start_bound: Preceding(UInt64(NULL)), end_bound: Following(UInt64(NULL)), is_causal: false }]
+03)----ProjectionExec: expr=[c@0 as c, b@1 as b, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+04)------AggregateExec: mode=Single, gby=[c@1 as c, b@0 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[b, c, d], output_ordering=[c@1 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+query TT
+EXPLAIN SELECT lhs.c, rhs.c, lhs.sum1, rhs.sum1
+  FROM
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c) as lhs
+  JOIN
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c) as rhs
+  ON lhs.b=rhs.b;
+----
+logical_plan
+01)Projection: lhs.c, rhs.c, lhs.sum1, rhs.sum1
+02)--Inner Join: lhs.b = rhs.b
+03)----SubqueryAlias: lhs
+04)------Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b, sum(multiple_ordered_table_with_pk.d) AS sum1
+05)--------Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+06)----------TableScan: multiple_ordered_table_with_pk projection=[b, c, d]
+07)----SubqueryAlias: rhs
+08)------Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b, sum(multiple_ordered_table_with_pk.d) AS sum1
+09)--------Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+10)----------TableScan: multiple_ordered_table_with_pk projection=[b, c, d]
+physical_plan
+01)HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(b@1, b@1)], projection=[c@0, c@3, sum1@2, sum1@5]
+02)--ProjectionExec: expr=[c@0 as c, b@1 as b, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+03)----AggregateExec: mode=Single, gby=[c@1 as c, b@0 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[b, c, d], output_ordering=[c@1 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+05)--ProjectionExec: expr=[c@0 as c, b@1 as b, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+06)----AggregateExec: mode=Single, gby=[c@1 as c, b@0 as b], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=PartiallySorted([0])
+07)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[b, c, d], output_ordering=[c@1 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+query TT
+EXPLAIN SELECT lhs.c, rhs.c, lhs.sum1, rhs.sum1
+  FROM
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c) as lhs
+  CROSS JOIN
+    (SELECT c, b, a, SUM(d) as sum1
+    FROM multiple_ordered_table_with_pk
+    GROUP BY c) as rhs;
+----
+logical_plan
+01)Projection: lhs.c, rhs.c, lhs.sum1, rhs.sum1
+02)--Cross Join:
+03)----SubqueryAlias: lhs
+04)------Projection: multiple_ordered_table_with_pk.c, sum(multiple_ordered_table_with_pk.d) AS sum1
+05)--------Aggregate: groupBy=[[multiple_ordered_table_with_pk.c]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+06)----------TableScan: multiple_ordered_table_with_pk projection=[c, d]
+07)----SubqueryAlias: rhs
+08)------Projection: multiple_ordered_table_with_pk.c, sum(multiple_ordered_table_with_pk.d) AS sum1
+09)--------Aggregate: groupBy=[[multiple_ordered_table_with_pk.c]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+10)----------TableScan: multiple_ordered_table_with_pk projection=[c, d]
+physical_plan
+01)ProjectionExec: expr=[c@0 as c, c@2 as c, sum1@1 as sum1, sum1@3 as sum1]
+02)--CrossJoinExec
+03)----ProjectionExec: expr=[c@0 as c, sum(multiple_ordered_table_with_pk.d)@1 as sum1]
+04)------AggregateExec: mode=Single, gby=[c@0 as c], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[c, d], output_ordering=[c@0 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+06)----ProjectionExec: expr=[c@0 as c, sum(multiple_ordered_table_with_pk.d)@1 as sum1]
+07)------AggregateExec: mode=Single, gby=[c@0 as c], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+08)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[c, d], output_ordering=[c@0 ASC NULLS LAST], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+# we do not generate physical plan for Repartition yet (e.g Distribute By queries).
+query TT
+EXPLAIN SELECT a, b, sum1
+FROM (SELECT c, b, a, SUM(d) as sum1
+   FROM multiple_ordered_table_with_pk
+   GROUP BY c)
+DISTRIBUTE BY a
+----
+logical_plan
+01)Repartition: DistributeBy(multiple_ordered_table_with_pk.a)
+02)--Projection: multiple_ordered_table_with_pk.a, multiple_ordered_table_with_pk.b, sum(multiple_ordered_table_with_pk.d) AS sum1
+03)----Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a, multiple_ordered_table_with_pk.b]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+04)------TableScan: multiple_ordered_table_with_pk projection=[a, b, c, d]
+physical_plan_error This feature is not implemented: Physical plan does not support DistributeBy partitioning
+
+# union with aggregate
+query TT
+EXPLAIN SELECT c, a, SUM(d) as sum1
+ FROM multiple_ordered_table_with_pk
+ GROUP BY c
+UNION ALL
+ SELECT c, a, SUM(d) as sum1
+ FROM multiple_ordered_table_with_pk
+ GROUP BY c
+----
+logical_plan
+01)Union
+02)--Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a, sum(multiple_ordered_table_with_pk.d) AS sum1
+03)----Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+04)------TableScan: multiple_ordered_table_with_pk projection=[a, c, d]
+05)--Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a, sum(multiple_ordered_table_with_pk.d) AS sum1
+06)----Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+07)------TableScan: multiple_ordered_table_with_pk projection=[a, c, d]
+physical_plan
+01)UnionExec
+02)--ProjectionExec: expr=[c@0 as c, a@1 as a, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+03)----AggregateExec: mode=Single, gby=[c@1 as c, a@0 as a], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, c, d], output_orderings=[[a@0 ASC NULLS LAST], [c@1 ASC NULLS LAST]], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+05)--ProjectionExec: expr=[c@0 as c, a@1 as a, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+06)----AggregateExec: mode=Single, gby=[c@1 as c, a@0 as a], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+07)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, c, d], output_orderings=[[a@0 ASC NULLS LAST], [c@1 ASC NULLS LAST]], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+# table scan should be simplified.
+query TT
+EXPLAIN SELECT c, a, SUM(d) as sum1
+ FROM multiple_ordered_table_with_pk
+ GROUP BY c
+----
+logical_plan
+01)Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a, sum(multiple_ordered_table_with_pk.d) AS sum1
+02)--Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+03)----TableScan: multiple_ordered_table_with_pk projection=[a, c, d]
+physical_plan
+01)ProjectionExec: expr=[c@0 as c, a@1 as a, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+02)--AggregateExec: mode=Single, gby=[c@1 as c, a@0 as a], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, c, d], output_orderings=[[a@0 ASC NULLS LAST], [c@1 ASC NULLS LAST]], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+# limit should be simplified
+query TT
+EXPLAIN SELECT *
+ FROM (SELECT c, a, SUM(d) as sum1
+   FROM multiple_ordered_table_with_pk
+   GROUP BY c
+   LIMIT 5)
+----
+logical_plan
+01)Projection: multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a, sum(multiple_ordered_table_with_pk.d) AS sum1
+02)--Limit: skip=0, fetch=5
+03)----Aggregate: groupBy=[[multiple_ordered_table_with_pk.c, multiple_ordered_table_with_pk.a]], aggr=[[sum(CAST(multiple_ordered_table_with_pk.d AS Int64))]]
+04)------TableScan: multiple_ordered_table_with_pk projection=[a, c, d]
+physical_plan
+01)ProjectionExec: expr=[c@0 as c, a@1 as a, sum(multiple_ordered_table_with_pk.d)@2 as sum1]
+02)--GlobalLimitExec: skip=0, fetch=5
+03)----AggregateExec: mode=Single, gby=[c@1 as c, a@0 as a], aggr=[sum(multiple_ordered_table_with_pk.d)], ordering_mode=Sorted
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, c, d], output_orderings=[[a@0 ASC NULLS LAST], [c@1 ASC NULLS LAST]], constraints=[PrimaryKey([3])], file_type=csv, has_header=true
+
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+# Tests for single distinct to group by optimization rule
+statement ok
+CREATE TABLE t(x int) AS VALUES (1), (2), (1);
+
+statement ok
+create table t1(x bigint,y int) as values (9223372036854775807,2), (9223372036854775806,2);
+
+query II
+SELECT SUM(DISTINCT x), MAX(DISTINCT x) from t GROUP BY x ORDER BY x;
+----
+1 1
+2 2
+
+query II
+SELECT MAX(DISTINCT x), SUM(DISTINCT x) from t GROUP BY x ORDER BY x;
+----
+1 1
+2 2
+
+query TT
+EXPLAIN SELECT SUM(DISTINCT CAST(x AS DOUBLE)), MAX(DISTINCT x) FROM t1 GROUP BY y;
+----
+logical_plan
+01)Projection: sum(DISTINCT t1.x), max(DISTINCT t1.x)
+02)--Aggregate: groupBy=[[t1.y]], aggr=[[sum(DISTINCT CAST(t1.x AS Float64)), max(DISTINCT t1.x)]]
+03)----TableScan: t1 projection=[x, y]
+physical_plan
+01)ProjectionExec: expr=[sum(DISTINCT t1.x)@1 as sum(DISTINCT t1.x), max(DISTINCT t1.x)@2 as max(DISTINCT t1.x)]
+02)--AggregateExec: mode=FinalPartitioned, gby=[y@0 as y], aggr=[sum(DISTINCT t1.x), max(DISTINCT t1.x)]
+03)----RepartitionExec: partitioning=Hash([y@0], 8), input_partitions=1
+04)------AggregateExec: mode=Partial, gby=[y@1 as y], aggr=[sum(DISTINCT t1.x), max(DISTINCT t1.x)]
+05)--------DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TT
+EXPLAIN SELECT SUM(DISTINCT CAST(x AS DOUBLE)), MAX(DISTINCT CAST(x AS DOUBLE)) FROM t1 GROUP BY y;
+----
+logical_plan
+01)Projection: sum(alias1) AS sum(DISTINCT t1.x), max(alias1) AS max(DISTINCT t1.x)
+02)--Aggregate: groupBy=[[t1.y]], aggr=[[sum(alias1), max(alias1)]]
+03)----Aggregate: groupBy=[[t1.y, CAST(t1.x AS Float64) AS alias1]], aggr=[[]]
+04)------TableScan: t1 projection=[x, y]
+physical_plan
+01)ProjectionExec: expr=[sum(alias1)@1 as sum(DISTINCT t1.x), max(alias1)@2 as max(DISTINCT t1.x)]
+02)--AggregateExec: mode=FinalPartitioned, gby=[y@0 as y], aggr=[sum(alias1), max(alias1)]
+03)----RepartitionExec: partitioning=Hash([y@0], 8), input_partitions=8
+04)------AggregateExec: mode=Partial, gby=[y@0 as y], aggr=[sum(alias1), max(alias1)]
+05)--------AggregateExec: mode=FinalPartitioned, gby=[y@0 as y, alias1@1 as alias1], aggr=[]
+06)----------RepartitionExec: partitioning=Hash([y@0, alias1@1], 8), input_partitions=1
+07)------------AggregateExec: mode=Partial, gby=[y@1 as y, CAST(x@0 AS Float64) as alias1], aggr=[]
+08)--------------DataSourceExec: partitions=1, partition_sizes=[1]
+
+# create an unbounded table that contains ordered timestamp.
+statement ok
+CREATE UNBOUNDED EXTERNAL TABLE unbounded_csv_with_timestamps (
+  name VARCHAR,
+  ts TIMESTAMP
+)
+STORED AS CSV
+WITH ORDER (ts DESC)
+LOCATION '../core/tests/data/timestamps.csv'
+
+# below query should work in streaming mode.
+query TT
+EXPLAIN SELECT date_bin('15 minutes', ts) as time_chunks
+  FROM unbounded_csv_with_timestamps
+  GROUP BY date_bin('15 minutes', ts)
+  ORDER BY time_chunks DESC
+  LIMIT 5;
+----
+logical_plan
+01)Sort: time_chunks DESC NULLS FIRST, fetch=5
+02)--Projection: date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts) AS time_chunks
+03)----Aggregate: groupBy=[[date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }"), unbounded_csv_with_timestamps.ts) AS date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)]], aggr=[[]]
+04)------TableScan: unbounded_csv_with_timestamps projection=[ts]
+physical_plan
+01)SortPreservingMergeExec: [time_chunks@0 DESC], fetch=5
+02)--ProjectionExec: expr=[date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)@0 as time_chunks]
+03)----AggregateExec: mode=FinalPartitioned, gby=[date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)@0 as date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)], aggr=[], ordering_mode=Sorted
+04)------RepartitionExec: partitioning=Hash([date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)@0], 8), input_partitions=8, preserve_order=true, sort_exprs=date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)@0 DESC
+05)--------AggregateExec: mode=Partial, gby=[date_bin(IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }, ts@0) as date_bin(Utf8("15 minutes"),unbounded_csv_with_timestamps.ts)], aggr=[], ordering_mode=Sorted
+06)----------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+07)------------StreamingTableExec: partition_sizes=1, projection=[ts], infinite_source=true, output_ordering=[ts@0 DESC]
+
+query P
+SELECT date_bin('15 minutes', ts) as time_chunks
+  FROM unbounded_csv_with_timestamps
+  GROUP BY date_bin('15 minutes', ts)
+  ORDER BY time_chunks DESC
+  LIMIT 5;
+----
+2018-12-13T12:00:00
+2018-11-13T17:00:00
+
+# Since extract is not a monotonic function, below query should not run.
+# when source is unbounded.
+query error
+SELECT extract(month from ts) as months
+  FROM unbounded_csv_with_timestamps
+  GROUP BY extract(month from ts)
+  ORDER BY months DESC
+  LIMIT 5;
+
+# Create a table where timestamp is ordered
+statement ok
+CREATE EXTERNAL TABLE csv_with_timestamps (
+  name VARCHAR,
+  ts TIMESTAMP
+)
+STORED AS CSV
+WITH ORDER (ts DESC)
+LOCATION '../core/tests/data/timestamps.csv'
+OPTIONS('format.has_header' 'false');
+
+# below query should run since it operates on a bounded source and have a sort
+# at the top of its plan.
+query TT
+EXPLAIN SELECT extract(month from ts) as months
+  FROM csv_with_timestamps
+  GROUP BY extract(month from ts)
+  ORDER BY months DESC
+  LIMIT 5;
+----
+logical_plan
+01)Sort: months DESC NULLS FIRST, fetch=5
+02)--Projection: date_part(Utf8("MONTH"),csv_with_timestamps.ts) AS months
+03)----Aggregate: groupBy=[[date_part(Utf8("MONTH"), csv_with_timestamps.ts)]], aggr=[[]]
+04)------TableScan: csv_with_timestamps projection=[ts]
+physical_plan
+01)SortPreservingMergeExec: [months@0 DESC], fetch=5
+02)--ProjectionExec: expr=[date_part(Utf8("MONTH"),csv_with_timestamps.ts)@0 as months]
+03)----SortExec: TopK(fetch=5), expr=[date_part(Utf8("MONTH"),csv_with_timestamps.ts)@0 DESC], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[date_part(Utf8("MONTH"),csv_with_timestamps.ts)@0 as date_part(Utf8("MONTH"),csv_with_timestamps.ts)], aggr=[], lim=[5]
+05)--------RepartitionExec: partitioning=Hash([date_part(Utf8("MONTH"),csv_with_timestamps.ts)@0], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[date_part(MONTH, ts@0) as date_part(Utf8("MONTH"),csv_with_timestamps.ts)], aggr=[], lim=[5]
+07)------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+08)--------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/timestamps.csv]]}, projection=[ts], output_ordering=[ts@0 DESC], file_type=csv, has_header=false
+
+query I
+SELECT extract(month from ts) as months
+  FROM csv_with_timestamps
+  GROUP BY extract(month from ts)
+  ORDER BY months DESC
+  LIMIT 5;
+----
+12
+11
+
+# create an unbounded table that contains name, timestamp.
+# where table is ordered by name DESC, ts DESC
+statement ok
+CREATE UNBOUNDED EXTERNAL TABLE unbounded_csv_with_timestamps2 (
+  name VARCHAR,
+  ts TIMESTAMP
+)
+STORED AS CSV
+WITH ORDER (name DESC, ts DESC)
+LOCATION '../core/tests/data/timestamps.csv'
+
+# result shouldn't have SortExec(sort_exprs=[name DESC, time_chunks DESC]) in the result.
+# datafusion should deduce that given ordering: [name DESC, ts DESC] is satisfied
+# ordering: [name DESC, date_bin('15 minutes', ts) DESC] is also valid.
+query TT
+EXPLAIN SELECT name, date_bin('15 minutes', ts) as time_chunks
+  FROM unbounded_csv_with_timestamps2
+  ORDER BY name DESC, time_chunks DESC
+  LIMIT 5;
+----
+logical_plan
+01)Sort: unbounded_csv_with_timestamps2.name DESC NULLS FIRST, time_chunks DESC NULLS FIRST, fetch=5
+02)--Projection: unbounded_csv_with_timestamps2.name, date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }"), unbounded_csv_with_timestamps2.ts) AS time_chunks
+03)----TableScan: unbounded_csv_with_timestamps2 projection=[name, ts]
+physical_plan
+01)SortPreservingMergeExec: [name@0 DESC, time_chunks@1 DESC], fetch=5
+02)--ProjectionExec: expr=[name@0 as name, date_bin(IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }, ts@1) as time_chunks]
+03)----RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1, maintains_sort_order=true
+04)------StreamingTableExec: partition_sizes=1, projection=[name, ts], infinite_source=true, output_ordering=[name@0 DESC, ts@1 DESC]
+
+statement ok
+drop table t1
+
+# Reproducer for https://github.com/apache/datafusion/issues/8175
+
+statement ok
+create table t1(state string, city string, min_temp float, area int, time timestamp) as values
+    ('MA', 'Boston', 70.4, 1, 50),
+    ('MA', 'Bedford', 71.59, 2, 150);
+
+query II
+select date_part('year', time) as bla, count(distinct state) as count from t1 group by bla;
+----
+1970 1
+
+query PI
+select date_bin(interval '1 year', time) as bla, count(distinct state) as count from t1 group by bla;
+----
+1970-01-01T00:00:00 1
+
+statement ok
+drop table t1
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  INT UNSIGNED NOT NULL,
+  c10 BIGINT UNSIGNED NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TIIII
+SELECT c1, count(distinct c2), min(distinct c2), min(c3), max(c4) FROM aggregate_test_100 GROUP BY c1 ORDER BY c1;
+----
+a 5 1 -101 32064
+b 5 1 -117 25286
+c 5 1 -117 29106
+d 5 1 -99 31106
+e 5 1 -95 32514
+
+query TT
+EXPLAIN SELECT c1, count(distinct c2), min(distinct c2), sum(c3), max(c4) FROM aggregate_test_100 GROUP BY c1 ORDER BY c1;
+----
+logical_plan
+01)Sort: aggregate_test_100.c1 ASC NULLS LAST
+02)--Projection: aggregate_test_100.c1, count(alias1) AS count(DISTINCT aggregate_test_100.c2), min(alias1) AS min(DISTINCT aggregate_test_100.c2), sum(alias2) AS sum(aggregate_test_100.c3), max(alias3) AS max(aggregate_test_100.c4)
+03)----Aggregate: groupBy=[[aggregate_test_100.c1]], aggr=[[count(alias1), min(alias1), sum(alias2), max(alias3)]]
+04)------Aggregate: groupBy=[[aggregate_test_100.c1, aggregate_test_100.c2 AS alias1]], aggr=[[sum(CAST(aggregate_test_100.c3 AS Int64)) AS alias2, max(aggregate_test_100.c4) AS alias3]]
+05)--------TableScan: aggregate_test_100 projection=[c1, c2, c3, c4]
+physical_plan
+01)SortPreservingMergeExec: [c1@0 ASC NULLS LAST]
+02)--ProjectionExec: expr=[c1@0 as c1, count(alias1)@1 as count(DISTINCT aggregate_test_100.c2), min(alias1)@2 as min(DISTINCT aggregate_test_100.c2), sum(alias2)@3 as sum(aggregate_test_100.c3), max(alias3)@4 as max(aggregate_test_100.c4)]
+03)----SortExec: expr=[c1@0 ASC NULLS LAST], preserve_partitioning=[true]
+04)------AggregateExec: mode=FinalPartitioned, gby=[c1@0 as c1], aggr=[count(alias1), min(alias1), sum(alias2), max(alias3)]
+05)--------RepartitionExec: partitioning=Hash([c1@0], 8), input_partitions=8
+06)----------AggregateExec: mode=Partial, gby=[c1@0 as c1], aggr=[count(alias1), min(alias1), sum(alias2), max(alias3)]
+07)------------AggregateExec: mode=FinalPartitioned, gby=[c1@0 as c1, alias1@1 as alias1], aggr=[sum(aggregate_test_100.c3) as alias2, max(aggregate_test_100.c4) as alias3]
+08)--------------RepartitionExec: partitioning=Hash([c1@0, alias1@1], 8), input_partitions=8
+09)----------------AggregateExec: mode=Partial, gby=[c1@0 as c1, c2@1 as alias1], aggr=[sum(aggregate_test_100.c3) as alias2, max(aggregate_test_100.c4) as alias3]
+10)------------------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=1
+11)--------------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c2, c3, c4], file_type=csv, has_header=true
+
+query II
+SELECT c2, count(distinct c3) FILTER (WHERE c1 != 'a') FROM aggregate_test_100 GROUP BY c2 ORDER BY c2;
+----
+1 17
+2 17
+3 13
+4 19
+5 11
+
+query III
+SELECT c2, count(distinct c3) FILTER (WHERE c1 != 'a'), count(c5) FILTER (WHERE c1 != 'b') FROM aggregate_test_100 GROUP BY c2 ORDER BY c2;
+----
+1 17 19
+2 17 18
+3 13 17
+4 19 18
+5 11 9
+
+statement ok
+drop table aggregate_test_100;
+
+
+# Create an unbounded external table with primary key
+# column c
+statement ok
+CREATE EXTERNAL TABLE unbounded_multiple_ordered_table_with_pk (
+  a0 INTEGER,
+  a INTEGER,
+  b INTEGER,
+  c INTEGER primary key,
+  d INTEGER
+)
+STORED AS CSV
+WITH ORDER (a ASC, b ASC)
+WITH ORDER (c ASC)
+LOCATION '../core/tests/data/window_2.csv'
+OPTIONS ('format.has_header' 'true');
+
+# Query below can be executed, since c is primary key.
+query III rowsort
+SELECT c, a, SUM(d)
+FROM unbounded_multiple_ordered_table_with_pk
+GROUP BY c
+ORDER BY c
+LIMIT 5
+----
+0 0 0
+1 0 2
+2 0 0
+3 0 0
+4 0 1
+
+
+query ITIPTR rowsort
+SELECT r.*
+FROM sales_global_with_pk as l, sales_global_with_pk as r
+ORDER BY 1, 2, 3, 4, 5, 6
+LIMIT 5
+----
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+0 GRC 0 2022-01-01T06:00:00 EUR 30
+
+# Create a table with timestamp data
+statement ok
+CREATE TABLE src_table (
+  t1 TIMESTAMP,
+  c2 INT
+) AS VALUES
+('2020-12-10T00:00:00.00Z', 0),
+('2020-12-11T00:00:00.00Z', 1),
+('2020-12-12T00:00:00.00Z', 2),
+('2020-12-13T00:00:00.00Z', 3),
+('2020-12-14T00:00:00.00Z', 4),
+('2020-12-15T00:00:00.00Z', 5),
+('2020-12-16T00:00:00.00Z', 6),
+('2020-12-17T00:00:00.00Z', 7),
+('2020-12-18T00:00:00.00Z', 8),
+('2020-12-19T00:00:00.00Z', 9);
+
+# Use src_table to create a partitioned file
+query I
+COPY (SELECT * FROM src_table)
+TO 'test_files/scratch/group_by/timestamp_table/0.csv'
+STORED AS CSV;
+----
+10
+
+query I
+COPY (SELECT * FROM src_table)
+TO 'test_files/scratch/group_by/timestamp_table/1.csv'
+STORED AS CSV;
+----
+10
+
+query I
+COPY (SELECT * FROM src_table)
+TO 'test_files/scratch/group_by/timestamp_table/2.csv'
+STORED AS CSV;
+----
+10
+
+query I
+COPY (SELECT * FROM src_table)
+TO 'test_files/scratch/group_by/timestamp_table/3.csv'
+STORED AS CSV;
+----
+10
+
+# Create a table from the generated CSV files:
+statement ok
+CREATE EXTERNAL TABLE timestamp_table (
+  t1 TIMESTAMP,
+  c2 INT,
+)
+STORED AS CSV
+LOCATION 'test_files/scratch/group_by/timestamp_table'
+OPTIONS ('format.has_header' 'true');
+
+# Group By using date_trunc
+query PI rowsort
+SELECT date_trunc('week', t1) as week, sum(c2)
+FROM timestamp_table
+GROUP BY date_trunc('week', t1)
+----
+2020-12-07T00:00:00 24
+2020-12-14T00:00:00 156
+
+# GROUP BY using LIMIT
+query IP
+SELECT c2, MAX(t1)
+FROM timestamp_table
+GROUP BY c2
+ORDER BY MAX(t1) DESC
+LIMIT 4;
+----
+9 2020-12-19T00:00:00
+8 2020-12-18T00:00:00
+7 2020-12-17T00:00:00
+6 2020-12-16T00:00:00
+
+# Explain the GROUP BY with LIMIT to ensure the plan contains `lim=[4]`
+query TT
+EXPLAIN
+SELECT c2, MAX(t1)
+FROM timestamp_table
+GROUP BY c2
+ORDER BY MAX(t1) DESC
+LIMIT 4;
+----
+logical_plan
+01)Sort: max(timestamp_table.t1) DESC NULLS FIRST, fetch=4
+02)--Aggregate: groupBy=[[timestamp_table.c2]], aggr=[[max(timestamp_table.t1)]]
+03)----TableScan: timestamp_table projection=[t1, c2]
+physical_plan
+01)SortPreservingMergeExec: [max(timestamp_table.t1)@1 DESC], fetch=4
+02)--SortExec: TopK(fetch=4), expr=[max(timestamp_table.t1)@1 DESC], preserve_partitioning=[true]
+03)----AggregateExec: mode=FinalPartitioned, gby=[c2@0 as c2], aggr=[max(timestamp_table.t1)]
+04)------RepartitionExec: partitioning=Hash([c2@0], 8), input_partitions=8
+05)--------AggregateExec: mode=Partial, gby=[c2@1 as c2], aggr=[max(timestamp_table.t1)]
+06)----------RepartitionExec: partitioning=RoundRobinBatch(8), input_partitions=4
+07)------------DataSourceExec: file_groups={4 groups: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/group_by/timestamp_table/0.csv], [WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/group_by/timestamp_table/1.csv], [WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/group_by/timestamp_table/2.csv], [WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/group_by/timestamp_table/3.csv]]}, projection=[t1, c2], file_type=csv, has_header=true
+
+# Clean up
+statement ok
+DROP TABLE src_table;
+
+statement ok
+DROP TABLE timestamp_table;
+
+### BEGIN Group By with Dictionary Variants ###
+#
+# The following tests use GROUP BY on tables with dictionary columns.
+# The same test is repeated using dictionaries with the key types:
+#
+# - Int8
+# - Int16
+# - Int32
+# - Int64
+# - UInt8
+# - UInt16
+# - UInt32
+# - UInt64
+
+# Table with an int column and Dict<Int8> column:
+statement ok
+CREATE TABLE int8_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(Int8, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(Int8, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(Int8, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(Int8, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(Int8, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(Int8, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM int8_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM int8_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM int8_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE int8_dict;
+
+# Table with an int column and Dict<Int16> column:
+statement ok
+CREATE TABLE int16_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(Int16, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(Int16, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(Int16, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(Int16, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(Int16, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(Int16, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM int16_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM int16_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM int16_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE int16_dict;
+
+# Table with an int column and Dict<Int32> column:
+statement ok
+CREATE TABLE int32_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(Int32, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(Int32, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(Int32, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(Int32, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(Int32, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(Int32, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM int32_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM int32_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM int32_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE int32_dict;
+
+# Table with an int column and Dict<Int64> column:
+statement ok
+CREATE TABLE int64_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(Int64, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(Int64, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(Int64, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(Int64, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(Int64, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(Int64, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM int64_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM int64_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM int64_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE int64_dict;
+
+# Table with an int column and Dict<UInt8> column:
+statement ok
+CREATE TABLE uint8_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(UInt8, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(UInt8, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(UInt8, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(UInt8, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(UInt8, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(UInt8, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM uint8_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM uint8_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM uint8_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE uint8_dict;
+
+# Table with an int column and Dict<UInt16> column:
+statement ok
+CREATE TABLE uint16_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(UInt16, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(UInt16, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(UInt16, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(UInt16, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(UInt16, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(UInt16, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM uint16_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM uint16_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM uint16_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE uint16_dict;
+
+# Table with an int column and Dict<UInt32> column:
+statement ok
+CREATE TABLE uint32_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(UInt32, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(UInt32, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(UInt32, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(UInt32, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(UInt32, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(UInt32, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM uint32_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM uint32_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM uint32_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE uint32_dict;
+
+# Table with an int column and Dict<UInt64> column:
+statement ok
+CREATE TABLE uint64_dict AS VALUES
+(1, arrow_cast('A', 'Dictionary(UInt64, Utf8)')),
+(2, arrow_cast('B', 'Dictionary(UInt64, Utf8)')),
+(2, arrow_cast('A', 'Dictionary(UInt64, Utf8)')),
+(4, arrow_cast('A', 'Dictionary(UInt64, Utf8)')),
+(1, arrow_cast('C', 'Dictionary(UInt64, Utf8)')),
+(1, arrow_cast('A', 'Dictionary(UInt64, Utf8)'));
+
+# Group by the non-dict column
+query TI rowsort
+SELECT column2, count(column1) FROM uint64_dict GROUP BY column2;
+----
+A 4
+B 1
+C 1
+
+# Group by the value column with dict as aggregate
+query II rowsort
+SELECT column1, count(column2) FROM uint64_dict GROUP BY column1;
+----
+1 3
+2 2
+4 1
+
+# Group by with dict as aggregate using distinct
+query II rowsort
+SELECT column1, count(distinct column2) FROM uint64_dict GROUP BY column1;
+----
+1 2
+2 2
+4 1
+
+# Clean up
+statement ok
+DROP TABLE uint64_dict;
+
+### END Group By with Dictionary Variants ###
+
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+query III?
+SELECT a, b, NTH_VALUE(c, 2), ARRAY_AGG(c)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 1 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+0 1 26 [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+1 2 51 [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
+1 3 76 [75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+
+query III?
+SELECT a, b, NTH_VALUE(c, 2 ORDER BY c ASC), ARRAY_AGG(c ORDER BY c ASC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 1 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+0 1 26 [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+1 2 51 [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
+1 3 76 [75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+
+query II?I
+SELECT a, b, ARRAY_AGG(c ORDER BY c ASC), NTH_VALUE(c, 2 ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] 23
+0 1 [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49] 48
+1 2 [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74] 73
+1 3 [75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99] 98
+
+query IIIIII
+SELECT a, b, NTH_VALUE(c, 2 ORDER BY c ASC), NTH_VALUE(c, 3 ORDER BY c ASC), NTH_VALUE(c, 2 ORDER BY c DESC), NTH_VALUE(c, 3 ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 1 2 23 22
+0 1 26 27 48 47
+1 2 51 52 73 72
+1 3 76 77 98 97
+
+# we should be able to reverse array agg requirement, if it helps to remove a SortExec from plan.
+query TT
+EXPLAIN SELECT a, b, ARRAY_AGG(c ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+logical_plan
+01)Sort: multiple_ordered_table.a ASC NULLS LAST, multiple_ordered_table.b ASC NULLS LAST
+02)--Aggregate: groupBy=[[multiple_ordered_table.a, multiple_ordered_table.b]], aggr=[[array_agg(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST]]]
+03)----TableScan: multiple_ordered_table projection=[a, b, c]
+physical_plan
+01)AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[array_agg(multiple_ordered_table.c) ORDER BY [multiple_ordered_table.c DESC NULLS FIRST]], ordering_mode=Sorted
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/window_2.csv]]}, projection=[a, b, c], output_orderings=[[a@0 ASC NULLS LAST, b@1 ASC NULLS LAST], [c@2 ASC NULLS LAST]], file_type=csv, has_header=true
+
+query II?
+SELECT a, b, ARRAY_AGG(c ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 [24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+0 1 [49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25]
+1 2 [74, 73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50]
+1 3 [99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77, 76, 75]
+
+query II?II
+SELECT a, b, ARRAY_AGG(d ORDER BY d DESC), NTH_VALUE(d, 1 ORDER BY d DESC), NTH_VALUE(d, 1 ORDER BY d ASC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 [4, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0] 4 0
+0 1 [4, 4, 4, 3, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0] 4 0
+1 2 [4, 4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0] 4 0
+1 3 [4, 4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0] 4 0
+
+# increase partition to 8
+statement ok
+set datafusion.execution.target_partitions = 8;
+
+# NTH_VALUE(c, 2) and ARRAY_AGG(c)[2] should produce same result
+query III
+SELECT a, b, NTH_VALUE(c, 2) - ARRAY_AGG(c)[2]
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 0
+0 1 0
+1 2 0
+1 3 0
+
+query III?
+SELECT a, b, NTH_VALUE(c, 2 ORDER BY c ASC), ARRAY_AGG(c ORDER BY c ASC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 1 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+0 1 26 [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+1 2 51 [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
+1 3 76 [75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+
+query II?I
+SELECT a, b, ARRAY_AGG(c ORDER BY c ASC), NTH_VALUE(c, 2 ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] 23
+0 1 [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49] 48
+1 2 [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74] 73
+1 3 [75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99] 98
+
+query IIIIII
+SELECT a, b, NTH_VALUE(c, 2 ORDER BY c ASC), NTH_VALUE(c, 3 ORDER BY c ASC), NTH_VALUE(c, 2 ORDER BY c DESC), NTH_VALUE(c, 3 ORDER BY c DESC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+----
+0 0 1 2 23 22
+0 1 26 27 48 47
+1 2 51 52 73 72
+1 3 76 77 98 97
+
+# nth value cannot work with conflicting requirements
+statement error DataFusion error: This feature is not implemented: Conflicting ordering requirements in aggregate functions is not supported
+SELECT a, b, NTH_VALUE(c, 2 ORDER BY c ASC), NTH_VALUE(c, 3 ORDER BY d ASC)
+FROM multiple_ordered_table
+GROUP BY a, b
+ORDER BY a, b;
+
+query II
+SELECT a + 1 AS d, a + 1 + b AS c FROM (SELECT 1 AS a, 2 AS b) GROUP BY a + 1, a + 1 + b;
+----
+2 4
+
+statement error DataFusion error: Error during planning: Cannot find column with position 4 in SELECT clause. Valid columns: 1 to 3
+SELECT a, b, COUNT(1)
+FROM multiple_ordered_table
+GROUP BY 1, 2, 4, 5, 6;
+
+statement ok
+set datafusion.execution.target_partitions = 1;
+
+# Create a table that contains various keywords, with their corresponding timestamps
+statement ok
+CREATE TABLE keywords_stream (
+    ts TIMESTAMP,
+    sn INTEGER PRIMARY KEY,
+    keyword VARCHAR NOT NULL
+);
+
+statement ok
+INSERT INTO keywords_stream(ts, sn, keyword) VALUES
+('2024-01-01T00:00:00Z', '0', 'Drug'),
+('2024-01-01T00:00:05Z', '1', 'Bomb'),
+('2024-01-01T00:00:10Z', '2', 'Theft'),
+('2024-01-01T00:00:15Z', '3', 'Gun'),
+('2024-01-01T00:00:20Z', '4', 'Calm');
+
+# Create a table that contains alert keywords
+statement ok
+CREATE TABLE ALERT_KEYWORDS(keyword VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO ALERT_KEYWORDS VALUES
+('Drug'),
+('Bomb'),
+('Theft'),
+('Gun'),
+('Knife'),
+('Fire');
+
+query TT
+explain SELECT
+    DATE_BIN(INTERVAL '2' MINUTE, ts, '2000-01-01') AS ts_chunk,
+    COUNT(keyword) AS alert_keyword_count
+FROM
+    keywords_stream
+WHERE
+    keywords_stream.keyword IN (SELECT keyword FROM ALERT_KEYWORDS)
+GROUP BY
+    ts_chunk;
+----
+logical_plan
+01)Projection: date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }"),keywords_stream.ts,Utf8("2000-01-01")) AS ts_chunk, count(keywords_stream.keyword) AS alert_keyword_count
+02)--Aggregate: groupBy=[[date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }"), keywords_stream.ts, TimestampNanosecond(946684800000000000, None)) AS date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }"),keywords_stream.ts,Utf8("2000-01-01"))]], aggr=[[count(keywords_stream.keyword)]]
+03)----LeftSemi Join: keywords_stream.keyword = __correlated_sq_1.keyword
+04)------TableScan: keywords_stream projection=[ts, keyword]
+05)------SubqueryAlias: __correlated_sq_1
+06)--------TableScan: alert_keywords projection=[keyword]
+physical_plan
+01)ProjectionExec: expr=[date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }"),keywords_stream.ts,Utf8("2000-01-01"))@0 as ts_chunk, count(keywords_stream.keyword)@1 as alert_keyword_count]
+02)--AggregateExec: mode=Single, gby=[date_bin(IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }, ts@0, 946684800000000000) as date_bin(IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 120000000000 }"),keywords_stream.ts,Utf8("2000-01-01"))], aggr=[count(keywords_stream.keyword)]
+03)----HashJoinExec: mode=CollectLeft, join_type=RightSemi, on=[(keyword@0, keyword@1)]
+04)------DataSourceExec: partitions=1, partition_sizes=[3]
+05)------DataSourceExec: partitions=1, partition_sizes=[3]
+
+query PI
+SELECT
+    DATE_BIN(INTERVAL '2' MINUTE, ts, '2000-01-01') AS ts_chunk,
+    COUNT(keyword) AS alert_keyword_count
+FROM
+    keywords_stream
+WHERE
+    keywords_stream.keyword IN (SELECT keyword FROM ALERT_KEYWORDS)
+GROUP BY
+    ts_chunk;
+----
+2024-01-01T00:00:00 4
+
+# Issue: https://github.com/apache/datafusion/issues/11118
+statement ok
+CREATE TABLE test_case_expr(a INT, b TEXT) AS VALUES (1,'hello'), (2,'world')
+
+query T
+SELECT (CASE WHEN CONCAT(b, 'hello') = 'test' THEN 'good' ELSE 'bad' END) AS c
+  FROM test_case_expr GROUP BY c;
+----
+bad
+
+query I rowsort
+SELECT (CASE a::BIGINT WHEN 1 THEN 1 END) AS c FROM test_case_expr GROUP BY c;
+----
+1
+NULL
+
+statement ok
+drop table test_case_expr
+
+statement ok
+drop table t;
+
+# test multi group by for binary type with nulls
+statement ok
+create table t(a int, b bytea) as values (1, 0xa), (1, 0xa), (2, null), (null, 0xb), (null, 0xb);
+
+query I?I
+select a, b, count(*) from t group by grouping sets ((a, b), (a), (b)) order by a, b;
+----
+1 0a 2
+1 NULL 2
+2 NULL 1
+2 NULL 1
+NULL 0a 2
+NULL 0b 2
+NULL 0b 2
+NULL NULL 2
+NULL NULL 1
+
+statement ok
+drop table t;
+
+# regression: duplicate grouping sets must not be collapsed into one
+statement ok
+create table duplicate_grouping_sets(deptno int, job varchar, sal int, comm int) as values
+(10, 'CLERK', 1300, null),
+(20, 'MANAGER', 3000, null);
+
+query ITIIIII
+select deptno, job, sal, sum(comm), grouping(deptno), grouping(job), grouping(sal)
+from duplicate_grouping_sets
+group by grouping sets ((deptno, job), (deptno, sal), (deptno, job))
+order by deptno, job, sal, grouping(deptno), grouping(job), grouping(sal);
+----
+10 CLERK NULL NULL 0 0 1
+10 CLERK NULL NULL 0 0 1
+10 NULL 1300 NULL 0 1 0
+20 MANAGER NULL NULL 0 0 1
+20 MANAGER NULL NULL 0 0 1
+20 NULL 3000 NULL 0 1 0
+
+query ITII
+select deptno, job, sal, grouping(deptno, job, sal)
+from duplicate_grouping_sets
+group by grouping sets ((deptno, job), (deptno, sal), (deptno, job))
+order by deptno, job, sal, grouping(deptno, job, sal);
+----
+10 CLERK NULL 1
+10 CLERK NULL 1
+10 NULL 1300 2
+20 MANAGER NULL 1
+20 MANAGER NULL 1
+20 NULL 3000 2
+
+statement ok
+drop table duplicate_grouping_sets;
+
+# test multi group by for binary type without nulls
+statement ok
+create table t(a int, b bytea) as values (1, 0xa), (1, 0xa), (2, 0xb), (3, 0xb), (3, 0xb);
+
+query I?I
+select a, b, count(*) from t group by grouping sets ((a, b), (a), (b)) order by a, b;
+----
+1 0a 2
+1 NULL 2
+2 0b 1
+2 NULL 1
+3 0b 2
+3 NULL 2
+NULL 0a 2
+NULL 0b 3
+
+statement ok
+drop table t;
+
+# test multi group by int + utf8
+statement ok
+create table t(a int, b varchar) as values (1, 'a'), (1, 'a'), (2, 'ab'), (3, 'abc'), (3, 'cba'), (null, null), (null, 'a'), (null, null), (null, 'a'), (1, 'null');
+
+query ITI rowsort
+select a, b, count(*) from t group by a, b;
+----
+1 a 2
+1 null 1
+2 ab 1
+3 abc 1
+3 cba 1
+NULL NULL 2
+NULL a 2
+
+statement ok
+drop table t;
+
+# test multi group by int + utf8view
+statement ok
+create table source as values
+-- use some strings that are larger than 12 characters as that goes through a different path
+(1, 'a'),
+(1, 'a'),
+(2, 'thisstringislongerthan12'),
+(2, 'thisstring'),
+(3, 'abc'),
+(3, 'cba'),
+(2, 'thisstring'),
+(null, null),
+(null, 'a'),
+(null, null),
+(null, 'a'),
+(2, 'thisstringisalsolongerthan12'),
+(2, 'thisstringislongerthan12'),
+(1, 'null')
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Utf8View') as b from source;
+
+query ITI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 a 2
+1 null 1
+2 thisstring 2
+2 thisstringisalsolongerthan12 1
+2 thisstringislongerthan12 2
+3 abc 1
+3 cba 1
+NULL a 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+# test with binary view
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'BinaryView') as b from source;
+
+query I?I
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 61 2
+1 6e756c6c 1
+2 74686973737472696e67 2
+2 74686973737472696e676973616c736f6c6f6e6765727468616e3132 1
+2 74686973737472696e6769736c6f6e6765727468616e3132 2
+3 616263 1
+3 636261 1
+NULL 61 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test multi group by int + Date32
+statement ok
+create table source as values
+(1, '2020-01-01'),
+(1, '2020-01-01'),
+(2, '2020-01-02'),
+(2, '2020-01-03'),
+(3, '2020-01-04'),
+(3, '2020-01-04'),
+(2, '2020-01-03'),
+(null, null),
+(null, '2020-01-01'),
+(null, null),
+(null, '2020-01-01'),
+(2, '2020-01-02'),
+(2, '2020-01-02'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Date32') as b from source;
+
+query IDI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 2020-01-01 2
+1 NULL 1
+2 2020-01-02 3
+2 2020-01-03 2
+3 2020-01-04 2
+NULL 2020-01-01 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test multi group by int + Date64
+statement ok
+create table source as values
+(1, '2020-01-01'),
+(1, '2020-01-01'),
+(2, '2020-01-02'),
+(2, '2020-01-03'),
+(3, '2020-01-04'),
+(3, '2020-01-04'),
+(2, '2020-01-03'),
+(null, null),
+(null, '2020-01-01'),
+(null, null),
+(null, '2020-01-01'),
+(2, '2020-01-02'),
+(2, '2020-01-02'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Date64') as b from source;
+
+query IDI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 2020-01-01T00:00:00 2
+1 NULL 1
+2 2020-01-02T00:00:00 3
+2 2020-01-03T00:00:00 2
+3 2020-01-04T00:00:00 2
+NULL 2020-01-01T00:00:00 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test multi group by int + Time32
+statement ok
+create table source as values
+(1, '12:34:56'),
+(1, '12:34:56'),
+(2, '13:00:00'),
+(2, '14:15:00'),
+(3, '23:59:59'),
+(3, '23:59:59'),
+(2, '14:15:00'),
+(null, null),
+(null, '12:00:00'),
+(null, null),
+(null, '12:00:00'),
+(2, '13:00:00'),
+(2, '13:00:00'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Time32(Second)') as b from source;
+
+query IDI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 12:34:56 2
+1 NULL 1
+2 13:00:00 3
+2 14:15:00 2
+3 23:59:59 2
+NULL 12:00:00 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test multi group by int + Time64
+statement ok
+create table source as values
+(1, '12:34:56.123456'),
+(1, '12:34:56.123456'),
+(2, '13:00:00.000001'),
+(2, '14:15:00.999999'),
+(3, '23:59:59.500000'),
+(3, '23:59:59.500000'),
+(2, '14:15:00.999999'),
+(null, null),
+(null, '12:00:00.000000'),
+(null, null),
+(null, '12:00:00.000000'),
+(2, '13:00:00.000001'),
+(2, '13:00:00.000001'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Time64(Microsecond)') as b from source;
+
+query IDI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 12:34:56.123456 2
+1 NULL 1
+2 13:00:00.000001 3
+2 14:15:00.999999 2
+3 23:59:59.500 2
+NULL 12:00:00 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test multi group by int + Timestamp
+statement ok
+create table source as values
+(1, '2020-01-01 12:34:56'),
+(1, '2020-01-01 12:34:56'),
+(2, '2020-01-02 13:00:00'),
+(2, '2020-01-03 14:15:00'),
+(3, '2020-01-04 23:59:59'),
+(3, '2020-01-04 23:59:59'),
+(2, '2020-01-03 14:15:00'),
+(null, null),
+(null, '2020-01-01 12:00:00'),
+(null, null),
+(null, '2020-01-01 12:00:00'),
+(2, '2020-01-02 13:00:00'),
+(2, '2020-01-02 13:00:00'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Timestamp(ns)') as b from source;
+
+query IPI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 2020-01-01T12:34:56 2
+1 NULL 1
+2 2020-01-02T13:00:00 3
+2 2020-01-03T14:15:00 2
+3 2020-01-04T23:59:59 2
+NULL 2020-01-01T12:00:00 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+# Test whether min, max accumulator produces NaN result when input is NaN.
+# See https://github.com/apache/datafusion/issues/13415 for rationale
+statement ok
+CREATE TABLE input_table (
+    "row" integer,
+    "x" double precision
+);
+
+statement ok
+INSERT INTO input_table VALUES    (1, 'NaN');
+
+query RR
+SELECT max(input_table.x), min(input_table.x) from input_table GROUP BY input_table."row";
+----
+NaN NaN
+
+# Group by timestamp
+query TP
+SELECT
+    'foo' AS text,
+    arrow_cast('2024-01-01T00:00:00Z'::timestamptz, 'Timestamp(Microsecond, Some("UTC"))') AS ts
+GROUP BY ts, text
+----
+foo 2024-01-01T00:00:00Z
+
+query TP
+SELECT
+    'foo' AS text,
+    arrow_cast('2024-01-01T00:00:00Z'::timestamptz, 'Timestamp(Second, Some("+08:00"))') AS ts
+GROUP BY ts, text
+----
+foo 2024-01-01T00:00:00+08:00
+
+# Test multi group by int + Decimal128
+statement ok
+create table source as values
+(1, '123.45'),
+(1, '123.45'),
+(2, '678.90'),
+(2, '1011.12'),
+(3, '1314.15'),
+(3, '1314.15'),
+(2, '1011.12'),
+(null, null),
+(null, '123.45'),
+(null, null),
+(null, '123.45'),
+(2, '678.90'),
+(2, '678.90'),
+(1, null)
+;
+
+statement ok
+create view t as select column1 as a, arrow_cast(column2, 'Decimal128(10, 2)') as b from source;
+
+query IRI
+select a, b, count(*) from t group by a, b order by a, b;
+----
+1 123.45 2
+1 NULL 1
+2 678.9 3
+2 1011.12 2
+3 1314.15 2
+NULL 123.45 2
+NULL NULL 2
+
+statement ok
+drop view t
+
+statement ok
+drop table source;
+
+
+# test select_wildcard_with_groupby
+statement count 0
+create table t(a int, b int, c int, "😀" int);
+
+query TT
+explain select * from t group by a, b, c, "😀";
+----
+logical_plan
+01)Aggregate: groupBy=[[t.a, t.b, t.c, t.😀]], aggr=[[]]
+02)--TableScan: t projection=[a, b, c, 😀]
+physical_plan
+01)AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b, c@2 as c, 😀@3 as 😀], aggr=[]
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+
+query TT
+explain select * from (select a, b from t) as c group by a, b;
+----
+logical_plan
+01)Aggregate: groupBy=[[c.a, c.b]], aggr=[[]]
+02)--SubqueryAlias: c
+03)----TableScan: t projection=[a, b]
+physical_plan
+01)AggregateExec: mode=Single, gby=[a@0 as a, b@1 as b], aggr=[]
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+
+# Config reset
+statement ok
+reset datafusion.execution.batch_size;
+
+# The SLT runner sets `target_partitions` to 4 instead of using the default, so
+# reset it explicitly.
+statement ok
+set datafusion.execution.target_partitions = 4;
+
+statement count 0
+drop table t;
+
+# DISTINCT must not be removed when a unique key is downgraded to a
+# non-unique functional dependency by a join: `u.id` is a primary key, but
+# after the LEFT JOIN each `u` row can occur once per matching order.
+statement ok
+CREATE TABLE users_with_pk (id INT, name VARCHAR, primary key(id)) AS VALUES
+  (1, 'alice'),
+  (2, 'bob');
+
+statement ok
+CREATE TABLE user_orders (user_id INT, amount INT) AS VALUES
+  (1, 10),
+  (1, 20),
+  (2, 30);
+
+query I
+SELECT DISTINCT u.id
+  FROM users_with_pk u
+  LEFT JOIN user_orders o ON u.id = o.user_id
+  ORDER BY u.id;
+----
+1
+2
+
+# The DISTINCT must be planned as an Aggregate; it cannot be removed based
+# on the (join-downgraded) primary key of `users_with_pk`.
+query TT
+EXPLAIN SELECT DISTINCT u.id
+  FROM users_with_pk u
+  LEFT JOIN user_orders o ON u.id = o.user_id;
+----
+logical_plan
+01)Aggregate: groupBy=[[u.id]], aggr=[[]]
+02)--SubqueryAlias: u
+03)----TableScan: users_with_pk projection=[id]
+physical_plan
+01)AggregateExec: mode=FinalPartitioned, gby=[id@0 as id], aggr=[]
+02)--RepartitionExec: partitioning=Hash([id@0], 4), input_partitions=1
+03)----AggregateExec: mode=Partial, gby=[id@0 as id], aggr=[]
+04)------DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement ok
+drop table users_with_pk;
+
+statement ok
+drop table user_orders;
+
+# Test multi group by int + Duration
+statement ok
+CREATE TABLE duration_group_test AS VALUES
+  (1, arrow_cast(5, 'Duration(Second)')),
+  (1, arrow_cast(5, 'Duration(Second)')),
+  (1, arrow_cast(7, 'Duration(Second)')),
+  (2, arrow_cast(5, 'Duration(Second)'));
+
+# Single Duration group key ({5s, 7s}, 5s x3) via the GroupValuesPrimitive path.
+query ?I
+SELECT column2, count(*) FROM duration_group_test GROUP BY column2 ORDER BY column2;
+----
+0 days 0 hours 0 mins 5 secs 3
+0 days 0 hours 0 mins 7 secs 1
+
+# Multi-column GROUP BY: a primitive key and a Duration key on the same path.
+query I?I
+SELECT column1, column2, count(*)
+FROM duration_group_test GROUP BY column1, column2 ORDER BY column1, column2;
+----
+1 0 days 0 hours 0 mins 5 secs 2
+1 0 days 0 hours 0 mins 7 secs 1
+2 0 days 0 hours 0 mins 5 secs 1
+
+statement ok
+DROP TABLE duration_group_test;
+
+# Test multi group by int + Float16
+statement ok
+CREATE TABLE float16_group_test AS VALUES
+  (arrow_cast(1.5, 'Float16'), 1),
+  (arrow_cast(1.5, 'Float16'), 1),
+  (arrow_cast(2.5, 'Float16'), 2),
+  (arrow_cast(-0.0, 'Float16'), 3),
+  (arrow_cast(0.0, 'Float16'), 3);
+
+# Single Float16 group key ({1.5, 2.5, ±0.0}) via the GroupValuesPrimitive path.
+query I
+SELECT count(*) FROM (SELECT column1 FROM float16_group_test GROUP BY column1);
+----
+3
+
+# Multi-column GROUP BY: a primitive key and a Float16 key on the same path.
+query I
+SELECT count(*) FROM (SELECT column1, column2 FROM float16_group_test GROUP BY column1, column2);
+----
+3
+
+statement ok
+DROP TABLE float16_group_test;
+
+# Test multi group by int + Interval
+statement ok
+CREATE TABLE interval_group_test AS VALUES
+  (1, INTERVAL '1' MONTH),
+  (1, INTERVAL '1' MONTH),
+  (1, INTERVAL '30' DAY),
+  (2, INTERVAL '1' MONTH);
+
+# Single Interval group key ({1 month, 30 days}) via the GroupValuesPrimitive path.
+query I
+SELECT count(*) FROM interval_group_test GROUP BY column2 ORDER BY count(*);
+----
+1
+3
+
+# Multi-column GROUP BY: a primitive key and an Interval key on the same path.
+query II
+SELECT column1, count(*)
+FROM interval_group_test GROUP BY column1, column2 ORDER BY column1, count(*);
+----
+1 1
+1 2
+2 1
+
+statement ok
+DROP TABLE interval_group_test;
+
+# Test multi group by int + Decimal256
+statement ok
+create table decimal256_multi_group (k int, d decimal(50, 2)) as values
+  (1, 100.00), (1, 100.00), (1, 250.00), (2, 100.00), (2, NULL);
+
+query IRI
+select k, d, count(*) from decimal256_multi_group group by k, d order by k, d;
+----
+1 100 2
+1 250 1
+2 100 1
+2 NULL 1
+
+statement ok
+drop table decimal256_multi_group;

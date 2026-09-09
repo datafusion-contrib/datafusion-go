@@ -271,6 +271,7 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 	datafusionSet := false
 	datafusionFFISet := false
 	datafusionSQLSet := false
+	datafusionSQLLogicTestSet := false
 	for _, raw := range strings.SplitAfter(string(data), "\n") {
 		line := strings.TrimSpace(raw)
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
@@ -290,6 +291,9 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 		case section == "dependencies" && strings.HasPrefix(line, "datafusion-sql = "):
 			fmt.Fprintf(&out, "datafusion-sql = %q\n", "="+cfg.DataFusionVersion)
 			datafusionSQLSet = true
+		case section == "dependencies.datafusion-sqllogictest" && strings.HasPrefix(line, "version = "):
+			fmt.Fprintf(&out, "version = %q\n", "="+cfg.DataFusionVersion)
+			datafusionSQLLogicTestSet = true
 		default:
 			out.WriteString(raw)
 		}
@@ -307,6 +311,9 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 	}
 	if !datafusionSQLSet {
 		missing = append(missing, "[dependencies].datafusion-sql")
+	}
+	if !datafusionSQLLogicTestSet {
+		missing = append(missing, "[dependencies.datafusion-sqllogictest].version")
 	}
 	if len(missing) != 0 {
 		return nil, fmt.Errorf("%s missing expected fields: %s", path, strings.Join(missing, ", "))

@@ -1,3 +1,4 @@
+use datafusion_sql::sqlparser::dialect::GenericDialect;
 use datafusion_sql::sqlparser::tokenizer::Location;
 
 use super::*;
@@ -6,7 +7,7 @@ use super::*;
 fn rewrites_question_marks_with_unicode_comments_and_multiline_sql() {
     let query = "select '雪?' as literal, ? as first, -- ? comment\n  'Ω' || ? as second, /* ? block */ ? as third";
 
-    let prepared = prepare_query(query.to_owned()).expect("prepare query");
+    let prepared = prepare_query(query.to_owned(), &GenericDialect {}).expect("prepare query");
 
     assert_eq!(prepared.params.count(), 3);
     assert_eq!(
@@ -26,7 +27,7 @@ fn rejects_malformed_or_mixed_placeholder_variants() {
         "select $",
     ] {
         assert!(
-            prepare_query(query.to_owned()).is_err(),
+            prepare_query(query.to_owned(), &GenericDialect {}).is_err(),
             "expected {query:?} to fail"
         );
     }

@@ -91,6 +91,10 @@ datafusion-ffi = "=old"
 datafusion-sql = "=old"
 tokio = { version = "1", features = ["rt"] }
 
+[dependencies.datafusion-sqllogictest]
+version = "=old"
+optional = true
+
 [dev-dependencies]
 serde_json = "1"
 `
@@ -147,7 +151,7 @@ func TestGenerationAndDrift(t *testing.T) {
 
 func TestCargoMissingFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Cargo.toml")
-	for _, field := range []string{`version = "old"`, `datafusion = "=old"`, `datafusion-ffi = "=old"`, `datafusion-sql = "=old"`} {
+	for _, field := range []string{`version = "old"`, `datafusion = "=old"`, `datafusion-ffi = "=old"`, `datafusion-sql = "=old"`, `version = "=old"`} {
 		writeFixture(t, path, strings.Replace(cargoFixture, field, "", 1))
 		if _, err := updateCargoToml(path, config{}); err == nil {
 			t.Errorf("accepted missing field %s", field)

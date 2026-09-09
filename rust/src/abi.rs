@@ -11,13 +11,17 @@ use datafusion::catalog::TableProvider;
 use datafusion::execution::context::SessionConfig;
 use datafusion::prelude::SessionContext;
 use datafusion_ffi::table_provider::FFI_TableProvider;
-use datafusion_sql::parser::DFParser;
+use datafusion_sql::parser::DFParserBuilder;
+use datafusion_sql::sqlparser::dialect::dialect_from_str;
 use tokio::runtime::Runtime;
 
 use crate::error::{FfiError, run_ffi};
 use crate::generated::{DATAFUSION_VERSION, DFGO_ABI_VERSION};
 use crate::parameters::bindings_from_params;
-use crate::query::{Binding, ParameterMetadata, prepare_query, statement_serializes};
+use crate::query::{
+    Binding, ParameterMetadata, PreparedQuery, prepare_query, statement_defines_parameters,
+    statement_serializes,
+};
 use crate::registration::{arrow_stream_batches, ipc_batches, register_record_batches};
 use crate::session::{Inner, session_config_from_dsn};
 use crate::stream::{CancelToken, execute_to_stream};
@@ -558,8 +562,21 @@ pub unsafe extern "C" fn dfgo_prepare(
         // Prepare does all driver-level validation that can be decided from SQL
         // text alone: placeholder style, single-statement enforcement, and
         // whether database/sql must serialize statement execution.
-        let prepared = prepare_query(cstr_to_string(query, "query")?)?;
-        let statements = DFParser::parse_sql(&prepared.query)
+        // SAFETY: the connection is live for this call. Snapshot its parser
+        // settings so prepare honors the same dialect and recursion limit as
+        // execution, including settings changed by a preceding SET statement.
+        let conn = unsafe { &*conn };
+        let state = conn.inner.ctx.state();
+        let options = &state.config_options().sql_parser;
+        let dialect = dialect_from_str(options.dialect).ok_or_else(|| {
+            FfiError::invalid_argument(format!("unsupported SQL dialect: {}", options.dialect))
+        })?;
+        let query = cstr_to_string(query, "query")?;
+        let statements = DFParserBuilder::new(query.as_str())
+            .with_dialect(dialect.as_ref())
+            .with_recursion_limit(options.recursion_limit.get())
+            .build()
+            .and_then(|mut parser| parser.parse_statements())
             .map_err(|e| FfiError::invalid_argument(e.to_string()))?;
         let serializes = match statements.len() {
             0 => {
@@ -574,9 +591,16 @@ pub unsafe extern "C" fn dfgo_prepare(
                 )));
             }
         };
+        let prepared = if statement_defines_parameters(&statements[0]) {
+            PreparedQuery {
+                query,
+                params: ParameterMetadata::None,
+            }
+        } else {
+            prepare_query(query, dialect.as_ref())?
+        };
         // SAFETY: `conn` is non-null and live; the prepared statement clones the
         // Arc it needs, so it can outlive the borrowed connection reference.
-        let conn = unsafe { &*conn };
         let stmt = dfgo_statement {
             inner: conn.inner.clone(),
             query: prepared.query,

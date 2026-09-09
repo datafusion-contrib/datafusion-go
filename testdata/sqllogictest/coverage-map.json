@@ -1,0 +1,178 @@
+{
+  "ddl.md#ddl": [
+    {
+      "location": "test_files/ddl.slt:22",
+      "sql_sha256": "f39641c4f3f183eb36652ac82688b050163fe1d76bffcf6df764da3ce6d1924e"
+    },
+    {
+      "location": "test_files/ddl.slt:25",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "ddl.md#create-table": [
+    {
+      "location": "test_files/ddl.slt:22",
+      "sql_sha256": "f39641c4f3f183eb36652ac82688b050163fe1d76bffcf6df764da3ce6d1924e"
+    },
+    {
+      "location": "test_files/ddl.slt:25",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "ddl.md#drop-table": [
+    {
+      "location": "test_files/ddl.slt:31",
+      "sql_sha256": "e17f746c354d91ee9f0b7b87df1102d04f11a4d4833bd0b4dce5eaa6f9fbdf7c"
+    }
+  ],
+  "dml.md#dml": [
+    {
+      "location": "test_files/ddl.slt:47",
+      "sql_sha256": "6074083ccf6515b8338e2f41b8e0b10f69869588fdf62903479daf3d3c77f924"
+    },
+    {
+      "location": "test_files/ddl.slt:50",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "dml.md#insert": [
+    {
+      "location": "test_files/ddl.slt:47",
+      "sql_sha256": "6074083ccf6515b8338e2f41b8e0b10f69869588fdf62903479daf3d3c77f924"
+    },
+    {
+      "location": "test_files/ddl.slt:50",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "dml.md#examples-1": [
+    {
+      "location": "test_files/ddl.slt:57",
+      "sql_sha256": "6508fd929f5cc7310737316617620eeece7c473da43c4302f2f9cfabe03c80dc"
+    },
+    {
+      "location": "test_files/ddl.slt:60",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "prepared_statements.md#prepared-statements": [
+    {
+      "location": "test_files/prepare.slt:87",
+      "sql_sha256": "9c9d08cfbe6e1357a91b03c5e1e42cac7c9b1352c5ca8655958937075ca107d6"
+    },
+    {
+      "location": "test_files/prepare.slt:90",
+      "sql_sha256": "ac3254483435a0ea5bf80dabcf9cd030715fb01695e62cb531bee65ff183d1b5"
+    }
+  ],
+  "prepared_statements.md#inferred-types": [
+    {
+      "location": "test_files/prepare.slt:87",
+      "sql_sha256": "9c9d08cfbe6e1357a91b03c5e1e42cac7c9b1352c5ca8655958937075ca107d6"
+    },
+    {
+      "location": "test_files/prepare.slt:90",
+      "sql_sha256": "ac3254483435a0ea5bf80dabcf9cd030715fb01695e62cb531bee65ff183d1b5"
+    }
+  ],
+  "prepared_statements.md#positional-arguments": [
+    {
+      "location": "test_files/prepare.slt:99",
+      "sql_sha256": "b06759ef4702feaf0e818d9021558176436cacca453af9ff4d84afb6c96d29ce"
+    },
+    {
+      "location": "test_files/prepare.slt:102",
+      "sql_sha256": "140612fdd81fb1814abb6150617be0ee89c47a5e6379e36ddfa91b4795a1bd8e"
+    }
+  ],
+  "select.md#select-syntax": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ],
+  "select.md#with-clause": [
+    {
+      "location": "test_files/cte.slt:24",
+      "sql_sha256": "8ae3bb42801e847bcae6e90955dee8c98c1b6b29acf625ddcb8c50a7eb25193d"
+    }
+  ],
+  "select.md#select-clause": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ],
+  "select.md#wildcards": [
+    {
+      "location": "test_files/cte.slt:24",
+      "sql_sha256": "8ae3bb42801e847bcae6e90955dee8c98c1b6b29acf625ddcb8c50a7eb25193d"
+    }
+  ],
+  "select.md#select-into": [
+    {
+      "location": "test_files/ddl.slt:34",
+      "sql_sha256": "c5d1b23786a45c42a945eebfd9867073abc9dccff8a429ce31092ba3edd0d730"
+    },
+    {
+      "location": "test_files/ddl.slt:37",
+      "sql_sha256": "770ec17e2277e313a56c78ecab71d0ee460922cac72efddf9869ca4194276572"
+    }
+  ],
+  "select.md#from-clause": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ],
+  "select.md#where-clause": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ],
+  "select.md#window-clause": [
+    {
+      "location": "test_files/select.slt:84",
+      "sql_sha256": "b0d0037a5eb06a990aea01ebac19ee78e8ddd4766b0508b16e8985c35c8d8d47"
+    }
+  ],
+  "select.md#set-operations": [
+    {
+      "location": "test_files/union.slt:77",
+      "sql_sha256": "8298157231683a04d6377024733a49390429324ec0a8df74ae62277d51701f94"
+    },
+    {
+      "location": "test_files/union.slt:121",
+      "sql_sha256": "ab64f439d967ae8b5d46935922739750b10e2b7279a0ce85f7151280077c9080"
+    },
+    {
+      "location": "test_files/union.slt:43",
+      "sql_sha256": "bd19a11a2fd83118e58e34ea02661236a9a151c1e6ecf51c7215a1076271a95f"
+    }
+  ],
+  "select.md#order-by-clause": [
+    {
+      "location": "test_files/select.slt:84",
+      "sql_sha256": "b0d0037a5eb06a990aea01ebac19ee78e8ddd4766b0508b16e8985c35c8d8d47"
+    }
+  ],
+  "select.md#limit-and-offset-clauses": [
+    {
+      "location": "test_files/limit.slt:281",
+      "sql_sha256": "51d368ff22eda088642fd520cea96dd51a5fafdecacbc367c92e377f6e42a286"
+    }
+  ],
+  "operators.md#logical-operators": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ],
+  "operators.md#and": [
+    {
+      "location": "test_files/select.slt:148",
+      "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
+    }
+  ]
+}
