@@ -3,13 +3,33 @@ import json
 from pathlib import Path
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import sql_coverage
 import sqllogictest
 
 
 class SQLLogicToolsTest(unittest.TestCase):
+    def test_native_comparison_rejects_stale_or_unknown_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            reports = Path(temporary)
+            lock = sqllogictest.check()
+            summary = {"upstream_commit": lock["source"]["commit"], "failed": ["arrow_typeof.slt"],
+                       "run": {"driver_manifest_sha256": sqllogictest.digest(sqllogictest.DRIVER_LOCK)}}
+            cases = [
+                (dict(summary, upstream_commit="stale"), "pinned DataFusion version"),
+                (dict(summary, run={"driver_manifest_sha256": "stale"}), "same driver SQL fixtures"),
+                (dict(summary, failed=["../../unknown.slt"]), "unknown SQL files"),
+            ]
+            with patch.object(sqllogictest, "prepare") as prepare:
+                for report, error in cases:
+                    (reports / "summary.json").write_text(json.dumps(report), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, error):
+                        sqllogictest.oracle(SimpleNamespace(reports=reports))
+                prepare.assert_not_called()
+
     def test_archive_rejects_traversal(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

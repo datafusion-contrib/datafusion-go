@@ -86,6 +86,20 @@ documentation unchanged.
 reports even on failure. Assertions remain failing when the driver or its Arrow
 dependency cannot represent a valid upstream result.
 
+After a failed run, `make test.sqllogic.oracle` replays each failed SQL file with
+DataFusion's own Rust executor. It verifies that the report references the
+current corpus and driver fixtures, then writes separate logs and outcomes
+under the report's `native/` directory. CI runs this diagnostic after failures,
+with a ten-minute limit. Native results do not change the Go assertion outcomes
+or count as Go coverage.
+
+The Windows GNU build also reports mismatches in `spark/math/csc.slt` and
+`spark/math/sec.slt` near trigonometric poles. For example, the `csc(pi())`
+snapshot expects `8165619676597685`, while Windows returned `8165889364191922`.
+The Spark functions use reciprocals of Rust's `f64::sin` and `f64::cos`, whose
+[precision can vary by platform](https://doc.rust-lang.org/std/primitive.f64.html#method.sin).
+The original snapshots and upstream comparison tolerances remain unchanged.
+
 The tight-memory aggregation in `aggregate_memory_spill.slt` can time out or
 exhaust its 1 MiB pool. The ignored Rust diagnostic
 `upstream_spill_with_blocking_pulls` in `rust/tests/sqllogictest_oracle.rs`

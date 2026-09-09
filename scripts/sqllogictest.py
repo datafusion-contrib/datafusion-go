@@ -336,11 +336,63 @@ def run(arguments):
     return result.returncode or (0 if summary["complete"] or arguments.run != "^TestSQLLogic$" else 1)
 
 
+def oracle(arguments):
+    summary_path = arguments.reports / "summary.json"
+    if not summary_path.is_file():
+        print("No completed SQL report is available for native comparison.")
+        return 0
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    lock = check()
+    if summary["upstream_commit"] != lock["source"]["commit"]:
+        raise ValueError("native comparison requires a report for the pinned DataFusion version")
+    if summary["run"]["driver_manifest_sha256"] != digest(DRIVER_LOCK):
+        raise ValueError("native comparison requires the same driver SQL fixtures as the Go run")
+    expected = {name for name in lock["files"] if name.endswith(".slt")}
+    expected.update("_driver/" + name for name in json.loads(DRIVER_LOCK.read_text(encoding="utf-8")))
+    failed = summary["failed"]
+    if not set(failed).issubset(expected):
+        raise ValueError("native comparison report contains unknown SQL files")
+    if not failed:
+        print("The Go report has no failed files to compare.")
+        return 0
+    source = prepare()
+    command = ["cargo", "test", "--manifest-path", str(ROOT / "rust/Cargo.toml"), "--release",
+               "--target-dir", str(arguments.target_dir), "--features", "test-sqllogictest", "--locked",
+               "--test", "sqllogictest_oracle", "upstream_oracle", "--", "--ignored", "--nocapture"]
+    directory = arguments.reports / "native"
+    directory.mkdir(exist_ok=True)
+    results = []
+    for name in failed:
+        log = directory / (name + ".log")
+        log.parent.mkdir(parents=True, exist_ok=True)
+        environment = dict(os.environ, DFGO_SQLLOGICTEST_SOURCE=str(source), DFGO_SQLLOGICTEST_FILE=name,
+                           ARROW_TEST_DATA=str(source / "testing" / "data"),
+                           PARQUET_TEST_DATA=str(source / "parquet-testing" / "data"),
+                           DATAFUSION_TEST_DATA=str(source / "datafusion-testing" / "data"))
+        with log.open("w", encoding="utf-8") as output:
+            result = subprocess.run(command, cwd=ROOT, env=environment, stdout=output,
+                                    stderr=subprocess.STDOUT, check=False)
+        results.append({"file": name, "exit_code": result.returncode})
+        print(f"Native comparison: {name}: exit {result.returncode}; log: {log}", flush=True)
+    (directory / "summary.json").write_text(json.dumps({
+        "upstream_commit": lock["source"]["commit"], "driver_manifest_sha256": digest(DRIVER_LOCK),
+        "repository_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "platform": sys.platform, "cargo_build_target": os.environ.get("CARGO_BUILD_TARGET", "host"),
+        "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+        "tokio_worker_threads": os.environ.get("TOKIO_WORKER_THREADS", "runtime default"),
+        "results": results,
+    }, indent=2) + "\n", encoding="utf-8")
+    # These diagnostics never alter the original Go outcomes or coverage.
+    return 0 if all(result["exit_code"] == 0 for result in results) else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check", "sync", "sync-driver", "prepare", "run", "report"])
+    parser.add_argument("command", choices=["check", "sync", "sync-driver", "prepare", "run", "report", "oracle"])
     parser.add_argument("--run", default="^TestSQLLogic$", help="Go subtest filter for local iteration")
     parser.add_argument("--reports", type=Path, default=CACHE / "reports" / "current")
+    parser.add_argument("--target-dir", type=Path, default=ROOT / "rust/target/sqllogictest",
+                        help="Cargo target directory for native comparison")
     arguments = parser.parse_args()
     if arguments.command == "check":
         lock = check()
@@ -353,6 +405,8 @@ def main():
         print(prepare())
     elif arguments.command == "report":
         return 0 if report(arguments.reports, check())["complete"] else 1
+    elif arguments.command == "oracle":
+        return oracle(arguments)
     else:
         return run(arguments)
     return 0

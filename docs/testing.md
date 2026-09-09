@@ -65,6 +65,9 @@ function and SQL section inventory keeps gaps visible beyond the upstream suite.
 See [the corpus instructions](../testdata/sqllogictest/README.md) for requirements,
 focused runs, corpus updates, and the limits of each coverage metric. CI runs
 this target on Linux, macOS, and Windows.
+After failures, `make test.sqllogic.oracle` compares the failed files with native
+DataFusion and retains separate diagnostic logs. CI runs this comparison with a
+ten-minute limit; its outcomes never replace the Go coverage results.
 
 ## Lifecycle and failure sequences
 
