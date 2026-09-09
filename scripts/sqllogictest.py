@@ -386,9 +386,47 @@ def oracle(arguments):
     return 0 if all(result["exit_code"] == 0 for result in results) else 1
 
 
+def spill(arguments):
+    lock = check()
+    directory = arguments.reports / "spill"
+    directory.mkdir(parents=True, exist_ok=True)
+    native = ["cargo", "test", "--manifest-path", str(ROOT / "rust/Cargo.toml"), "--release",
+              "--target-dir", str(arguments.target_dir), "--features", "test-sqllogictest", "--locked",
+              "--test", "sqllogictest_oracle", "upstream_spill_with_blocking_pulls",
+              "--", "--ignored", "--exact", "--nocapture"]
+    go = ["go", "test", "-count=25", "-failfast", "-tags=datafusion_test_sqllogic", "-timeout=2m", "-v",
+          "-run=^TestSQLParallelSpillDiagnostic$", "."]
+    summary = {
+        "upstream_commit": lock["source"]["commit"],
+        "repository_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "platform": sys.platform, "cargo_build_target": os.environ.get("CARGO_BUILD_TARGET", "host"),
+        "tokio_worker_threads": os.environ.get("TOKIO_WORKER_THREADS", "runtime default"),
+        "complete": False, "results": [],
+    }
+    summary_path = directory / "summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    for name, command in [("go", go), ("native-blocking", native), ("native-async", native)]:
+        environment = dict(os.environ, DFGO_SQLLOGICTEST_SPILL_DIAGNOSTIC="1")
+        environment.pop("DFGO_SQLLOGICTEST_ASYNC_COLLECT", None)
+        if name == "native-async":
+            environment["DFGO_SQLLOGICTEST_ASYNC_COLLECT"] = "1"
+        log = directory / (name + ".log")
+        print(f"Parallel spill diagnostic: {name}; log: {log}", flush=True)
+        with log.open("w", encoding="utf-8") as output:
+            result = subprocess.run(command, cwd=ROOT, env=environment, stdout=output,
+                                    stderr=subprocess.STDOUT, check=False)
+        summary["results"].append({"mode": name, "exit_code": result.returncode})
+        summary["complete"] = len(summary["results"]) == 3
+        # Preserve completed outcomes even if a later mode reaches CI's time limit.
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        print(f"Parallel spill diagnostic: {name}: exit {result.returncode}", flush=True)
+    # CI marks only this diagnostic step continue-on-error; local failures remain visible.
+    return 0 if all(result["exit_code"] == 0 for result in summary["results"]) else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check", "sync", "sync-driver", "prepare", "run", "report", "oracle"])
+    parser.add_argument("command", choices=["check", "sync", "sync-driver", "prepare", "run", "report", "oracle", "spill"])
     parser.add_argument("--run", default="^TestSQLLogic$", help="Go subtest filter for local iteration")
     parser.add_argument("--reports", type=Path, default=CACHE / "reports" / "current")
     parser.add_argument("--target-dir", type=Path, default=ROOT / "rust/target/sqllogictest",
@@ -407,6 +445,8 @@ def main():
         return 0 if report(arguments.reports, check())["complete"] else 1
     elif arguments.command == "oracle":
         return oracle(arguments)
+    elif arguments.command == "spill":
+        return spill(arguments)
     else:
         return run(arguments)
     return 0

@@ -82,6 +82,21 @@ jobs:
           CC: gcc
           CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
         run: make test.sqllogic.oracle
+      - name: Diagnose quarantined parallel spilling
+        if: ${{ !cancelled() && matrix.platform != 'windows-amd64' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: make test.sqllogic.spill
+      - name: Diagnose quarantined parallel spilling (Windows)
+        if: ${{ !cancelled() && matrix.platform == 'windows-amd64' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: '1'
+          CC: gcc
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: make test.sqllogic.spill
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

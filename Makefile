@@ -246,7 +246,7 @@ test.extended: test.sqlite test.install test.sequences test.fuzz rust.fuzz test.
 
 # The optional upstream fixture dependencies and test callbacks live in their
 # own build directory. Release and source-link artifacts remain independent.
-.PHONY: sqllogic.sync sqllogic.driver.sync sqllogic.check sqllogic.tools.test rust.sqllogic test.sqllogic test.sqllogic.oracle
+.PHONY: sqllogic.sync sqllogic.driver.sync sqllogic.check sqllogic.tools.test rust.sqllogic test.sqllogic test.sqllogic.oracle test.sqllogic.spill
 sqllogic.sync:
 	python3 scripts/sqllogictest.py sync
 
@@ -269,3 +269,6 @@ test.sqllogic: rust.sqllogic sqllogic.tools.test
 
 test.sqllogic.oracle:
 	$(RUST_BUILD_ENV) python3 scripts/sqllogictest.py oracle --target-dir $(SQLLOGIC_TARGET_DIR)
+
+test.sqllogic.spill: rust.sqllogic
+	$(RUST_BUILD_ENV) DATAFUSION_GO_LIBRARY=$(abspath $(SQLLOGIC_TARGET_DIR))/$(if $(CARGO_BUILD_TARGET),$(CARGO_BUILD_TARGET)/)release/$(NATIVE_SHARED_NAME) python3 scripts/sqllogictest.py spill --target-dir $(SQLLOGIC_TARGET_DIR)

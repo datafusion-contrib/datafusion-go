@@ -82,32 +82,68 @@ fn upstream_spill_with_blocking_pulls() -> Result<(), Box<dyn std::error::Error>
     ] {
         runtime.block_on(async { ctx.sql(sql).await?.collect().await })?;
     }
-    let query = "EXPLAIN ANALYZE SELECT count(*), sum(total) FROM (SELECT (v * 7) % 100000 AS k, sum(v) AS total FROM generate_series(1, 100000) AS t(v) GROUP BY (v * 7) % 100000)";
+    let query = "SELECT count(*), sum(total) FROM (SELECT (v * 7) % 100000 AS k, sum(v) AS total FROM generate_series(1, 100000) AS t(v) GROUP BY (v * 7) % 100000)";
+    let explain = format!("EXPLAIN ANALYZE {query}");
     let async_collect = std::env::var_os("DFGO_SQLLOGICTEST_ASYNC_COLLECT").is_some();
     for iteration in 0..25 {
-        if async_collect {
-            let batches = runtime.block_on(async {
-                tokio::time::timeout(Duration::from_secs(5), async {
-                    ctx.sql(query).await?.collect().await
-                })
-                .await
-            })??;
-            assert!(batches.iter().any(|batch| batch.num_rows() > 0));
-            continue;
-        }
-        let mut stream =
-            runtime.block_on(async { ctx.sql(query).await?.execute_stream().await })?;
-        let mut rows = 0;
-        loop {
-            let next = runtime.block_on(async {
-                tokio::time::timeout(Duration::from_secs(5), stream.next()).await
-            })?;
-            match next {
-                Some(batch) => rows += batch?.num_rows(),
-                None => break,
+        for (sql, is_explain) in [(query, false), (explain.as_str(), true)] {
+            println!("iteration {iteration}: explain={is_explain}, async_collect={async_collect}");
+            let batches = if async_collect {
+                runtime.block_on(async {
+                    tokio::time::timeout(Duration::from_secs(5), async {
+                        ctx.sql(sql).await?.collect().await
+                    })
+                    .await
+                })??
+            } else {
+                let mut stream = runtime.block_on(async {
+                    tokio::time::timeout(Duration::from_secs(5), async {
+                        ctx.sql(sql).await?.execute_stream().await
+                    })
+                    .await
+                })??;
+                let mut batches = Vec::new();
+                loop {
+                    let next = runtime.block_on(async {
+                        tokio::time::timeout(Duration::from_secs(5), stream.next()).await
+                    })?;
+                    match next {
+                        Some(batch) => batches.push(batch?),
+                        None => break,
+                    }
+                }
+                batches
+            };
+            let schema = batches.first().ok_or("query returned no batches")?.schema();
+            let values = datafusion_sqllogictest::convert_batches(&schema, batches, false)?;
+            if is_explain {
+                let spilled = values
+                    .iter()
+                    .flatten()
+                    .flat_map(|value| value.lines())
+                    .any(|line| {
+                        line.contains("mode=FinalPartitioned")
+                            && line.split_once("spill_count=").is_some_and(|(_, count)| {
+                                count
+                                    .chars()
+                                    .take_while(|c| c.is_ascii_digit())
+                                    .collect::<String>()
+                                    .parse::<usize>()
+                                    .is_ok_and(|count| count > 0)
+                            })
+                    });
+                assert!(
+                    spilled,
+                    "iteration {iteration}: final aggregation did not spill: {values:?}"
+                );
+            } else {
+                assert_eq!(
+                    values,
+                    vec![vec!["100000".to_owned(), "5000050000".to_owned()]],
+                    "iteration {iteration}: spill lost rows"
+                );
             }
         }
-        assert!(rows > 0, "iteration {iteration}");
     }
     Ok(())
 }

@@ -12,6 +12,41 @@ import sqllogictest
 
 
 class SQLLogicToolsTest(unittest.TestCase):
+    def test_spill_diagnostic_reports_failures_without_changing_corpus_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            reports = Path(temporary)
+            corpus_summary = reports / "summary.json"
+            corpus_summary.write_text('{"complete": true}\n', encoding="utf-8")
+            calls = []
+
+            def execute(command, **kwargs):
+                calls.append((command, kwargs["env"]))
+                kwargs["stdout"].write("diagnostic output\n")
+                return SimpleNamespace(returncode=101 if len(calls) == 2 else 0)
+
+            with patch.object(sqllogictest, "check", return_value={"source": {"commit": "pinned"}}), \
+                    patch.object(sqllogictest.subprocess, "check_output", return_value="head\n"), \
+                    patch.object(sqllogictest.subprocess, "run", side_effect=execute), \
+                    patch.dict(sqllogictest.os.environ, {"DFGO_SQLLOGICTEST_ASYNC_COLLECT": "1"}):
+                result = sqllogictest.spill(SimpleNamespace(reports=reports, target_dir=Path("target")))
+
+            self.assertEqual(result, 1)
+            self.assertEqual(corpus_summary.read_text(encoding="utf-8"), '{"complete": true}\n')
+            summary = json.loads((reports / "spill/summary.json").read_text(encoding="utf-8"))
+            self.assertTrue(summary["complete"])
+            self.assertEqual(summary["results"], [
+                {"mode": "go", "exit_code": 0},
+                {"mode": "native-blocking", "exit_code": 101},
+                {"mode": "native-async", "exit_code": 0},
+            ])
+            self.assertIn("-count=25", calls[0][0])
+            self.assertEqual(calls[0][1]["DFGO_SQLLOGICTEST_SPILL_DIAGNOSTIC"], "1")
+            self.assertNotIn("DFGO_SQLLOGICTEST_ASYNC_COLLECT", calls[1][1])
+            self.assertEqual(calls[2][1]["DFGO_SQLLOGICTEST_ASYNC_COLLECT"], "1")
+            for mode in ["go", "native-blocking", "native-async"]:
+                self.assertEqual((reports / "spill" / (mode + ".log")).read_text(encoding="utf-8"),
+                                 "diagnostic output\n")
+
     def test_native_comparison_rejects_stale_or_unknown_inputs(self):
         with tempfile.TemporaryDirectory() as temporary:
             reports = Path(temporary)

@@ -38,9 +38,14 @@ Infinity
 NULL
 
 query R
-SELECT csc(a) FROM (VALUES (pi()), (-pi()), (pi()/2) , (arrow_cast('NAN','Float32'))) AS t(a);
+SELECT csc(a) FROM (VALUES (pi()/2), (arrow_cast('NAN','Float32'))) AS t(a);
 ----
-8165619676597685
--8165619676597685
 1
 NaN
+
+# Near-pole snapshots depend on the platform's sin implementation.
+# Check known values away from the poles with an explicit tolerance.
+query BB
+SELECT abs(csc(pi()/6) - 2) < 1e-12, abs(csc(-pi()/6) + 2) < 1e-12;
+----
+true true

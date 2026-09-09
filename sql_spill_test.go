@@ -5,12 +5,19 @@ package datafusion
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestSQLStreamingSinglePartitionSpill(t *testing.T) {
+	testSQLStreamingSpill(t, 1)
+}
+
+func testSQLStreamingSpill(t *testing.T, partitions int) {
+	t.Helper()
 	db, err := sql.Open("datafusion", "")
 	if err != nil {
 		t.Fatal(err)
@@ -24,9 +31,8 @@ func TestSQLStreamingSinglePartitionSpill(t *testing.T) {
 	}
 	defer closeNoError(t, conn)
 	for _, query := range []string{
-		// Exercise streaming reads during a spill without repartitioning.
-		// The full SQL corpus includes the parallel aggregation stress case.
-		"SET datafusion.execution.target_partitions = 1",
+		// Four partitions are exercised by the separate spill diagnostic.
+		fmt.Sprintf("SET datafusion.execution.target_partitions = %d", partitions),
 		"SET datafusion.execution.batch_size = 128",
 		"SET datafusion.runtime.memory_limit = '1M'",
 	} {
@@ -53,12 +59,18 @@ func TestSQLStreamingSinglePartitionSpill(t *testing.T) {
 	defer closeNoError(t, rows)
 	spilled := false
 	spillCount := regexp.MustCompile(`spill_count=[1-9][0-9]*`)
+	mode := "mode=Single"
+	if partitions > 1 {
+		mode = "mode=FinalPartitioned"
+	}
 	for rows.Next() {
 		var planType, plan string
 		if err := rows.Scan(&planType, &plan); err != nil {
 			t.Fatal(err)
 		}
-		spilled = spilled || spillCount.MatchString(plan)
+		for _, line := range strings.Split(plan, "\n") {
+			spilled = spilled || (strings.Contains(line, mode) && spillCount.MatchString(line))
+		}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)

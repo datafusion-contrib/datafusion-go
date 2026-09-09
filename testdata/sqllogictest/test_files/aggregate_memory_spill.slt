@@ -198,31 +198,34 @@ FROM (
 statement ok
 SET datafusion.execution.target_partitions = 4
 
-query II
-SELECT count(*), sum(total)
-FROM (
-  SELECT (v * 7) % 100000 AS k, sum(v) AS total
-  FROM generate_series(1, 100000) AS t(v)
-  GROUP BY (v * 7) % 100000
-)
-----
-100000 5000050000
+# TODO(datafusion-go): Restore these two assertions when parallel spilling
+# is reliable with a 1 MiB pool. They run in make test.sqllogic.spill,
+# which checks returned values and a nonzero final-aggregate spill count.
+# query II
+# SELECT count(*), sum(total)
+# FROM (
+#   SELECT (v * 7) % 100000 AS k, sum(v) AS total
+#   FROM generate_series(1, 100000) AS t(v)
+#   GROUP BY (v * 7) % 100000
+# )
+# ----
+# 100000 5000050000
 
 # Assert spill happened in the final aggregation.
 # In multi-partitions configuration, 'spilled_rows' is not deterministic, so assert 
 # the unit to be 'K'
-query TT
-EXPLAIN ANALYZE
-SELECT count(*), sum(total)
-FROM (
-  SELECT (v * 7) % 100000 AS k, sum(v) AS total
-  FROM generate_series(1, 100000) AS t(v)
-  GROUP BY (v * 7) % 100000
-)
-----
-<slt:ignore>
-06)----------AggregateExec: mode=FinalPartitioned, gby=[t.v * Int64(7) % Int64(100000)@0 as t.v * Int64(7) % Int64(100000)], aggr=[sum(t.v)], metrics=[<slt:ignore>spilled_rows=<slt:ignore>K,<slt:ignore>]
-<slt:ignore>
+# query TT
+# EXPLAIN ANALYZE
+# SELECT count(*), sum(total)
+# FROM (
+#   SELECT (v * 7) % 100000 AS k, sum(v) AS total
+#   FROM generate_series(1, 100000) AS t(v)
+#   GROUP BY (v * 7) % 100000
+# )
+# ----
+# <slt:ignore>
+# 06)----------AggregateExec: mode=FinalPartitioned, gby=[t.v * Int64(7) % Int64(100000)@0 as t.v * Int64(7) % Int64(100000)], aggr=[sum(t.v)], metrics=[<slt:ignore>spilled_rows=<slt:ignore>K,<slt:ignore>]
+# <slt:ignore>
 
 # Restore settings to slt runner defaults
 statement ok

@@ -37,9 +37,14 @@ SELECT sec(a) FROM (VALUES (0::INT), (1::INT), (-1::INT), (null)) AS t(a);
 NULL
 
 query R
-SELECT sec(a) FROM (VALUES (pi()), (3 * pi()/2), (pi()/2) , (arrow_cast('NAN','Float32'))) AS t(a);
+SELECT sec(a) FROM (VALUES (pi()), (arrow_cast('NAN','Float32'))) AS t(a);
 ----
 -1
--5443746451065123
-16331239353195370
 NaN
+
+# Near-pole snapshots depend on the platform's cos implementation.
+# Check known values away from the poles with an explicit tolerance.
+query BB
+SELECT abs(sec(pi()/3) - 2) < 1e-12, abs(sec(-pi()/3) - 2) < 1e-12;
+----
+true true

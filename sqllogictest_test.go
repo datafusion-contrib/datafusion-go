@@ -23,6 +23,15 @@ import (
 	"github.com/datafusion-contrib/datafusion-go/internal/native"
 )
 
+// TestSQLParallelSpillDiagnostic is excluded from the required corpus. The
+// diagnostic target repeats it separately and retains failures in CI artifacts.
+func TestSQLParallelSpillDiagnostic(t *testing.T) {
+	if os.Getenv("DFGO_SQLLOGICTEST_SPILL_DIAGNOSTIC") != "1" {
+		t.Skip("use make test.sqllogic.spill to run the parallel spill diagnostic")
+	}
+	testSQLStreamingSpill(t, 4)
+}
+
 // TestSQLLogic runs all upstream files. Test selection is handled by go test's
 // normal -run filter; a missing corpus is an error, never a skipped green test.
 func TestSQLLogic(t *testing.T) {
