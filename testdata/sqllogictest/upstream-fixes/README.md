@@ -23,7 +23,8 @@ the additional driver fixtures. The report records the Arrow module replacement
 and native library checksum. A separate intermittent timeout in
 `aggregate_memory_spill.slt` has reproduced with both four workers and the runtime
 default; it remains unresolved. The patch validates the zero-length list fix
-independently of that execution issue.
+independently of that execution issue. A pure Rust diagnostic has also failed
+with both separate blocking stream pulls and continuous async collection.
 
 This patch is not applied by the project build and has not been submitted
 upstream. Production still uses the released Arrow Go dependency. A local

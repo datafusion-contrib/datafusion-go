@@ -89,10 +89,12 @@ dependency cannot represent a valid upstream result.
 The tight-memory aggregation in `aggregate_memory_spill.slt` can time out or
 exhaust its 1 MiB pool. The ignored Rust diagnostic
 `upstream_spill_with_blocking_pulls` in `rust/tests/sqllogictest_oracle.rs`
-reproduces memory exhaustion without Go. It compares separate blocking stream
+reproduces failures without Go. It compares separate blocking stream
 pulls against creating and collecting the query in one async operation, selected
-with `DFGO_SQLLOGICTEST_ASYNC_COLLECT=1`. The async control passed 25 repetitions;
-the blocking mode failed. This narrows the reproduction but does not resolve
-the failure. The SQL assertion remains enabled.
+with `DFGO_SQLLOGICTEST_ASYNC_COLLECT=1`. The async control initially passed 25
+repetitions, but a subsequent run reached its five-second timeout. The blocking
+mode has failed with memory exhaustion. Both modes can fail in native DataFusion;
+changing how the Go bridge polls is not an established fix. The SQL assertion
+remains enabled.
 The ordinary Go regression checks a single-partition aggregation and verifies
 both returned values and a nonzero `spill_count` in `EXPLAIN ANALYZE` output.
