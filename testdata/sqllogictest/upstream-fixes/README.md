@@ -18,6 +18,13 @@ The DataFusion `arrow_typeof.slt` file also passes all 62 records when an
 isolated Go module file selects this patched checkout. Both zero-length list
 queries fail with the unmodified v18.8.0 release.
 
+An isolated run with four Tokio workers passed all 24,881 assertions present
+at that point. The report records the Arrow module replacement and native
+library checksum. A separate intermittent timeout in `aggregate_memory_spill.slt`
+has since reproduced with both four workers and the runtime default; it remains
+unresolved. The patch validates the zero-length list fix independently of that
+execution issue.
+
 This patch is not applied by the project build and has not been submitted
 upstream. Production still uses the released Arrow Go dependency. A local
 `replace` directive would not fix downstream users of this module, so it is

@@ -11,6 +11,11 @@ SELECT datetrunc('month', TIMESTAMP '2026-09-09 12:34:56')
 ----
 2026-09-01T00:00:00
 
+query I
+SELECT datepart('year', TIMESTAMP '2026-09-09 12:34:56')
+----
+2026
+
 query ?
 SELECT list_sort(list_distinct([3, 1, 3]))
 ----

@@ -66,12 +66,19 @@ class SQLLogicToolsTest(unittest.TestCase):
             reports = root / "reports"
             reports.mkdir()
             record = {"location": "test.slt:1", "sql": "SELECT abs(1)", "passed": True,
-                      "skipped": False, "expects_error": True, "kind": "query", "functions": ["abs"]}
+                      "skipped": False, "expects_error": True, "kind": "query", "functions": ["abs"],
+                      "query_statement": True, "returned_rows": 1}
             path = reports / "test.slt.json"
-            for passed, expects_error, count in [(True, True, 0), (False, False, 0), (True, False, 1)]:
-                record.update(passed=passed, expects_error=expects_error)
+            for passed, expects_error, query_statement, rows, count in [
+                (True, True, True, 1, 0), (False, False, True, 1, 0),
+                (True, False, False, 1, 0), (True, False, True, 0, 0),
+                (True, False, True, 1, 1),
+            ]:
+                record.update(passed=passed, expects_error=expects_error, query_statement=query_statement, returned_rows=rows)
                 path.write_text(json.dumps({"records": [record]}), encoding="utf-8")
                 self.assertEqual(sql_coverage.summarize(reports, root, "test")["functions_with_witnesses"], count)
+            path.write_text(json.dumps({"file": "spark/example.slt", "records": [record]}), encoding="utf-8")
+            self.assertEqual(sql_coverage.summarize(reports, root, "test")["functions_with_witnesses"], 0)
 
 
 if __name__ == "__main__":

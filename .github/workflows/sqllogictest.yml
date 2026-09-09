@@ -45,6 +45,7 @@ jobs:
         with:
           workspaces: rust -> target/sqllogictest
           key: sqllogictest-${{ matrix.platform }}
+          cache-on-failure: true
       - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         if: matrix.platform == 'windows-amd64'
         with:

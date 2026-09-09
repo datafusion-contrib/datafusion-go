@@ -123,21 +123,7 @@ func TestSQLLogic(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				data, err := sqlLogicArrow(ctx, conn, query)
-				var nativeError *native.Error
-				if errors.As(err, &nativeError) {
-					if nativeError.Kind == "panic" {
-						return nil, &native.SQLLogicHarnessError{Err: err}
-					}
-					// Match upstream's error wrapper; preserve the engine message.
-					return nil, errors.New("DataFusion error: " + nativeError.Message)
-				}
-				if err != nil && sqlLogicStreamError.MatchString(err.Error()) {
-					return nil, errors.New("DataFusion error: " + sqlLogicStreamError.ReplaceAllString(err.Error(), ""))
-				}
-				if err != nil {
-					return nil, &native.SQLLogicHarnessError{Err: err}
-				}
-				return data, err
+				return data, sqlLogicError(err)
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -175,6 +161,30 @@ func TestSQLLogic(t *testing.T) {
 
 // Arrow's C stream adds its own transport prefix around DataFusion's message.
 var sqlLogicStreamError = regexp.MustCompile(`^arrow stream failed with errno [0-9]+: External error: `)
+
+func sqlLogicError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var nativeError *native.Error
+	if errors.As(err, &nativeError) {
+		if nativeError.Kind == "panic" {
+			return &native.SQLLogicHarnessError{Err: err}
+		}
+		// Match upstream's error wrapper; preserve the engine message.
+		return errors.New("DataFusion error: " + nativeError.Message)
+	}
+	if sqlLogicStreamError.MatchString(err.Error()) {
+		message := sqlLogicStreamError.ReplaceAllString(err.Error(), "")
+		// StreamingReader contains native panics in an Arrow error. That
+		// transport wrapper must not turn a panic into an expected SQL error.
+		if message == "panic while reading query results across datafusion-go native boundary" {
+			return &native.SQLLogicHarnessError{Err: err}
+		}
+		return errors.New("DataFusion error: " + message)
+	}
+	return &native.SQLLogicHarnessError{Err: err}
+}
 
 func sqlLogicArrow(ctx context.Context, conn *sql.Conn, query string) (array.RecordReader, error) {
 	reader, err := QueryArrowContext(ctx, conn, query)

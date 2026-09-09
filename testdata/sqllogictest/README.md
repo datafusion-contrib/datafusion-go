@@ -15,6 +15,10 @@ SF 0.1 data locally; `tpch.json` verifies all eight generated files. Explicit
 signed wrapping and LF line endings make generation reproducible across
 compilers and operating systems.
 
+`run.json` records the Arrow Go version, any module replacement, the native
+library checksum, and the Tokio worker setting. CI uses four Tokio workers;
+`TOKIO_WORKER_THREADS=4 make test.sqllogic` reproduces that setting locally.
+
 The Rust SQLLogicTest runner parses records, expands includes, and compares
 results using DataFusion's published test support crate. It calls back into Go
 to execute SQL through `QueryArrowContext`. Go consumes and retains the batches,
@@ -56,16 +60,22 @@ records. Comment-only files are inventoried but never counted as passing SQL.
 `sql/` contains the pinned release's SQL documentation. `coverage.json`
 inventories its 327 documented functions (including aliases) and 188 sections.
 The generated coverage report attaches passing query locations and SQL hashes
-to function calls found by the SQL parser. Expected errors, EXPLAIN plans,
-comments, strings, and failed assertions cannot supply function witnesses.
+to functions, operators, and SELECT clauses found by the SQL parser. A function
+or operator witness must come from a SELECT query that returned rows. Expected
+errors, EXPLAIN plans (including those preceded by comments), comments, strings,
+empty results, and failed assertions cannot supply these witnesses.
+Spark's alternate function registry contributes to corpus totals but does not
+supply witnesses for the default DataFusion SQL guide.
 The parser is conservative: syntax it cannot parse stays visible in the report.
 
-`coverage-map.json` records reviewed section witnesses by location and SQL hash.
-Sections with no mapping remain gaps. Function-call witnesses measure examples,
+`coverage-map.json` records additional reviewed section witnesses by location and
+SQL hash. Sections without parsed or reviewed witnesses remain gaps. Witnesses measure examples,
 not every overload, input, branch, or combination. Full corpus execution and
 documentation witnesses are separate metrics; neither proves every possible
 SQL program correct. `complete` means the corpus passed;
 `sql_surface_complete` additionally requires witnesses for all inventory entries.
+Grouping headings can use all their child sections' witnesses; the report
+retains those child identifiers so the relationship can be checked.
 
 `SQLLogicTest` CI runs the full target on Linux, macOS, and Windows and retains
 reports even on failure. Assertions remain failing when the driver or its Arrow

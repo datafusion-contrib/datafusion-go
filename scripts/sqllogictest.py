@@ -154,7 +154,8 @@ def prepare_tpch():
     machine = "WIN32" if windows else "LINUX"
     # dbgen's alphanumeric RNG intentionally relies on signed 32-bit wrapping.
     # Make that behavior explicit so Clang and GCC produce the reference data.
-    flags = (f"-O2 -fwrapv -D{machine} -DORACLE -DTPCH -DRNG_TEST -D_FILE_OFFSET_BITS=64 "
+    # Its old-style function declarations also require pre-C23 semantics.
+    flags = (f"-std=gnu99 -O2 -fwrapv -D{machine} -DORACLE -DTPCH -DRNG_TEST -D_FILE_OFFSET_BITS=64 "
              "-D_POSIX_SOURCE -D_POSIX_C_SOURCE=200809L")
     subprocess.run(["make", "-B", executable, "CFLAGS=" + flags, "EXE=" + (".exe" if windows else "")],
                    cwd=generator, check=True)
@@ -249,6 +250,8 @@ def report(directory, lock):
     if len(actual) != len(results) or actual - expected:
         raise ValueError("duplicate or unexpected SQLLogicTest report files")
     coverage = sql_coverage.summarize(directory, CORPUS, lock["source"]["commit"])
+    metadata_path = directory / "run.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else None
     summary = {
         "datafusion_version": lock["datafusion_version"],
         "upstream_commit": lock["source"]["commit"],
@@ -272,6 +275,7 @@ def report(directory, lock):
         "documented_functions": coverage["functions"],
         "documentation_gaps": len(coverage["missing"]),
         "sql_surface_complete": actual == expected and not failed and not coverage["missing"],
+        "run": metadata,
     }
     (directory / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     text = (
@@ -287,10 +291,23 @@ def report(directory, lock):
 def run(arguments):
     source = prepare()
     lock = check()
-    directory = CACHE / "reports" / "current"
+    directory = arguments.reports.resolve()
+    report_root = (CACHE / "reports").resolve()
+    if directory == report_root or not directory.is_relative_to(report_root):
+        raise ValueError("run reports must use a subdirectory of .cache/sqllogictest/reports")
     if directory.exists():
         shutil.rmtree(directory)
     directory.mkdir(parents=True)
+    module = json.loads(subprocess.check_output(
+        ["go", "list", "-m", "-json", "github.com/apache/arrow-go/v18"], cwd=ROOT, text=True))
+    replacement = module.get("Replace")
+    metadata = {
+        "arrow_go_version": module["Version"],
+        "arrow_go_replace": {k: replacement[k] for k in ["Path", "Version"] if k in replacement} if replacement else None,
+        "tokio_worker_threads": os.environ.get("TOKIO_WORKER_THREADS", "runtime default"),
+        "native_library_sha256": digest(Path(os.environ["DATAFUSION_GO_LIBRARY"])),
+    }
+    (directory / "run.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     environment = dict(os.environ, DFGO_SQLLOGICTEST_SOURCE=str(source),
                        DFGO_SQLLOGICTEST_REPORT=str(directory),
                        ARROW_TEST_DATA=str(source / "testing" / "data"),

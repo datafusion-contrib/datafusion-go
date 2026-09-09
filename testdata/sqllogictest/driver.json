@@ -1,3 +1,5 @@
 {
-  "documented_functions.slt": "67f202d1ffbc8fefb80971ff50f5657d9d204ba5b8e690f1cb093104715f66ea"
+  "documented_functions.slt": "15f1f9d3bad09fdf8fb2545705541c87e055ff33f0ae063ea52e2cb0f9c37ea5",
+  "documented_subqueries.slt": "361a25a451ed5ca80f53599acc236b99466d9209ed62ae0e27d2f09325fc714a",
+  "postgres_operators.slt": "0f94964039087b1c90db3f848a982b3b4453e407c7f461011761b8c2450a5a28"
 }

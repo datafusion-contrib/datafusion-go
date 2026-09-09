@@ -72,14 +72,18 @@ type SQLLogicReport struct {
 // SQLLogicRecord preserves the assertion outcome and its original SQL for
 // coverage witnesses. Expected SQL errors are distinct from value assertions.
 type SQLLogicRecord struct {
-	Location     string   `json:"location"`
-	SQL          string   `json:"sql"`
-	Kind         string   `json:"kind"`
-	Passed       bool     `json:"passed"`
-	Skipped      bool     `json:"skipped"`
-	ExpectsError bool     `json:"expects_error"`
-	Functions    []string `json:"functions"`
-	ParseError   string   `json:"parse_error,omitempty"`
+	Location       string   `json:"location"`
+	SQL            string   `json:"sql"`
+	Kind           string   `json:"kind"`
+	Passed         bool     `json:"passed"`
+	Skipped        bool     `json:"skipped"`
+	ExpectsError   bool     `json:"expects_error"`
+	Functions      []string `json:"functions"`
+	Operators      []string `json:"operators"`
+	Clauses        []string `json:"clauses"`
+	QueryStatement bool     `json:"query_statement"`
+	ReturnedRows   int      `json:"returned_rows"`
+	ParseError     string   `json:"parse_error,omitempty"`
 }
 
 // SQLLogicHarnessError cannot satisfy an upstream expected-SQL-error record.

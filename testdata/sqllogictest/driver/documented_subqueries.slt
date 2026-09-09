@@ -1,0 +1,91 @@
+# Value assertions for the pinned SQL guide's subquery examples.
+# Source: sql/subqueries.md. Each file gets a fresh DataFusion session.
+
+statement ok
+CREATE TABLE x(column_1 INT, column_2 INT) AS VALUES (1, 2), (2, 4)
+
+statement ok
+CREATE TABLE y(number INT, string TEXT) AS VALUES (1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')
+
+query II
+SELECT * FROM x WHERE EXISTS (SELECT 1 FROM y WHERE number = x.column_2 AND number > 2)
+----
+2 4
+
+query II
+SELECT * FROM x WHERE NOT EXISTS (SELECT 1 FROM y WHERE number = x.column_2 AND number > 2)
+----
+1 2
+
+query II
+SELECT * FROM x WHERE column_1 IN (1, 3)
+----
+1 2
+
+query II
+SELECT * FROM x WHERE column_1 NOT IN (1, 3)
+----
+2 4
+
+query BB
+SELECT (1, 1) IN ((1, NULL)), (1, NULL) IN ((1, NULL))
+----
+false true
+
+query IT rowsort
+SELECT column_1, (SELECT first_value(string) FROM y WHERE number = x.column_1) AS "numeric string" FROM x
+----
+1 one
+2 two
+
+query I
+SELECT column_2 FROM (SELECT * FROM x WHERE column_1 > 1)
+----
+4
+
+query II
+SELECT * FROM x WHERE column_2 > (SELECT AVG(number) FROM y)
+----
+2 4
+
+query II
+SELECT * FROM x WHERE column_2 IN (SELECT number FROM y WHERE length(string) > 3)
+----
+2 4
+
+query II
+SELECT * FROM x WHERE column_2 > (SELECT AVG(length(string)) FROM y WHERE number = x.column_1)
+----
+2 4
+
+query RB
+SELECT AVG(number) AS avg, (number % 2 = 0) AS even FROM y GROUP BY even HAVING avg = (SELECT MAX(column_1) FROM x)
+----
+2 false
+
+query RB
+SELECT AVG(number) AS avg, (number % 2 = 0) AS even FROM y GROUP BY even HAVING avg IN (SELECT column_1 FROM x)
+----
+2 false
+
+query II rowsort
+SELECT column_1, (SELECT count(*) FROM y) FROM x
+----
+1 4
+2 4
+
+query I
+SELECT (SELECT number FROM y WHERE number > 4)
+----
+NULL
+
+query II rowsort
+SELECT * FROM (SELECT column_1, column_2 FROM x)
+----
+1 2
+2 4
+
+query I
+SELECT count(*) FROM (SELECT * FROM x WHERE column_1 > 2)
+----
+0

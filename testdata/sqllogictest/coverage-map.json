@@ -174,5 +174,291 @@
       "location": "test_files/select.slt:148",
       "sql_sha256": "21b8976c36fa3ea388cce91a33361b3fa0adf62bd7e86f86bc42f49bd7ac4f9c"
     }
+  ],
+  "select.md#unnest_outer": [
+    {
+      "location": "test_files/unnest.slt:1506",
+      "sql_sha256": "df3659aea8e41506f98fa1b4173c78c15b4edff80e4fe199167e8250d66fe554"
+    }
+  ],
+  "information_schema.md#show-tables": [
+    {
+      "location": "test_files/information_schema.slt:625",
+      "sql_sha256": "0911281e30125ba385272b96dee2f5e947201513bb6a06be34aa19b36958341c"
+    }
+  ],
+  "information_schema.md#show-columns": [
+    {
+      "location": "test_files/information_schema.slt:659",
+      "sql_sha256": "e4b1eb460f670d65733104b2c9f2eeae505af39465ad0ee8f5f7598f2563d461"
+    },
+    {
+      "location": "test_files/information_schema.slt:669",
+      "sql_sha256": "6034d63f298ee072a38464c048be6fbd5585dd0246d1d08cd75929306b54d769"
+    },
+    {
+      "location": "test_files/information_schema.slt:675",
+      "sql_sha256": "26a545a247b690b378cafe5a130aa00f5cad935ba9091ad9449e4c7348d4b86b"
+    }
+  ],
+  "information_schema.md#show-all-configuration-options": [
+    {
+      "location": "test_files/information_schema.slt:206",
+      "sql_sha256": "044acdca1c06eb0c67ff0d503eb085d2c5210a5f877152f33a9e1c3d6a03e2b2"
+    }
+  ],
+  "information_schema.md#show-functions": [
+    {
+      "location": "test_files/information_schema.slt:913",
+      "sql_sha256": "3adace6632a50762f51b92a7a325362006350cca79656db2c431e9c7a5840f55"
+    }
+  ],
+  "ddl.md#describe": [
+    {
+      "location": "test_files/describe.slt:101",
+      "sql_sha256": "060bfd388abee0e5bf5b4e06e0a48dec4e63ccda2ba155d93759b42bc24390f8"
+    }
+  ],
+  "ddl.md#example-basic-table-description": [
+    {
+      "location": "test_files/describe.slt:101",
+      "sql_sha256": "060bfd388abee0e5bf5b4e06e0a48dec4e63ccda2ba155d93759b42bc24390f8"
+    }
+  ],
+  "ddl.md#example-using-desc-alias": [
+    {
+      "location": "test_files/describe.slt:95",
+      "sql_sha256": "b28418996b85a1621f2fdd07dc97028cd7749f66f32e6147e0425d3dcd0c6435"
+    }
+  ],
+  "ddl.md#example-describing-external-tables": [
+    {
+      "location": "test_files/describe.slt:29",
+      "sql_sha256": "3695515e8a2b7d2117dcb3c09007233ed734110027d83c6929c38c645c847371"
+    },
+    {
+      "location": "test_files/describe.slt:73",
+      "sql_sha256": "579ee0d76d94a3e0aaf5b2d2cce3537c5e4e938fbf9efb95ad8b66863726ed1b"
+    }
+  ],
+  "operators.md#operator-213d": [
+    {
+      "location": "test_files/_driver/postgres_operators.slt:7",
+      "sql_sha256": "36eb2c572f83e2474f45f3a0834d0ac1e3be347d02c73743579b52e29c5804c0"
+    }
+  ],
+  "operators.md#operator-23": [
+    {
+      "location": "test_files/_driver/postgres_operators.slt:12",
+      "sql_sha256": "41e019f18e0fc475e9b5b574da25456d24f09dbfa19ea45043d820c9ffc5ad4a"
+    }
+  ],
+  "subqueries.md#-not--exists": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:10",
+      "sql_sha256": "c01504a230c5a5f47a4d5300f608b26e90074e401b806e5123fef87b0e523fde"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:15",
+      "sql_sha256": "c691bf1e70674dd6fd7be34e1d62de3d59381f30298895b50501742fe1964af7"
+    }
+  ],
+  "subqueries.md#-not--in": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:20",
+      "sql_sha256": "cafb04f2baa9ac52fea397792f374bfc57435bafacf2cc1399635ee3543af8cb"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:25",
+      "sql_sha256": "acc039e50be6790400ac59e268c1e031e9b000196d16a3de91ac0f1351fa2ed8"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:30",
+      "sql_sha256": "a3aca408e7d4ec14a44efb3bfeda8da5c89579a3b3af09bd2da02c1059bfb2e2"
+    }
+  ],
+  "subqueries.md#example": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:35",
+      "sql_sha256": "4a8c6ee2714d2b4d4dab46f6d4629113a418cddd0620cf026544c999bcd3bd35"
+    }
+  ],
+  "subqueries.md#example-1": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:41",
+      "sql_sha256": "c7c09e8e25fc1ce67bc74b2bdd71817400dc30a402b35c526c93556ebe076dba"
+    }
+  ],
+  "subqueries.md#examples": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:46",
+      "sql_sha256": "95fc2c8425c04c76391fd7c0f4e60a4abb3cde2756979b34c861135d7baace6b"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:51",
+      "sql_sha256": "8bbb84304c70848bffaebd02405ae11da299123a182a4eec04755af61a97491f"
+    }
+  ],
+  "subqueries.md#where-clause-with-correlated-subquery": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:56",
+      "sql_sha256": "66bb64456bed4e7550b24436a2efa2efba4ad85cfa8dbe21f0d92b3efe94fa43"
+    }
+  ],
+  "subqueries.md#examples-1": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:61",
+      "sql_sha256": "f4b83e6f246236e04e1b7839bae184a8fee1366518818e6452b8f159b3572ce0"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:66",
+      "sql_sha256": "d7e226ad74155d3595dcbbad1ffc19eff73266dcd977f69588bbb07ea09b777e"
+    }
+  ],
+  "subqueries.md#correlated-subqueries": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:35",
+      "sql_sha256": "4a8c6ee2714d2b4d4dab46f6d4629113a418cddd0620cf026544c999bcd3bd35"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:56",
+      "sql_sha256": "66bb64456bed4e7550b24436a2efa2efba4ad85cfa8dbe21f0d92b3efe94fa43"
+    }
+  ],
+  "subqueries.md#non-correlated-subqueries": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:46",
+      "sql_sha256": "95fc2c8425c04c76391fd7c0f4e60a4abb3cde2756979b34c861135d7baace6b"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:71",
+      "sql_sha256": "1ce1740c41ff55369533291a8cd0d499d86cb99ecb96efc1c4355ba526d23f9b"
+    }
+  ],
+  "subqueries.md#scalar-subqueries": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:35",
+      "sql_sha256": "4a8c6ee2714d2b4d4dab46f6d4629113a418cddd0620cf026544c999bcd3bd35"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:71",
+      "sql_sha256": "1ce1740c41ff55369533291a8cd0d499d86cb99ecb96efc1c4355ba526d23f9b"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:77",
+      "sql_sha256": "31bcd7c9237d03e3bdaee33e4c78ad83f05a5d7b387ccd60eddfe6aa65ebc3bb"
+    }
+  ],
+  "subqueries.md#non-scalar-subqueries": [
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:51",
+      "sql_sha256": "8bbb84304c70848bffaebd02405ae11da299123a182a4eec04755af61a97491f"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:82",
+      "sql_sha256": "65407d55c866521419ce3818b27ff8fe9f7a738a9538a3b64a4a44e53f15c6e5"
+    },
+    {
+      "location": "test_files/_driver/documented_subqueries.slt:88",
+      "sql_sha256": "08de9356193271596e542eea86d3cac32578a22d319b73bf870be7d0eadb9f0a"
+    }
+  ],
+  "explain.md#syntax": [
+    {
+      "location": "test_files/explain.slt:469",
+      "sql_sha256": "019f9995441143ab72fff6f5b3192a6fc38587f4e4e9efd1f9c3fa5e287156fd"
+    },
+    {
+      "location": "test_files/explain.slt:709",
+      "sql_sha256": "240ed41c1920e932ee09b99e0a66e0e22ea1fcbe84db50f9db9b3acc7da305e3"
+    }
+  ],
+  "explain.md#tree-format-default": [
+    {
+      "location": "test_files/explain.slt:476",
+      "sql_sha256": "7c09588d2e2cc1813a33b04699c71ebe13f1cb2990274ec4a0a856ca1cd3001b"
+    }
+  ],
+  "explain.md#indent-format": [
+    {
+      "location": "test_files/explain.slt:469",
+      "sql_sha256": "019f9995441143ab72fff6f5b3192a6fc38587f4e4e9efd1f9c3fa5e287156fd"
+    }
+  ],
+  "explain.md#pgjson-format": [
+    {
+      "location": "test_files/explain.slt:651",
+      "sql_sha256": "a80337751e59e57155339676c5d939342e5b9ff6bcfb696a604ec569421ea986"
+    }
+  ],
+  "explain.md#graphviz-format": [
+    {
+      "location": "test_files/explain.slt:669",
+      "sql_sha256": "df256919890708170fb48f6a4b1a2c024deb37a8cc444695d3e72ea93905b486"
+    }
+  ],
+  "explain.md#pgjson-format-with-analyze": [
+    {
+      "location": "test_files/explain_analyze.slt:627",
+      "sql_sha256": "ce1ce92ccb81676e91e216ceb3fdc714ee561e47e7e9e76c7146dd6792e76f64"
+    },
+    {
+      "location": "test_files/explain_analyze.slt:652",
+      "sql_sha256": "c0e569aadf9cdf0b91e2d6ba177e2114468e7907c93bf2e3cf774c48f7ee21f5"
+    }
+  ],
+  "ddl.md#create-schema": [
+    {
+      "location": "test_files/information_schema.slt:755",
+      "sql_sha256": "ec5002cb4342f59aa093826efc3ef84bd24ab1eb81d7b43c934b5e6316412cc0"
+    },
+    {
+      "location": "test_files/information_schema.slt:758",
+      "sql_sha256": "5160cba3abb4f45635162ca88cce6e6f1ceb43ebb7e1f17958e091424d348720"
+    },
+    {
+      "location": "test_files/information_schema.slt:761",
+      "sql_sha256": "a6d0fdf3467623eacfeed020f9168162656c45b34a83e5c438051b7941167624"
+    }
+  ],
+  "ddl.md#create-view": [
+    {
+      "location": "test_files/information_schema.slt:737",
+      "sql_sha256": "e9735e55a40211fc5ebd9a0ea2a4848a839cc390e494d221f531393e8e5496a9"
+    },
+    {
+      "location": "test_files/information_schema.slt:740",
+      "sql_sha256": "ab177be1294b31e514dc68f403685c9630ac3f635bfed7bb95aeee3a5b64b7e9"
+    }
+  ],
+  "ddl.md#drop-view": [
+    {
+      "location": "test_files/information_schema.slt:748",
+      "sql_sha256": "590dcd8dc4f89e961b5b94d8c5dde44b19de828fe16b26cf8bbdee97ae7eb0de"
+    },
+    {
+      "location": "test_files/information_schema.slt:772",
+      "sql_sha256": "2cabedd4c3432e78e4ab09ce4f55eff33c25311170a544b48024226968a0a172"
+    }
+  ],
+  "special_functions.md#unnest": [
+    {
+      "location": "test_files/unnest.slt:48",
+      "sql_sha256": "d9bb926832767bb4d7c1ee00d54d5d5378f6d79548ade31cff4e06e7a7147f5a"
+    },
+    {
+      "location": "test_files/unnest.slt:352",
+      "sql_sha256": "6d009d50295840a4cd8a13a04af106c59c76f641253fe5dfcb5c904f5f3c8f87"
+    }
+  ],
+  "special_functions.md#unnest-struct": [
+    {
+      "location": "test_files/unnest.slt:56",
+      "sql_sha256": "c05f3f8a7594cda17823cc15c11b2f6d75ca73f662fe660946c582149403e05c"
+    },
+    {
+      "location": "test_files/unnest.slt:84",
+      "sql_sha256": "7e740dcf78dba6743a4b64f2235cbdaccb2726c19bd8a7349ed0b72f8ced8fbc"
+    }
   ]
 }

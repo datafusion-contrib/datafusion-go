@@ -7,6 +7,7 @@
 use std::ffi::{CString, c_char, c_void};
 use std::path::Path;
 use std::ptr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use datafusion::arrow::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
@@ -38,6 +39,7 @@ struct GoDatabase {
     spark: bool,
     workspace: String,
     failures: Arc<Mutex<Vec<String>>>,
+    result_rows: Arc<AtomicUsize>,
 }
 
 impl GoDatabase {
@@ -100,6 +102,7 @@ impl DB for GoDatabase {
             .map_err(|e| self.adapter_error(e))?;
         let mut rows =
             convert_batches(&schema, batches, self.spark).map_err(|e| self.adapter_error(e))?;
+        self.result_rows.store(rows.len(), Ordering::Relaxed);
         // The published upstream crate embeds its build directory. Our data
         // lives in a separately pinned checkout, so normalize that root too.
         for row in &mut rows {
@@ -199,6 +202,7 @@ pub unsafe extern "C" fn dfgo_test_slt_run(
             .map_err(|e| FfiError::native(e.to_string()))?;
         let spark = path.replace('\\', "/").contains("/spark/");
         let failures = Arc::new(Mutex::new(Vec::new()));
+        let result_rows = Arc::new(AtomicUsize::new(0));
         let mut runner = Runner::new(|| async {
             Ok(GoDatabase {
                 handle,
@@ -207,6 +211,7 @@ pub unsafe extern "C" fn dfgo_test_slt_run(
                 spark,
                 workspace: workspace.clone(),
                 failures: Arc::clone(&failures),
+                result_rows: Arc::clone(&result_rows),
             })
         });
         runner.with_column_validator(strict_column_validator);
@@ -296,20 +301,27 @@ pub unsafe extern "C" fn dfgo_test_slt_run(
                             ..
                         }
                     );
-                    let (functions, parse_error) = coverage::functions(sql);
+                    let (syntax, parse_error) = match coverage::syntax(sql) {
+                        Ok(syntax) => (syntax, String::new()),
+                        Err(error) => (coverage::Syntax::default(), error),
+                    };
                     witness = Some(json!({"location": loc.to_string(), "sql": sql,
                         "kind": if matches!(&record, Record::Query { .. }) { "query" } else { "statement" },
                         "expects_error": expects_error, "skipped": skip, "passed": false,
-                        "functions": functions, "parse_error": parse_error}));
+                        "functions": syntax.functions, "operators": syntax.operators,
+                        "clauses": syntax.clauses, "query_statement": syntax.query_statement,
+                        "parse_error": parse_error}));
                 }
                 let failures_before = failures.lock().unwrap().len();
+                result_rows.store(0, Ordering::Relaxed);
                 if let Err(error) = runner.run_async(record).await {
                     errors.push(error.to_string());
                 } else if is_sql && failures.lock().unwrap().len() == failures_before {
                     passed += 1;
                     witness.as_mut().unwrap()["passed"] = json!(true);
                 }
-                if let Some(witness) = witness {
+                if let Some(mut witness) = witness {
+                    witness["returned_rows"] = json!(result_rows.load(Ordering::Relaxed));
                     evidence.push(witness);
                 }
             }

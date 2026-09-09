@@ -62,6 +62,12 @@ func TestSQLLogicHarness(t *testing.T) {
 		{name: "panic cannot satisfy SQL error", script: "statement error expected\nSELECT 1\n", wantFailure: true, callback: func(string) (array.RecordReader, error) {
 			panic("expected")
 		}},
+		{name: "native stream panic cannot satisfy SQL error", script: "statement error .*\nSELECT 1\n", wantFailure: true, callback: func(string) (array.RecordReader, error) {
+			return nil, sqlLogicError(errors.New("arrow stream failed with errno 5: External error: panic while reading query results across datafusion-go native boundary"))
+		}},
+		{name: "native stream SQL error keeps engine message", script: "statement error DataFusion error: expected\nSELECT 1\n", callback: func(string) (array.RecordReader, error) {
+			return nil, sqlLogicError(errors.New("arrow stream failed with errno 5: External error: expected"))
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
