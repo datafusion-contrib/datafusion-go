@@ -91,6 +91,9 @@ func runLibraryProcess(t *testing.T, exe, mode, fixture string) {
 	// without duplicate keys (including Windows' case-insensitive environment).
 	t.Setenv("DFGO_TEST_LIBRARY_MODE", mode)
 	t.Setenv("DFGO_TEST_LIBRARY_FIXTURE", fixture)
+	// Windows keeps loaded DLLs locked until the child exits. The parent owns
+	// the cache directory so its cleanup runs after that process has stopped.
+	t.Setenv("DFGO_TEST_LIBRARY_CACHE", t.TempDir())
 	t.Setenv(nativeLibraryEnv, "")
 	t.Setenv(nativeNoDownloadEnv, "")
 	t.Setenv(nativeDownloadBaseEnv, "https://unavailable.invalid")
@@ -152,7 +155,10 @@ func TestLibraryProcessHelper(t *testing.T) {
 	if mode == "no-download" {
 		t.Setenv(nativeNoDownloadEnv, "1")
 	}
-	cache := t.TempDir()
+	cache := os.Getenv("DFGO_TEST_LIBRARY_CACHE")
+	if cache == "" {
+		t.Fatal("subprocess cache directory was not provided")
+	}
 	nativeUserCacheDir = func() (string, error) { return cache, nil }
 	asset, err := nativeAssetName()
 	if err != nil {
