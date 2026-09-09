@@ -15,8 +15,9 @@ SF 0.1 data locally; `tpch.json` verifies all eight generated files. Explicit
 signed wrapping and LF line endings make generation reproducible across
 compilers and operating systems.
 
-`run.json` records the Arrow Go version, any module replacement, the native
-library checksum, and the Tokio worker setting. CI uses four Tokio workers;
+`run.json` records the repository revision and tracked changes, driver fixture
+manifest checksum, Arrow Go version and module replacement, native library
+checksum, and Tokio worker setting. CI uses four Tokio workers;
 `TOKIO_WORKER_THREADS=4 make test.sqllogic` reproduces that setting locally.
 
 The Rust SQLLogicTest runner parses records, expands includes, and compares
@@ -76,7 +77,22 @@ SQL program correct. `complete` means the corpus passed;
 `sql_surface_complete` additionally requires witnesses for all inventory entries.
 Grouping headings can use all their child sections' witnesses; the report
 retains those child identifiers so the relationship can be checked.
+Mappings record discrepancies in the pinned guide, including the removed
+`COMPRESSION TYPE` spelling and illustrative struct field orders. Additional
+tests check the supported syntax and field values while preserving upstream
+documentation unchanged.
 
 `SQLLogicTest` CI runs the full target on Linux, macOS, and Windows and retains
 reports even on failure. Assertions remain failing when the driver or its Arrow
 dependency cannot represent a valid upstream result.
+
+The tight-memory aggregation in `aggregate_memory_spill.slt` can time out or
+exhaust its 1 MiB pool. The ignored Rust diagnostic
+`upstream_spill_with_blocking_pulls` in `rust/tests/sqllogictest_oracle.rs`
+reproduces memory exhaustion without Go. It compares separate blocking stream
+pulls against creating and collecting the query in one async operation, selected
+with `DFGO_SQLLOGICTEST_ASYNC_COLLECT=1`. The async control passed 25 repetitions;
+the blocking mode failed. This narrows the reproduction but does not resolve
+the failure. The SQL assertion remains enabled.
+The ordinary Go regression checks a single-partition aggregation and verifies
+both returned values and a nonzero `spill_count` in `EXPLAIN ANALYZE` output.

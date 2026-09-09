@@ -79,6 +79,15 @@ class SQLLogicToolsTest(unittest.TestCase):
                 self.assertEqual(sql_coverage.summarize(reports, root, "test")["functions_with_witnesses"], count)
             path.write_text(json.dumps({"file": "spark/example.slt", "records": [record]}), encoding="utf-8")
             self.assertEqual(sql_coverage.summarize(reports, root, "test")["functions_with_witnesses"], 0)
+            record.update(expects_error=True, parse_error="invalid SQL")
+            path.write_text(json.dumps({"records": [record]}), encoding="utf-8")
+            self.assertEqual(sql_coverage.summarize(reports, root, "test")["unparsed_successful_queries"], [])
+            # A reviewed section mapping must not bypass function evidence rules.
+            (root / "coverage-map.json").write_text(json.dumps({"scalar_functions.md#abs": [
+                {"location": record["location"], "sql_sha256": sql_coverage.sql_digest(record["sql"])}
+            ]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "only allowed for SQL sections"):
+                sql_coverage.summarize(reports, root, "test")
 
 
 if __name__ == "__main__":

@@ -302,6 +302,10 @@ def run(arguments):
         ["go", "list", "-m", "-json", "github.com/apache/arrow-go/v18"], cwd=ROOT, text=True))
     replacement = module.get("Replace")
     metadata = {
+        "repository_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "tracked_changes": bool(subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True).strip()),
+        "driver_manifest_sha256": digest(DRIVER_LOCK),
         "arrow_go_version": module["Version"],
         "arrow_go_replace": {k: replacement[k] for k in ["Path", "Version"] if k in replacement} if replacement else None,
         "tokio_worker_threads": os.environ.get("TOKIO_WORKER_THREADS", "runtime default"),

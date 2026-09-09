@@ -1,8 +1,9 @@
 """Inventory pinned SQL documentation and attach passing assertion witnesses.
 
 Function witnesses are parsed call expressions in successful query assertions.
-Section witnesses require reviewed mappings; text mentions never count. These
-metrics measure examples, not every argument combination or execution path.
+Sections use parsed operators and clauses or reviewed mappings; text mentions
+never count. These metrics measure examples, not every argument combination or
+execution path.
 """
 
 import hashlib
@@ -61,9 +62,11 @@ def sql_digest(sql):
 def summarize(directory, corpus, commit):
     entries = json.loads((corpus / "coverage.json").read_text(encoding="utf-8"))
     mappings = json.loads((corpus / "coverage-map.json").read_text(encoding="utf-8"))
-    known = {entry["id"] for entry in entries}
+    known = {entry["id"]: entry for entry in entries}
     if mappings.keys() - known:
         raise ValueError("coverage mapping references an unknown documentation entry")
+    if any(known[identifier]["kind"] != "section" for identifier in mappings):
+        raise ValueError("manual coverage mappings are only allowed for SQL sections")
     records = {}
     functions = {}
     operators = {}
@@ -82,7 +85,8 @@ def summarize(directory, corpus, commit):
                 records[(location, witness["sql_sha256"])] = record
             # EXPLAIN verifies a plan, and expected errors verify rejection.
             # Neither is evidence of the function's returned value.
-            if record["passed"] and record["kind"] == "query" and record.get("parse_error"):
+            if (record["passed"] and not record["skipped"] and not record["expects_error"]
+                    and record["kind"] == "query" and record.get("parse_error")):
                 parse_errors.append(witness)
             if (not record["passed"] or record["skipped"] or record["expects_error"]
                     or record["kind"] != "query" or not record.get("query_statement")

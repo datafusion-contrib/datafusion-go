@@ -460,5 +460,517 @@
       "location": "test_files/unnest.slt:84",
       "sql_sha256": "7e740dcf78dba6743a4b64f2235cbdaccb2726c19bd8a7349ed0b72f8ced8fbc"
     }
+  ],
+  "struct_coercion.md#example-field-reordering-is-handled-transparently": [
+    {
+      "location": "test_files/struct.slt:1362",
+      "sql_sha256": "289dd05a3f44a05f040494ad2913edf037ee67719df266f568633bee1564a586",
+      "note": "Checks field names and values; the inferred field order and integer width can differ from the illustrative guide output."
+    }
+  ],
+  "struct_coercion.md#1-array-literal-construction": [
+    {
+      "location": "test_files/struct.slt:1362",
+      "sql_sha256": "289dd05a3f44a05f040494ad2913edf037ee67719df266f568633bee1564a586"
+    },
+    {
+      "location": "test_files/struct.slt:1159",
+      "sql_sha256": "50b7b73ddcd31d00f5779d24b12418daf7b51e9aaa80f0a7e9aff1d0c8fb65e2"
+    }
+  ],
+  "struct_coercion.md#2-array-construction-from-columns": [
+    {
+      "location": "test_files/struct.slt:1380",
+      "sql_sha256": "c782f6aebc15110b869af64cd2371356abfbbfc45df68772197ab44c6d0aa8bf"
+    }
+  ],
+  "struct_coercion.md#3-union-operations": [
+    {
+      "location": "test_files/struct.slt:1396",
+      "sql_sha256": "c6c6fc8e353e9f6d6d29d48840b2dd9397d1daf53331843879ea3d5baf2d0530"
+    }
+  ],
+  "struct_coercion.md#4-common-table-expressions-ctes": [
+    {
+      "location": "test_files/struct.slt:1409",
+      "sql_sha256": "8d19dfe4d9bed5bbc2fd38423e04d9b88de11e20c83a22de3bd95958bdb93f51"
+    }
+  ],
+  "struct_coercion.md#5-values-clauses": [
+    {
+      "location": "test_files/struct.slt:1347",
+      "sql_sha256": "7f30d5a1e96889e6e10c2c59116a7943fda62b90b85741c0554ff0c2c4a1ee9c"
+    },
+    {
+      "location": "test_files/struct.slt:1352",
+      "sql_sha256": "e7fbbe74f5f675579de331070bfe1b858c83e81f779f362da409730c789a0108"
+    }
+  ],
+  "struct_coercion.md#6-join-operations": [
+    {
+      "location": "test_files/struct.slt:1508",
+      "sql_sha256": "2c7ffbf82ee8e42823b9e39c7bf475fdfaac2560935df0e485a65507ab592765"
+    },
+    {
+      "location": "test_files/struct.slt:1543",
+      "sql_sha256": "5bba6f04c18136f470d2464a27dc217d9638b47db7d8e3980f5163cc1c8a066d"
+    }
+  ],
+  "struct_coercion.md#7-aggregate-functions": [
+    {
+      "location": "test_files/struct.slt:1431",
+      "sql_sha256": "d3b0dbec9b8c72541a9affc7d7f55aa242ae1a63d64f662fbc542a54f624218e"
+    }
+  ],
+  "struct_coercion.md#example-partial-field-overlap": [
+    {
+      "location": "test_files/struct.slt:1127",
+      "sql_sha256": "985882a75d9a9d5ca46249ad4630641b18dc32198bca936c62ead35007863029"
+    }
+  ],
+  "struct_coercion.md#limitations": [
+    {
+      "location": "test_files/struct.slt:1456",
+      "sql_sha256": "d707358c8f668488466eab6234aba46478cb4ece4619100bc75c357544644307"
+    },
+    {
+      "location": "test_files/struct.slt:1460",
+      "sql_sha256": "0b1914e7206b52b8cbfb7847bb887545d1135d57a6de27eb3c92ddab447cd7f5"
+    },
+    {
+      "location": "test_files/struct.slt:1127",
+      "sql_sha256": "985882a75d9a9d5ca46249ad4630641b18dc32198bca936c62ead35007863029"
+    }
+  ],
+  "struct_coercion.md#using-explicit-cast-for-compatibility": [
+    {
+      "location": "test_files/struct.slt:860",
+      "sql_sha256": "2716756d134e7b7a74cc9ee3552a52d48caf12d3f4f4f502941d29eb63db3f74"
+    }
+  ],
+  "struct_coercion.md#3-test-field-mappings": [
+    {
+      "location": "test_files/struct.slt:1143",
+      "sql_sha256": "68b74383f07480676c01a5b7ae1d025e91dcd54161cb16383dcb4fedff14d168",
+      "note": "Checks field names and values; the inferred field order and integer width can differ from the illustrative guide output."
+    },
+    {
+      "location": "test_files/struct.slt:1362",
+      "sql_sha256": "289dd05a3f44a05f040494ad2913edf037ee67719df266f568633bee1564a586"
+    }
+  ],
+  "struct_coercion.md#4-handle-partial-field-overlap-explicitly": [
+    {
+      "location": "test_files/struct.slt:1127",
+      "sql_sha256": "985882a75d9a9d5ca46249ad4630641b18dc32198bca936c62ead35007863029"
+    }
+  ],
+  "struct_coercion.md#cannot-coerce-struct-with-different-field-counts": [
+    {
+      "location": "test_files/struct.slt:1460",
+      "sql_sha256": "0b1914e7206b52b8cbfb7847bb887545d1135d57a6de27eb3c92ddab447cd7f5"
+    },
+    {
+      "location": "test_files/struct.slt:1127",
+      "sql_sha256": "985882a75d9a9d5ca46249ad4630641b18dc32198bca936c62ead35007863029"
+    }
+  ],
+  "struct_coercion.md#field-x-not-found-in-struct": [
+    {
+      "location": "test_files/struct.slt:798",
+      "sql_sha256": "3a5a8f82246542c7507ae6c4c56d4111d868896e9da2748b727c417840085fc4"
+    },
+    {
+      "location": "test_files/struct.slt:750",
+      "sql_sha256": "c7b77800d29b60a5a678e1bc055ed7dd5d82cf54ddd2539cb72356a230b80bb7"
+    }
+  ],
+  "struct_coercion.md#related-functions": [
+    {
+      "location": "test_files/struct.slt:132",
+      "sql_sha256": "4b5a22465359738c5b86fd47876953457b51f5ca1b248a5fa3da61686f4f104a"
+    },
+    {
+      "location": "test_files/struct.slt:1143",
+      "sql_sha256": "68b74383f07480676c01a5b7ae1d025e91dcd54161cb16383dcb4fedff14d168"
+    },
+    {
+      "location": "test_files/struct.slt:860",
+      "sql_sha256": "2716756d134e7b7a74cc9ee3552a52d48caf12d3f4f4f502941d29eb63db3f74"
+    },
+    {
+      "location": "test_files/struct.slt:750",
+      "sql_sha256": "c7b77800d29b60a5a678e1bc055ed7dd5d82cf54ddd2539cb72356a230b80bb7"
+    }
+  ],
+  "struct_coercion.md#example-query-that-changes-behavior": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:8",
+      "sql_sha256": "44dd17f8ca486d117a50cf81ff4c02043c8b0ade8be2c4f448e9cf0dd825506a"
+    }
+  ],
+  "struct_coercion.md#8-window-functions": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:13",
+      "sql_sha256": "c995506c3c309b896a1353b545bef650b69dc23383f4140d348c80d70f21752d"
+    }
+  ],
+  "struct_coercion.md#examples": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:20",
+      "sql_sha256": "dc65c0206fe78dc1d275adc9a2af5f24bc155691165f89b56e074d6a3af169ff"
+    }
+  ],
+  "struct_coercion.md#1-be-explicit-with-schema-definitions": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:25",
+      "sql_sha256": "b0c323b996db89464163b401a7010cc02bd29d42259969ba123a38112142973a"
+    }
+  ],
+  "struct_coercion.md#2-use-named-struct-constructors": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:30",
+      "sql_sha256": "271cd1bad0dced919263a9aac240404c8c6802dabbaf07eb05edf36e1cb67ec6"
+    }
+  ],
+  "struct_coercion.md#unexpected-null-values-after-coercion": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:35",
+      "sql_sha256": "675232e8b4187387a56bb6e7dfad164370ce2a780401a096d0224b00a9759d00"
+    }
+  ],
+  "struct_coercion.md#5-document-struct-schemas": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:40",
+      "sql_sha256": "4cf3fcb4997ac0b8c6113ac03f49f846b89aef7a4ac57e27d27f75edfd72a5a5"
+    }
+  ],
+  "data_types.md#character-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:6",
+      "sql_sha256": "63a77087110642b932a41b13a62600f59dfe6b05574ff54ad3242dd4331585a1"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:11",
+      "sql_sha256": "76d24a67bed5f6828263fc0ba490adc126dc3e9477bb9f8abfd0561ccd359283"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:16",
+      "sql_sha256": "526e2724583454140dea7e82055bd4e3a7625ca159e56361ef95806aeeed00a2"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:21",
+      "sql_sha256": "a14790b2ca9ec858652f3c9dac7469bbd96b63a27881c4e9cb5c778c67380bdc"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:29",
+      "sql_sha256": "76d24a67bed5f6828263fc0ba490adc126dc3e9477bb9f8abfd0561ccd359283"
+    }
+  ],
+  "data_types.md#numeric-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:34",
+      "sql_sha256": "9a6882f3244c8e74d56a464417039ba7677179fdb167111121bdb849e409260c"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:39",
+      "sql_sha256": "f424e1b618077540a920e4bb92b6bbe4c5c8318a7c771ec27659a80725495b75"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:44",
+      "sql_sha256": "951f72af0d4709bd4c04e63e23cddc085f644c9607a4d763ce6805292148d351"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:49",
+      "sql_sha256": "4018c4731112b08383b7b186548cdbf1639ddfe074b49617304d4fae5a0b181c"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:54",
+      "sql_sha256": "18bc8765197ba1e0c632b38ec3abb0540dc7e07fc426652aefb5c88480c03613"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:59",
+      "sql_sha256": "a54583945c413615c8c16beb6cf0f9e16cb956ea2123be49048d728a22749297"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:64",
+      "sql_sha256": "3d87f3565aed179a318e3d5a23d37e69f58ed0dba2a2c0f192cee103b6da5875"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:69",
+      "sql_sha256": "3ec441eb8ff07cd1e643be065b08501a90e3377a11f85bb4518d3ed8f448d9f1"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:74",
+      "sql_sha256": "930ec1cbc4e22d1c10ce8093e2e92fced5d5dbe49236889985213014e4de5841"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:79",
+      "sql_sha256": "2295b34ef0bb048b3a0fb539ab9c5ea116e6d9226966f8a6c583b895b26a6ac8"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:84",
+      "sql_sha256": "dad9c214e5cdeb80bfb73bd4754bd2d0b62d83ea60827305188841331c21b73a"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:89",
+      "sql_sha256": "a781752363f3feda1600ce1dddd5e26327546d31f5baae51e98d274ac2bbc6f0"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:94",
+      "sql_sha256": "d9e2f6a04f209050011c24ebfea0b96f7297268e79feac7b6ebb10ee640bcf72"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:99",
+      "sql_sha256": "c6631545bc0f1acb5de7b0e93dd9eee3fb3a3d6426b0c2eb2b1663dd3a36f416"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:104",
+      "sql_sha256": "f78f7ce2e1822f7808999865e363c76fc2158af89b0836a6160b5110cd97215e"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:109",
+      "sql_sha256": "2e44af2fc536082f4ba240a6aae68391d85f57aff6aba838a292faafda127d7b"
+    }
+  ],
+  "data_types.md#datetime-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:114",
+      "sql_sha256": "2c2be4bd214eb2df1d29ada66ec6b59339bbd37299ed14ff2f214df51047cc3b"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:119",
+      "sql_sha256": "5507f594d4f55dc1f854f1c1d89fea546307d04658190559f313ca7e7db1985a"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:124",
+      "sql_sha256": "4f54445c94c2e53f90991719ed947bfb5fcb3a20f7a284db2687d0eadd56f520"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:129",
+      "sql_sha256": "f8429fdd940a106448c4369d2e30d363b45a3181c24ff2a2b335a4212d017280"
+    }
+  ],
+  "data_types.md#boolean-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:134",
+      "sql_sha256": "d8fc6017c7f5e480124f711afeb54fefd5b979239cf516d38a16b8ec056ddbaf"
+    }
+  ],
+  "data_types.md#binary-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:139",
+      "sql_sha256": "c55c8ea71bfb19bd5085034ce730b6027cd8e9d24eb49cbec4ec191c8991111e"
+    }
+  ],
+  "data_types.md#unsupported-sql-types": [
+    {
+      "location": "test_files/_driver/documented_types.slt:144",
+      "sql_sha256": "ceb5c4888b2935b8fba8d1236ec005cdf6e06f998dcb2cf6f6f9fbf010761699"
+    },
+    {
+      "location": "test_files/_driver/documented_types.slt:147",
+      "sql_sha256": "a237e53d8cd6ec62796a70ec3caf23f1f946e0ee5d802413c4d97f633e904670"
+    }
+  ],
+  "ddl.md#create-database": [
+    {
+      "location": "test_files/information_schema_multiple_catalogs.slt:47",
+      "sql_sha256": "3003858e2ec2fe82588e7879279412d76f22214f76ef421bb99c89dda04f13d1"
+    },
+    {
+      "location": "test_files/information_schema_multiple_catalogs.slt:50",
+      "sql_sha256": "9a1cd6e4c319314d20ae28ad4bc55b240e86d30a3bc25fad640ef959e98ea25f"
+    },
+    {
+      "location": "test_files/information_schema_multiple_catalogs.slt:80",
+      "sql_sha256": "985c0dd420898282dae8e9b10e503c00a2e268e0305314c4fab79c4e162ac4a7"
+    }
+  ],
+  "ddl.md#example-parquet": [
+    {
+      "location": "test_files/copy.slt:35",
+      "sql_sha256": "4d197f62904e25ad7ed527b1a4a7eac3646c65e7946dd4f5706b383e81ca927c"
+    },
+    {
+      "location": "test_files/copy.slt:39",
+      "sql_sha256": "f84bd111cbc52653b67a7f56857ac97f5cc9c65ca6130edaa8d261871b148120"
+    }
+  ],
+  "ddl.md#example-comma-separated-value-csv": [
+    {
+      "location": "test_files/copy.slt:495",
+      "sql_sha256": "c1df1fdc94a1468ac6f9dbfa0ae048ad53522624880453049482722287b666f3"
+    },
+    {
+      "location": "test_files/copy.slt:498",
+      "sql_sha256": "94f1579a9ec9fcd9bbd2da4c947f3b7348db708d1c937aa54e6b0a653b62cffa"
+    }
+  ],
+  "ddl.md#example-specifying-schema": [
+    {
+      "location": "test_files/csv_files.slt:19",
+      "sql_sha256": "55bc701407bd00e30f88b04594d435f5c89abcdc3f96035b06975f5a843bd8e5"
+    },
+    {
+      "location": "test_files/csv_files.slt:39",
+      "sql_sha256": "c7a85470b4006f78b0b9f9b5fad397d7fdc4a46f973d789ff3785575d0a3035e"
+    }
+  ],
+  "ddl.md#example-partitioned-tables": [
+    {
+      "location": "test_files/csv_files.slt:136",
+      "sql_sha256": "f24e10d53c1f9d865dd19f9dbecdf52b98bd0beef9bee4b609f2aae81fca4bc7"
+    },
+    {
+      "location": "test_files/csv_files.slt:147",
+      "sql_sha256": "70b7c229a2a03afb621aa5f43bdfce9ee99bd4f2d4dcd588abb790839bed5e85"
+    },
+    {
+      "location": "test_files/copy.slt:50",
+      "sql_sha256": "879aacd81732fc0cc045a48c7e5362baa67972a7c1f481172d4d23b49fb26f82"
+    }
+  ],
+  "ddl.md#example-unbounded-data-sources": [
+    {
+      "location": "test_files/explain.slt:136",
+      "sql_sha256": "df8baab8bcd2702b72b6acf6ab3b5fb652591c36bec269d43dc0ef71b1d66998"
+    },
+    {
+      "location": "test_files/explain.slt:156",
+      "sql_sha256": "fa0ae5bca065380d3b410e3ff5ecc97ae3885df33360e9f5970ca357c6d02a6c"
+    }
+  ],
+  "ddl.md#example-with-order-clause": [
+    {
+      "location": "test_files/create_external_table.slt:246",
+      "sql_sha256": "9dc33a1522a06f224f5bf4e7004f78e7440937f0c07f934cfd38713d58d29bea"
+    },
+    {
+      "location": "test_files/create_external_table.slt:250",
+      "sql_sha256": "f53935d4e1eff7c2183778106807de5105f74e5b464e198e1452c2065e9961af"
+    },
+    {
+      "location": "test_files/create_external_table.slt:259",
+      "sql_sha256": "6f2b1dcd7e4fef702bd78ffb1a928ada35b07ecfdf797e3adb14753855b008dc"
+    }
+  ],
+  "ddl.md#example-compression": [
+    {
+      "location": "test_files/copy.slt:479",
+      "sql_sha256": "8f1176a5e86d71ffbeb6d4b3760cfa636589ceb65e77fba112ebf95e4ac8dbad",
+      "note": "The guide shows removed COMPRESSION TYPE syntax. These tests check its rejection and the supported OPTIONS syntax for compressed data."
+    },
+    {
+      "location": "test_files/copy.slt:482",
+      "sql_sha256": "1ee2e3cc2e0aa1f30b3606fa8e349cbcf941cdc6c2b4d27754887019fafa8b2b"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:64",
+      "sql_sha256": "fd8f3a90392375d9c85425b5db69224beabd0d94ba4058fd4ae574a82377244e"
+    }
+  ],
+  "dml.md#examples": [
+    {
+      "location": "test_files/copy.slt:23",
+      "sql_sha256": "2ed72f8d4076a4da6beeed2931af67d4e1e31134d990a71baabb23e037431071"
+    },
+    {
+      "location": "test_files/copy.slt:29",
+      "sql_sha256": "f2405318a955c5b03e6d40f5e1c3b525827f0848457bd2be92be83e0ab66ff68"
+    },
+    {
+      "location": "test_files/copy.slt:39",
+      "sql_sha256": "f84bd111cbc52653b67a7f56857ac97f5cc9c65ca6130edaa8d261871b148120"
+    }
+  ],
+  "format_options.md#json-format-options": [
+    {
+      "location": "test_files/copy.slt:457",
+      "sql_sha256": "b3c7f5faf221574f5472b4ea3c250a9bc5291aee7348aa1b50a80f1d19e3f970"
+    },
+    {
+      "location": "test_files/copy.slt:466",
+      "sql_sha256": "5591eaf4c83bf503f2a9840f9e3f4959eda5cee4c7d7205d263ea15eb6942c8b"
+    }
+  ],
+  "format_options.md#csv-format-options": [
+    {
+      "location": "test_files/csv_files.slt:39",
+      "sql_sha256": "c7a85470b4006f78b0b9f9b5fad397d7fdc4a46f973d789ff3785575d0a3035e"
+    },
+    {
+      "location": "test_files/csv_files.slt:58",
+      "sql_sha256": "fe282e22f7b476f67cd8035b1e544d8d2adf5a60e4b068c06f6c49770be84f19"
+    },
+    {
+      "location": "test_files/copy.slt:482",
+      "sql_sha256": "1ee2e3cc2e0aa1f30b3606fa8e349cbcf941cdc6c2b4d27754887019fafa8b2b"
+    }
+  ],
+  "format_options.md#parquet-format-options": [
+    {
+      "location": "test_files/copy.slt:320",
+      "sql_sha256": "7cd16081fed5fd10bc17cc8ba98470d9a68ad1ebfdef9ec721f686aa671405da"
+    },
+    {
+      "location": "test_files/copy.slt:39",
+      "sql_sha256": "f84bd111cbc52653b67a7f56857ac97f5cc9c65ca6130edaa8d261871b148120"
+    }
+  ],
+  "format_options.md#specifying-options-and-order-of-precedence": [
+    {
+      "location": "test_files/_driver/documented_formats.slt:7",
+      "sql_sha256": "4b3010f5f8b2b65c6a4f7a9067d1166dab7aa610731eceea3e3dc44ba2843396"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:18",
+      "sql_sha256": "11fc0418661f67a3411b04a541d2a68a082266fba89a6a60fda6c9c5b8f8143d"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:29",
+      "sql_sha256": "4556c75bc4eb2562217be893916b00c620755b201329b01c7202d54c0c207aab"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:39",
+      "sql_sha256": "e4fcf463bb8c3ecebe5ce95e8d752782112c95d37d5fc2031398c8836d861915"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:44",
+      "sql_sha256": "303418fd2f38a85c4f131a0d5187fcdc524ad32d7a671007b9e1f89157c596f7"
+    },
+    {
+      "location": "test_files/_driver/documented_formats.slt:55",
+      "sql_sha256": "fc88849bf4a0c83523cdf56274e0b8d990c62236eb6d3432d7081eec36d34ba8"
+    }
+  ],
+  "operators.md#escaping": [
+    {
+      "location": "test_files/_driver/documented_literals.slt:3",
+      "sql_sha256": "8a35e9a905d67dc2edfa67604752d03a5f78d8b564852b5494975476105352a2"
+    },
+    {
+      "location": "test_files/_driver/documented_literals.slt:8",
+      "sql_sha256": "b2427187eb7aa24f3bb937aadd25874bcd31a3fb3bbebeff7090be5e807b2136"
+    },
+    {
+      "location": "test_files/_driver/documented_literals.slt:13",
+      "sql_sha256": "bef9751d5c8b29836dd5b80ae3463927847593c37ff0988ed7ea2794a04caa42"
+    },
+    {
+      "location": "test_files/_driver/documented_literals.slt:18",
+      "sql_sha256": "480190a588420462b4e8f4c7c1dc3631a605a1ca70cc92224a9cc2b15a020ebf"
+    }
+  ],
+  "struct_coercion.md#migration-steps": [
+    {
+      "location": "test_files/_driver/documented_structs.slt:8",
+      "sql_sha256": "44dd17f8ca486d117a50cf81ff4c02043c8b0ade8be2c4f448e9cf0dd825506a",
+      "note": "This prose checklist points to assertions for its field-mapping and explicit-CAST steps; it is not a separate SQL feature."
+    },
+    {
+      "location": "test_files/struct.slt:860",
+      "sql_sha256": "2716756d134e7b7a74cc9ee3552a52d48caf12d3f4f4f502941d29eb63db3f74"
+    }
   ]
 }

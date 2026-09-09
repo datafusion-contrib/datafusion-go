@@ -1,0 +1,47 @@
+# Value assertions for sql/struct_coercion.md. Select fields by name where
+# schema order is inferred; explicit CAST controls order when required.
+
+# Match upstream struct.slt's dialect for STRUCT(field TYPE) declarations.
+statement ok
+SET datafusion.sql_parser.dialect = 'DuckDB'
+
+query IIII
+SELECT [{x: 1, y: 2}, {y: 3, x: 4}][1]['x'], [{x: 1, y: 2}, {y: 3, x: 4}][1]['y'], [{x: 1, y: 2}, {y: 3, x: 4}][2]['x'], [{x: 1, y: 2}, {y: 3, x: 4}][2]['y']
+----
+1 2 4 3
+
+query IIII
+WITH t AS (SELECT {category: 1, value: 10} AS s, 1 AS id UNION ALL SELECT {value: 10, category: 1} AS s, 2 AS id)
+SELECT id, s['category'], s['value'], row_number() OVER (PARTITION BY s ORDER BY id) FROM t ORDER BY id
+----
+1 1 10 1
+2 1 10 2
+
+query BBB
+SELECT {x: 1, y: 2} < {x: 1, y: 3}, {x: 1, y: NULL} < {x: 1, y: 2}, {x: 1, y: NULL} = {x: 1, y: NULL}
+----
+true true true
+
+query ?
+SELECT CAST({active: true, name: 'Alice', id: 1} AS STRUCT(id INT, name VARCHAR, active BOOLEAN))
+----
+{id: 1, name: Alice, active: true}
+
+query ??
+SELECT named_struct('id', 1, 'name', 'Alice', 'active', true) AS constructed, {id: 1, name: 'Alice', active: true} AS literal
+----
+{id: 1, name: Alice, active: true} {id: 1, name: Alice, active: true}
+
+query I
+SELECT coalesce(s['b'], 9) FROM (SELECT CAST({a: 1} AS STRUCT(a INT, b INT)) AS s)
+----
+9
+
+query ?
+-- Expected schema: {customer_id: INT, name: VARCHAR, age: INT}
+SELECT {customer_id: c.id, name: c.name, age: c.age} AS customer_info FROM (VALUES (1, 'Alice', 30)) AS c(id, name, age)
+----
+{customer_id: 1, name: Alice, age: 30}
+
+statement ok
+RESET datafusion.sql_parser.dialect

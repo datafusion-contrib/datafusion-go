@@ -1,0 +1,151 @@
+# SQL type mappings and values from the pinned sql/data_types.md guide.
+
+statement ok
+SET datafusion.sql_parser.map_string_types_to_utf8view = true
+
+query TT
+SELECT CAST('abc' AS CHAR) AS value, arrow_typeof(CAST('abc' AS CHAR)) AS type
+----
+abc Utf8View
+
+query TT
+SELECT CAST('abc' AS VARCHAR) AS value, arrow_typeof(CAST('abc' AS VARCHAR)) AS type
+----
+abc Utf8View
+
+query TT
+SELECT CAST('abc' AS TEXT) AS value, arrow_typeof(CAST('abc' AS TEXT)) AS type
+----
+abc Utf8View
+
+query TT
+SELECT CAST('abc' AS STRING) AS value, arrow_typeof(CAST('abc' AS STRING)) AS type
+----
+abc Utf8View
+
+statement ok
+SET datafusion.sql_parser.map_string_types_to_utf8view = false
+
+query TT
+SELECT CAST('abc' AS VARCHAR) AS value, arrow_typeof(CAST('abc' AS VARCHAR)) AS type
+----
+abc Utf8
+
+query IT
+SELECT CAST(7 AS TINYINT) AS value, arrow_typeof(CAST(7 AS TINYINT)) AS type
+----
+7 Int8
+
+query IT
+SELECT CAST(7 AS SMALLINT) AS value, arrow_typeof(CAST(7 AS SMALLINT)) AS type
+----
+7 Int16
+
+query IT
+SELECT CAST(7 AS INT) AS value, arrow_typeof(CAST(7 AS INT)) AS type
+----
+7 Int32
+
+query IT
+SELECT CAST(7 AS INTEGER) AS value, arrow_typeof(CAST(7 AS INTEGER)) AS type
+----
+7 Int32
+
+query IT
+SELECT CAST(7 AS BIGINT) AS value, arrow_typeof(CAST(7 AS BIGINT)) AS type
+----
+7 Int64
+
+query IT
+SELECT CAST(7 AS TINYINT UNSIGNED) AS value, arrow_typeof(CAST(7 AS TINYINT UNSIGNED)) AS type
+----
+7 UInt8
+
+query IT
+SELECT CAST(7 AS SMALLINT UNSIGNED) AS value, arrow_typeof(CAST(7 AS SMALLINT UNSIGNED)) AS type
+----
+7 UInt16
+
+query IT
+SELECT CAST(7 AS INT UNSIGNED) AS value, arrow_typeof(CAST(7 AS INT UNSIGNED)) AS type
+----
+7 UInt32
+
+query IT
+SELECT CAST(7 AS INTEGER UNSIGNED) AS value, arrow_typeof(CAST(7 AS INTEGER UNSIGNED)) AS type
+----
+7 UInt32
+
+query IT
+SELECT CAST(7 AS BIGINT UNSIGNED) AS value, arrow_typeof(CAST(7 AS BIGINT UNSIGNED)) AS type
+----
+7 UInt64
+
+query RT
+SELECT CAST(1.25 AS FLOAT) AS value, arrow_typeof(CAST(1.25 AS FLOAT)) AS type
+----
+1.25 Float32
+
+query RT
+SELECT CAST(1.25 AS REAL) AS value, arrow_typeof(CAST(1.25 AS REAL)) AS type
+----
+1.25 Float32
+
+query RT
+SELECT CAST(1.25 AS DOUBLE) AS value, arrow_typeof(CAST(1.25 AS DOUBLE)) AS type
+----
+1.25 Float64
+
+query RT
+SELECT CAST(1.25 AS DECIMAL(10, 2)) AS value, arrow_typeof(CAST(1.25 AS DECIMAL(10, 2))) AS type
+----
+1.25 Decimal128(10, 2)
+
+query RT
+SELECT CAST(1.25 AS DECIMAL(39, 2)) AS value, arrow_typeof(CAST(1.25 AS DECIMAL(39, 2))) AS type
+----
+1.25 Decimal256(39, 2)
+
+query RT
+SELECT CAST(1.25 AS DECIMAL(76, 2)) AS value, arrow_typeof(CAST(1.25 AS DECIMAL(76, 2))) AS type
+----
+1.25 Decimal256(76, 2)
+
+query DT
+SELECT DATE '2026-09-09' AS value, arrow_typeof(DATE '2026-09-09') AS type
+----
+2026-09-09 Date32
+
+query DT
+SELECT TIME '12:34:56' AS value, arrow_typeof(TIME '12:34:56') AS type
+----
+12:34:56 Time64(ns)
+
+query PT
+SELECT TIMESTAMP '2026-09-09 12:34:56' AS value, arrow_typeof(TIMESTAMP '2026-09-09 12:34:56') AS type
+----
+2026-09-09T12:34:56 Timestamp(ns)
+
+query TI
+SELECT arrow_typeof(INTERVAL '1 month') AS type, EXTRACT(month FROM INTERVAL '1 month') AS months
+----
+Interval(MonthDayNano) 1
+
+query BT
+SELECT CAST(true AS BOOLEAN) AS value, arrow_typeof(CAST(true AS BOOLEAN)) AS type
+----
+true Boolean
+
+query ?T
+SELECT CAST(X'1234' AS BYTEA) AS value, arrow_typeof(CAST(X'1234' AS BYTEA)) AS type
+----
+1234 Binary
+
+statement error DataFusion error: This feature is not implemented: Unsupported SQL type UUID
+SELECT CAST(NULL AS UUID)
+
+statement error DataFusion error: This feature is not implemented: Unsupported SQL type REGCLASS
+SELECT CAST(NULL AS REGCLASS)
+
+statement ok
+RESET datafusion.sql_parser.map_string_types_to_utf8view

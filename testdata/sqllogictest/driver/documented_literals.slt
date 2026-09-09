@@ -1,0 +1,21 @@
+# Quoting and escaping from sql/operators.md.
+
+query T
+SELECT 'foo'
+----
+foo
+
+query T
+SELECT 'it''s escaped'
+----
+it's escaped
+
+query B
+SELECT 'foo\nbar' = concat('foo', chr(92), 'nbar')
+----
+true
+
+query T
+SELECT replace(E'foo\nbar', chr(10), '<LF>')
+----
+foo<LF>bar
