@@ -2,6 +2,14 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550000.2 - 2026-09-09
+
+- Consolidated query and statement execution and simplified native ownership and cleanup across Go and Rust.
+- Fixed statement preparation to honor the configured SQL dialect and preserve parameters owned by SQL `PREPARE` and `CREATE FUNCTION` statements, including under `EXPLAIN`.
+- Upgraded Arrow Go to v18.8.0 for correct fractional-hour timezone offsets.
+- Added the pinned DataFusion SQLLogicTest corpus, SQL documentation coverage reports, reproducible datasets, and CI runs on Linux, macOS, and Windows. Replaced platform-dependent trigonometric snapshots with portable assertions. Two zero-length fixed-size-list assertions remain disabled pending Arrow Go support, and parallel spill stress tests run as nonblocking diagnostics.
+- Expanded lifecycle, installation, conformance, fuzzing, and native ABI checks, and clarified setup and usage documentation.
+
 ## v0.550000.1 - 2026-09-06
 
 - Fixed Arrow reader callback panics leaking imported buffers, premature reader finalization during active reads, and native connection access racing with close or session reset.
