@@ -13,8 +13,8 @@ const (
 	DataFusionGoMajor = 0
 
 	// DataFusionGoPatch is the patch component of datafusion-go release tags.
-	DataFusionGoPatch = 2
+	DataFusionGoPatch = 3
 
 	// DataFusionGoVersion is the full datafusion-go module version without the leading v.
-	DataFusionGoVersion = "0.550000.2"
+	DataFusionGoVersion = "0.550000.3"
 )

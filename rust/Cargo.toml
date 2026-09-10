@@ -1,6 +1,6 @@
 [package]
 name = "datafusion-go"
-version = "0.550000.2"
+version = "0.550000.3"
 edition = "2024"
 rust-version = "1.94"
 
