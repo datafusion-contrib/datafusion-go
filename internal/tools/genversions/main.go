@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -26,47 +27,55 @@ func main() {
 	githubOutput := flag.String("github-output", "", "append computed release values to a GitHub Actions output file")
 	flag.Parse()
 
-	cfg, err := readConfig("versions.toml")
-	if err != nil {
+	if err := run(*check, *githubOutput); err != nil {
 		fatal(err)
 	}
+}
 
-	if *githubOutput != "" {
-		if err := appendGitHubOutput(*githubOutput, cfg); err != nil {
-			fatal(err)
+func run(check bool, githubOutput string) error {
+	cfg, err := readConfig("versions.toml")
+	if err != nil {
+		return err
+	}
+
+	if githubOutput != "" {
+		if err := appendGitHubOutput(githubOutput, cfg); err != nil {
+			return err
 		}
-		return
+		return nil
 	}
 
 	updates, err := plannedUpdates(cfg)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 
 	var stale []string
 	for path, want := range updates {
 		current, err := os.ReadFile(path)
 		if err != nil && !os.IsNotExist(err) {
-			fatal(err)
+			return err
 		}
 		if bytes.Equal(current, want) {
 			continue
 		}
-		if *check {
+		if check {
 			stale = append(stale, path)
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			fatal(err)
+			return err
 		}
 		if err := os.WriteFile(path, want, 0o644); err != nil {
-			fatal(err)
+			return err
 		}
 	}
 
 	if len(stale) != 0 {
-		fatal(fmt.Errorf("generated version files are stale; run `make generate`: %s", strings.Join(stale, ", ")))
+		sort.Strings(stale)
+		return fmt.Errorf("generated version files are stale; run `make generate`: %s", strings.Join(stale, ", "))
 	}
+	return nil
 }
 
 func fatal(err error) {
@@ -81,6 +90,7 @@ func readConfig(path string) (config, error) {
 	}
 
 	values := map[string]string{}
+	sections := map[string]bool{}
 	section := ""
 	for lineNo, raw := range strings.Split(string(data), "\n") {
 		line := strings.TrimSpace(stripComment(raw))
@@ -94,6 +104,10 @@ func readConfig(path string) (config, error) {
 			default:
 				return config{}, fmt.Errorf("%s:%d: unknown section %q", path, lineNo+1, section)
 			}
+			if sections[section] {
+				return config{}, fmt.Errorf("%s:%d: duplicate section %q", path, lineNo+1, section)
+			}
+			sections[section] = true
 			continue
 		}
 		if section == "" {
@@ -108,6 +122,9 @@ func readConfig(path string) (config, error) {
 		case "datafusion.version", "datafusion_go.major", "datafusion_go.patch", "abi.version":
 		default:
 			return config{}, fmt.Errorf("%s:%d: unknown key %q", path, lineNo+1, name)
+		}
+		if _, exists := values[name]; exists {
+			return config{}, fmt.Errorf("%s:%d: duplicate key %q", path, lineNo+1, name)
 		}
 		values[name] = strings.TrimSpace(value)
 	}
@@ -135,6 +152,10 @@ func readConfig(path string) (config, error) {
 	abiVersion, err := requiredInt(values, "abi.version")
 	if err != nil {
 		return config{}, err
+	}
+
+	if abiVersion > 1<<31-1 {
+		return config{}, fmt.Errorf("abi.version must fit in a signed 32-bit integer")
 	}
 
 	return config{
@@ -201,10 +222,15 @@ func parseSemver(version string) (int, int, int, error) {
 	if match == nil {
 		return 0, 0, 0, fmt.Errorf("datafusion.version must be major.minor.patch, got %q", version)
 	}
-	major, _ := strconv.Atoi(match[1])
-	minor, _ := strconv.Atoi(match[2])
-	patch, _ := strconv.Atoi(match[3])
-	return major, minor, patch, nil
+	var parts [3]int
+	for i := range parts {
+		n, err := strconv.Atoi(match[i+1])
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("datafusion.version component is out of range: %w", err)
+		}
+		parts[i] = n
+	}
+	return parts[0], parts[1], parts[2], nil
 }
 
 func (cfg config) encodedDataFusionVersion() string {
@@ -245,6 +271,7 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 	datafusionSet := false
 	datafusionFFISet := false
 	datafusionSQLSet := false
+	datafusionSQLLogicTestSet := false
 	for _, raw := range strings.SplitAfter(string(data), "\n") {
 		line := strings.TrimSpace(raw)
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
@@ -264,6 +291,9 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 		case section == "dependencies" && strings.HasPrefix(line, "datafusion-sql = "):
 			fmt.Fprintf(&out, "datafusion-sql = %q\n", "="+cfg.DataFusionVersion)
 			datafusionSQLSet = true
+		case section == "dependencies.datafusion-sqllogictest" && strings.HasPrefix(line, "version = "):
+			fmt.Fprintf(&out, "version = %q\n", "="+cfg.DataFusionVersion)
+			datafusionSQLLogicTestSet = true
 		default:
 			out.WriteString(raw)
 		}
@@ -281,6 +311,9 @@ func updateCargoToml(path string, cfg config) ([]byte, error) {
 	}
 	if !datafusionSQLSet {
 		missing = append(missing, "[dependencies].datafusion-sql")
+	}
+	if !datafusionSQLLogicTestSet {
+		missing = append(missing, "[dependencies.datafusion-sqllogictest].version")
 	}
 	if len(missing) != 0 {
 		return nil, fmt.Errorf("%s missing expected fields: %s", path, strings.Join(missing, ", "))

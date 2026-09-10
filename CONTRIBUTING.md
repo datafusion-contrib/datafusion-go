@@ -12,6 +12,15 @@
 
 ## Test Workflow
 
+The [architecture guide](docs/architecture.md) records module responsibilities,
+ownership, and lock ordering. The [testing guide](docs/testing.md) explains the
+shared query corpus, deterministic failure tests, installation tests, fuzzing,
+native instrumentation, and coverage gates.
+
+After `make bundle`, use `make test.quick` for local iteration. Before handing
+off changes, run `make lint`, `make test`, `make test.source`, and
+`make rust.test`. Extended checks are available with `make test.extended`.
+
 Run the default bundled-library path:
 
 ```sh
@@ -91,6 +100,10 @@ make generate.check
 `make generate` updates `rust/Cargo.toml`, `rust/Cargo.lock`, `version.go`,
 `internal/native/version_generated.go`, and `rust/src/generated.rs`. Commit those
 mechanical outputs with the `versions.toml` change.
+
+It also derives the native loader declarations and ABI contract tests from
+`rust/include/datafusion_go.h`. Edit that header for an ABI change, then run
+`make generate` and `make generate.check`; do not hand-edit ABI generated files.
 
 Increment `abi.version` only when the C ABI in `rust/include/datafusion_go.h`
 changes incompatibly with the Go native wrapper.

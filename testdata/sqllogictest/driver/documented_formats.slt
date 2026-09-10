@@ -1,0 +1,68 @@
+# Explicit format options take precedence over catalog defaults, and table
+# options govern INSERT output. Verify the written data by reading it back.
+
+statement ok
+SET datafusion.catalog.has_header = true
+
+query I
+COPY (VALUES (1, 'a'), (2, 'b')) TO 'test_files/scratch/documented_formats/input.csv'
+STORED AS CSV OPTIONS ('format.has_header' false, 'format.delimiter' ';')
+----
+2
+
+statement ok
+CREATE EXTERNAL TABLE explicit_header(id INT, val TEXT) STORED AS CSV
+LOCATION 'test_files/scratch/documented_formats/input.csv'
+OPTIONS ('format.has_header' false, 'format.delimiter' ';')
+
+query IT rowsort
+SELECT * FROM explicit_header
+----
+1 a
+2 b
+
+statement ok
+CREATE EXTERNAL TABLE default_header(id INT, val TEXT) STORED AS CSV
+LOCATION 'test_files/scratch/documented_formats/input.csv'
+OPTIONS ('format.delimiter' ';')
+
+query IT
+SELECT * FROM default_header
+----
+2 b
+
+statement ok
+CREATE EXTERNAL TABLE table_options(id INT, val TEXT) STORED AS CSV
+LOCATION 'test_files/scratch/documented_formats/output/'
+OPTIONS ('format.has_header' true, 'format.delimiter' '|')
+
+query I
+INSERT INTO table_options VALUES (3, 'c'), (4, 'd')
+----
+2
+
+query IT rowsort
+SELECT * FROM table_options
+----
+3 c
+4 d
+
+statement ok
+CREATE EXTERNAL TABLE raw_lines(line TEXT) STORED AS CSV
+LOCATION 'test_files/scratch/documented_formats/output/'
+OPTIONS ('format.has_header' false, 'format.delimiter' '~')
+
+query T rowsort
+SELECT * FROM raw_lines
+----
+3|c
+4|d
+id|val
+
+# The pinned guide still shows this removed spelling. Keep its rejection
+# distinct from the supported OPTIONS form exercised by upstream copy.slt.
+statement error .*COMPRESSION TYPE clause is no longer in use.*
+CREATE EXTERNAL TABLE obsolete_compression STORED AS CSV COMPRESSION TYPE GZIP LOCATION 'unused.csv.gz'
+
+statement ok
+RESET datafusion.catalog.has_header

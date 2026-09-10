@@ -1,4 +1,4 @@
-# Keep generated/version files stable across Windows checkouts so
+# Keep generator inputs and outputs stable across Windows checkouts so
 # `make generate.check` compares content, not platform line endings.
 versions.toml text eol=lf
 version.go text eol=lf
@@ -6,3 +6,8 @@ internal/native/version_generated.go text eol=lf
 rust/Cargo.toml text eol=lf
 rust/Cargo.lock text eol=lf
 rust/src/generated.rs text eol=lf
+rust/include/datafusion_go.h text eol=lf
+internal/native/abi_generated.h text eol=lf
+rust/src/abi/contract_generated.rs text eol=lf
+rust/tests/abi_layout.c text eol=lf
+testdata/sqllogictest/** text eol=lf

@@ -9,7 +9,6 @@ import (
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow/array"
-	"github.com/apache/arrow-go/v18/arrow/arrio"
 )
 
 var errCgoDisabled = errors.New("datafusion-go requires cgo; rebuild with CGO_ENABLED=1")
@@ -60,6 +59,6 @@ func (stmt *Statement) Serializes() bool {
 	return false
 }
 
-func (stmt *Statement) ExecuteArrow(context.Context, []driver.NamedValue) (arrio.Reader, error) {
+func (stmt *Statement) ExecuteArrow(context.Context, []driver.NamedValue) (RecordReader, error) {
 	return nil, errCgoDisabled
 }

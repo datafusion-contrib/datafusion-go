@@ -57,88 +57,33 @@ func (s *Stmt) CheckNamedValue(nv *driver.NamedValue) error {
 
 // Exec executes the statement with positional driver values.
 func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	named := make([]driver.NamedValue, len(args))
-	for i, arg := range args {
-		value, err := normalizeParameterValue(arg)
-		if err != nil {
-			return nil, err
-		}
-		named[i] = driver.NamedValue{Ordinal: i + 1, Value: value}
-	}
-	return s.ExecContext(context.Background(), named)
+	return s.ExecContext(context.Background(), positionalNamedValues(args))
 }
 
 // ExecContext executes the statement with normalized named values.
 func (s *Stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	named, err := normalizeNamedValueSlice(args)
+	reader, err := runArrowQuery(ctx, args, s.prepareOperation)
 	if err != nil {
 		return nil, err
 	}
-
-	unlock, err := s.lockSerializedStatement(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := s.executeArrow(ctx, named)
-	if err != nil {
-		if unlock != nil {
-			unlock()
-		}
-		return nil, err
-	}
-	return execResult(newSerializedArrowReader(reader, unlock))
+	return execResult(reader)
 }
 
 // Query executes the statement with positional driver values.
 func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
-	named := make([]driver.NamedValue, len(args))
-	for i, arg := range args {
-		value, err := normalizeParameterValue(arg)
-		if err != nil {
-			return nil, err
-		}
-		named[i] = driver.NamedValue{Ordinal: i + 1, Value: value}
-	}
-	return s.QueryContext(context.Background(), named)
+	return s.QueryContext(context.Background(), positionalNamedValues(args))
 }
 
 // QueryContext executes the statement with normalized named values.
 func (s *Stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	named, err := normalizeNamedValueSlice(args)
+	reader, err := runArrowQuery(ctx, args, s.prepareOperation)
 	if err != nil {
 		return nil, err
 	}
-
-	unlock, err := s.lockSerializedStatement(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := s.executeArrow(ctx, named)
-	if err != nil {
-		if unlock != nil {
-			unlock()
-		}
-		return nil, err
-	}
-	arrowReader := newSerializedArrowReader(reader, unlock)
-
-	rows, err := newRows(arrowReader)
-	if err != nil {
-		closeReader(arrowReader)
-		return nil, driverError(ErrorScan, "could not create DataFusion rows", err)
-	}
-	return rows, nil
+	return queryRows(reader)
 }
 
-func (s *Stmt) executeArrow(ctx context.Context, named []driver.NamedValue) (ArrowReader, error) {
+func (s *Stmt) executeArrow(ctx context.Context, named []driver.NamedValue) (native.RecordReader, error) {
 	s.conn.mu.Lock()
 	s.mu.Lock()
 	if s.closed || s.conn.closed {
@@ -157,28 +102,19 @@ func (s *Stmt) executeArrow(ctx context.Context, named []driver.NamedValue) (Arr
 	}
 	s.conn.mu.Unlock()
 
-	reader, err := s.stmt.ExecuteArrow(ctx, named)
-	s.mu.Unlock()
-	if err != nil {
-		return nil, driverError(ErrorExecute, "could not execute DataFusion statement", err)
-	}
-
-	arrowReader, ok := reader.(ArrowReader)
-	if !ok {
-		closeReader(reader)
-		return nil, driverError(ErrorNative, "DataFusion Arrow reader is not closeable", nil)
-	}
-	return arrowReader, nil
+	defer s.mu.Unlock()
+	return executeNativeStatement(ctx, s.stmt, named)
 }
 
-func (s *Stmt) lockSerializedStatement(ctx context.Context) (func(), error) {
-	if s.conn.connector == nil {
-		return nil, nil
-	}
+func (s *Stmt) prepareOperation() (queryOperation, error) {
 	s.mu.Lock()
 	serializes := !s.closed && s.serializes
 	s.mu.Unlock()
-	return s.conn.connector.lockSerializedStatement(ctx, serializes)
+	return queryOperation{
+		connector:  s.conn.connector,
+		serializes: serializes,
+		execute:    s.executeArrow,
+	}, nil
 }
 
 var _ driver.Stmt = (*Stmt)(nil)

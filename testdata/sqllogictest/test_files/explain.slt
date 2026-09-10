@@ -1,0 +1,841 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+        c1  VARCHAR NOT NULL,
+        c2  TINYINT NOT NULL,
+        c3  SMALLINT NOT NULL,
+        c4  SMALLINT NOT NULL,
+        c5  INTEGER NOT NULL,
+        c6  BIGINT NOT NULL,
+        c7  SMALLINT NOT NULL,
+        c8  INT NOT NULL,
+        c9  INT UNSIGNED NOT NULL,
+        c10 BIGINT UNSIGNED NOT NULL,
+        c11 FLOAT NOT NULL,
+        c12 DOUBLE NOT NULL,
+        c13 VARCHAR NOT NULL
+    )
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TT
+explain SELECT c1 FROM aggregate_test_100 where c2 > 10
+----
+logical_plan
+01)Projection: aggregate_test_100.c1
+02)--Filter: aggregate_test_100.c2 > Int8(10)
+03)----TableScan: aggregate_test_100 projection=[c1, c2], partial_filters=[aggregate_test_100.c2 > Int8(10)]
+physical_plan
+01)FilterExec: c2@1 > 10, projection=[c1@0]
+02)--RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c2], file_type=csv, has_header=true
+
+# explain_csv_exec_scan_config
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100_with_order (
+        c1  VARCHAR NOT NULL,
+        c2  TINYINT NOT NULL,
+        c3  SMALLINT NOT NULL,
+        c4  SMALLINT NOT NULL,
+        c5  INTEGER NOT NULL,
+        c6  BIGINT NOT NULL,
+        c7  SMALLINT NOT NULL,
+        c8  INT NOT NULL,
+        c9  INT UNSIGNED NOT NULL,
+        c10 BIGINT UNSIGNED NOT NULL,
+        c11 FLOAT NOT NULL,
+        c12 DOUBLE NOT NULL,
+        c13 VARCHAR NOT NULL
+    )
+STORED AS CSV
+WITH ORDER (c1 ASC)
+LOCATION '../core/tests/data/aggregate_test_100_order_by_c1_asc.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TT
+explain SELECT c1 FROM aggregate_test_100_with_order order by c1 ASC limit 10
+----
+logical_plan
+01)Sort: aggregate_test_100_with_order.c1 ASC NULLS LAST, fetch=10
+02)--TableScan: aggregate_test_100_with_order projection=[c1]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/aggregate_test_100_order_by_c1_asc.csv]]}, projection=[c1], limit=10, output_ordering=[c1@0 ASC NULLS LAST], file_type=csv, has_header=true
+
+## explain_physical_plan_only
+
+statement ok
+set datafusion.explain.physical_plan_only = true
+
+query TT
+EXPLAIN select count(*) from (values ('a', 1, 100), ('a', 2, 150)) as t (c1,c2,c3)
+----
+physical_plan
+01)ProjectionExec: expr=[2 as count(*)]
+02)--PlaceholderRowExec
+
+statement ok
+set datafusion.explain.physical_plan_only = false
+
+
+## explain nested
+query error DataFusion error: Error during planning: Nested EXPLAINs are not supported
+EXPLAIN explain select 1
+
+## explain nested
+statement error DataFusion error: Error during planning: Nested EXPLAINs are not supported
+EXPLAIN EXPLAIN explain select 1
+
+statement ok
+set datafusion.explain.physical_plan_only = true
+
+statement error DataFusion error: Error during planning: Nested EXPLAINs are not supported
+EXPLAIN explain select 1
+
+statement ok
+set datafusion.explain.physical_plan_only = false
+
+##########
+# EXPLAIN VERBOSE will get pass prefixed with "logical_plan after"
+##########
+
+statement ok
+CREATE EXTERNAL TABLE simple_explain_test (
+  a INT,
+  b INT,
+  c INT
+)
+STORED AS CSV
+LOCATION '../core/tests/data/example.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TT
+EXPLAIN SELECT a, b, c FROM simple_explain_test
+----
+logical_plan TableScan: simple_explain_test projection=[a, b, c]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+
+# create a sink table, path is same with aggregate_test_100 table
+# we do not overwrite this file, we only assert plan.
+statement ok
+CREATE UNBOUNDED EXTERNAL TABLE sink_table (
+        c1  VARCHAR NOT NULL,
+        c2  TINYINT NOT NULL,
+        c3  SMALLINT NOT NULL,
+        c4  SMALLINT NOT NULL,
+        c5  INTEGER NOT NULL,
+        c6  BIGINT NOT NULL,
+        c7  SMALLINT NOT NULL,
+        c8  INT NOT NULL,
+        c9  INT UNSIGNED NOT NULL,
+        c10 BIGINT UNSIGNED NOT NULL,
+        c11 FLOAT NOT NULL,
+        c12 DOUBLE NOT NULL,
+        c13 VARCHAR NOT NULL
+    )
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+query TT
+EXPLAIN INSERT INTO sink_table SELECT * FROM aggregate_test_100 ORDER by c1
+----
+logical_plan
+01)Dml: op=[Insert Into] table=[sink_table]
+02)--Projection: aggregate_test_100.c1 AS c1, aggregate_test_100.c2 AS c2, aggregate_test_100.c3 AS c3, aggregate_test_100.c4 AS c4, aggregate_test_100.c5 AS c5, aggregate_test_100.c6 AS c6, aggregate_test_100.c7 AS c7, aggregate_test_100.c8 AS c8, aggregate_test_100.c9 AS c9, aggregate_test_100.c10 AS c10, aggregate_test_100.c11 AS c11, aggregate_test_100.c12 AS c12, aggregate_test_100.c13 AS c13
+03)----Sort: aggregate_test_100.c1 ASC NULLS LAST
+04)------TableScan: aggregate_test_100 projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13]
+physical_plan
+01)DataSinkExec: sink=StreamWrite { location: "../../testing/data/csv/aggregate_test_100.csv", batch_size: 8192, encoding: Csv, header: true, .. }
+02)--SortExec: expr=[c1@0 ASC NULLS LAST], preserve_partitioning=[false]
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/testing/data/csv/aggregate_test_100.csv]]}, projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], file_type=csv, has_header=true
+
+# test EXPLAIN VERBOSE
+query TT
+EXPLAIN VERBOSE SELECT a, b, c FROM simple_explain_test
+----
+initial_logical_plan
+01)Projection: simple_explain_test.a, simple_explain_test.b, simple_explain_test.c
+02)--TableScan: simple_explain_test
+logical_plan after resolve_grouping_function SAME TEXT AS ABOVE
+logical_plan after type_coercion SAME TEXT AS ABOVE
+analyzed_logical_plan SAME TEXT AS ABOVE
+logical_plan after rewrite_set_comparison SAME TEXT AS ABOVE
+logical_plan after optimize_unions SAME TEXT AS ABOVE
+logical_plan after unions_to_filter SAME TEXT AS ABOVE
+logical_plan after simplify_expressions SAME TEXT AS ABOVE
+logical_plan after replace_distinct_aggregate SAME TEXT AS ABOVE
+logical_plan after eliminate_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_predicate_subquery SAME TEXT AS ABOVE
+logical_plan after scalar_subquery_to_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_lateral_join SAME TEXT AS ABOVE
+logical_plan after extract_equijoin_predicate SAME TEXT AS ABOVE
+logical_plan after eliminate_duplicated_expr SAME TEXT AS ABOVE
+logical_plan after eliminate_filter SAME TEXT AS ABOVE
+logical_plan after eliminate_cross_join SAME TEXT AS ABOVE
+logical_plan after eliminate_limit SAME TEXT AS ABOVE
+logical_plan after propagate_empty_relation SAME TEXT AS ABOVE
+logical_plan after filter_null_join_keys SAME TEXT AS ABOVE
+logical_plan after eliminate_outer_join SAME TEXT AS ABOVE
+logical_plan after push_down_limit SAME TEXT AS ABOVE
+logical_plan after push_down_filter SAME TEXT AS ABOVE
+logical_plan after single_distinct_aggregation_to_group_by SAME TEXT AS ABOVE
+logical_plan after eliminate_group_by_constant SAME TEXT AS ABOVE
+logical_plan after common_sub_expression_eliminate SAME TEXT AS ABOVE
+logical_plan after extract_leaf_expressions SAME TEXT AS ABOVE
+logical_plan after push_down_leaf_projections SAME TEXT AS ABOVE
+logical_plan after optimize_projections TableScan: simple_explain_test projection=[a, b, c]
+logical_plan after rewrite_set_comparison SAME TEXT AS ABOVE
+logical_plan after optimize_unions SAME TEXT AS ABOVE
+logical_plan after unions_to_filter SAME TEXT AS ABOVE
+logical_plan after simplify_expressions SAME TEXT AS ABOVE
+logical_plan after replace_distinct_aggregate SAME TEXT AS ABOVE
+logical_plan after eliminate_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_predicate_subquery SAME TEXT AS ABOVE
+logical_plan after scalar_subquery_to_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_lateral_join SAME TEXT AS ABOVE
+logical_plan after extract_equijoin_predicate SAME TEXT AS ABOVE
+logical_plan after eliminate_duplicated_expr SAME TEXT AS ABOVE
+logical_plan after eliminate_filter SAME TEXT AS ABOVE
+logical_plan after eliminate_cross_join SAME TEXT AS ABOVE
+logical_plan after eliminate_limit SAME TEXT AS ABOVE
+logical_plan after propagate_empty_relation SAME TEXT AS ABOVE
+logical_plan after filter_null_join_keys SAME TEXT AS ABOVE
+logical_plan after eliminate_outer_join SAME TEXT AS ABOVE
+logical_plan after push_down_limit SAME TEXT AS ABOVE
+logical_plan after push_down_filter SAME TEXT AS ABOVE
+logical_plan after single_distinct_aggregation_to_group_by SAME TEXT AS ABOVE
+logical_plan after eliminate_group_by_constant SAME TEXT AS ABOVE
+logical_plan after common_sub_expression_eliminate SAME TEXT AS ABOVE
+logical_plan after extract_leaf_expressions SAME TEXT AS ABOVE
+logical_plan after push_down_leaf_projections SAME TEXT AS ABOVE
+logical_plan after optimize_projections SAME TEXT AS ABOVE
+logical_plan TableScan: simple_explain_test projection=[a, b, c]
+initial_physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+initial_physical_plan_with_stats DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, statistics=[Rows=Absent, Bytes=Absent, [(Col[0]:),(Col[1]:),(Col[2]:)]]
+initial_physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, schema=[a:Int32;N, b:Int32;N, c:Int32;N]
+physical_plan after OutputRequirements
+01)OutputRequirementExec: order_by=[], dist_by=Unspecified
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan after aggregate_statistics SAME TEXT AS ABOVE
+physical_plan after join_selection SAME TEXT AS ABOVE
+physical_plan after LimitedDistinctAggregation SAME TEXT AS ABOVE
+physical_plan after FilterPushdown SAME TEXT AS ABOVE
+physical_plan after WindowTopN SAME TEXT AS ABOVE
+physical_plan after EnsureRequirements SAME TEXT AS ABOVE
+physical_plan after CombinePartialFinalAggregate SAME TEXT AS ABOVE
+physical_plan after OptimizeAggregateOrder SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after OutputRequirements DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan after LimitAggregation SAME TEXT AS ABOVE
+physical_plan after LimitPushPastWindows SAME TEXT AS ABOVE
+physical_plan after HashJoinBuffering SAME TEXT AS ABOVE
+physical_plan after LimitPushdown SAME TEXT AS ABOVE
+physical_plan after TopKRepartition SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after PushdownSort SAME TEXT AS ABOVE
+physical_plan after EnsureCooperative SAME TEXT AS ABOVE
+physical_plan after FilterPushdown(Post) SAME TEXT AS ABOVE
+physical_plan after SanityCheckPlan SAME TEXT AS ABOVE
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan_with_stats DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, statistics=[Rows=Absent, Bytes=Absent, [(Col[0]:),(Col[1]:),(Col[2]:)]]
+physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, schema=[a:Int32;N, b:Int32;N, c:Int32;N]
+
+### tests for EXPLAIN with display schema enabled
+
+statement ok
+set datafusion.explain.show_schema = true;
+
+# test EXPLAIN VERBOSE
+query TT
+EXPLAIN SELECT a, b, c FROM simple_explain_test;
+----
+logical_plan TableScan: simple_explain_test projection=[a, b, c]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, schema=[a:Int32;N, b:Int32;N, c:Int32;N]
+
+
+statement ok
+set datafusion.explain.show_schema = false;
+
+
+### tests for EXPLAIN with display statistics enabled
+statement ok
+set datafusion.explain.show_statistics = true;
+
+statement ok
+set datafusion.explain.physical_plan_only = true;
+
+# CSV scan with empty statistics
+query TT
+EXPLAIN SELECT a, b, c FROM simple_explain_test limit 10;
+----
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], limit=10, file_type=csv, has_header=true, statistics=[Rows=Absent, Bytes=Absent, [(Col[0]:),(Col[1]:),(Col[2]:)]]
+
+# Parquet scan with statistics collected
+statement ok
+set datafusion.execution.collect_statistics = true;
+
+statement ok
+CREATE EXTERNAL TABLE alltypes_plain STORED AS PARQUET LOCATION '../../parquet-testing/data/alltypes_plain.parquet';
+
+query TT
+EXPLAIN SELECT * FROM alltypes_plain limit 10;
+----
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+
+# explain verbose with both collect & show statistics on
+query TT
+EXPLAIN VERBOSE SELECT * FROM alltypes_plain limit 10;
+----
+initial_physical_plan
+01)GlobalLimitExec: skip=0, fetch=10, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+initial_physical_plan_with_schema
+01)GlobalLimitExec: skip=0, fetch=10, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+physical_plan after OutputRequirements
+01)OutputRequirementExec: order_by=[], dist_by=Unspecified, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+02)--GlobalLimitExec: skip=0, fetch=10, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+physical_plan after aggregate_statistics SAME TEXT AS ABOVE
+physical_plan after join_selection SAME TEXT AS ABOVE
+physical_plan after LimitedDistinctAggregation SAME TEXT AS ABOVE
+physical_plan after FilterPushdown SAME TEXT AS ABOVE
+physical_plan after WindowTopN SAME TEXT AS ABOVE
+physical_plan after EnsureRequirements SAME TEXT AS ABOVE
+physical_plan after CombinePartialFinalAggregate SAME TEXT AS ABOVE
+physical_plan after OptimizeAggregateOrder SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after OutputRequirements
+01)GlobalLimitExec: skip=0, fetch=10, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+physical_plan after LimitAggregation SAME TEXT AS ABOVE
+physical_plan after LimitPushPastWindows SAME TEXT AS ABOVE
+physical_plan after HashJoinBuffering SAME TEXT AS ABOVE
+physical_plan after LimitPushdown DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+physical_plan after TopKRepartition SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after PushdownSort SAME TEXT AS ABOVE
+physical_plan after EnsureCooperative SAME TEXT AS ABOVE
+physical_plan after FilterPushdown(Post) SAME TEXT AS ABOVE
+physical_plan after SanityCheckPlan SAME TEXT AS ABOVE
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+
+
+statement ok
+set datafusion.explain.show_statistics = false;
+
+# explain verbose with collect on and & show statistics off: still has stats
+query TT
+EXPLAIN VERBOSE SELECT * FROM alltypes_plain limit 10;
+----
+initial_physical_plan
+01)GlobalLimitExec: skip=0, fetch=10
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet
+initial_physical_plan_with_stats
+01)GlobalLimitExec: skip=0, fetch=10, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+initial_physical_plan_with_schema
+01)GlobalLimitExec: skip=0, fetch=10, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+physical_plan after OutputRequirements
+01)OutputRequirementExec: order_by=[], dist_by=Unspecified
+02)--GlobalLimitExec: skip=0, fetch=10
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet
+physical_plan after aggregate_statistics SAME TEXT AS ABOVE
+physical_plan after join_selection SAME TEXT AS ABOVE
+physical_plan after LimitedDistinctAggregation SAME TEXT AS ABOVE
+physical_plan after FilterPushdown SAME TEXT AS ABOVE
+physical_plan after WindowTopN SAME TEXT AS ABOVE
+physical_plan after EnsureRequirements SAME TEXT AS ABOVE
+physical_plan after CombinePartialFinalAggregate SAME TEXT AS ABOVE
+physical_plan after OptimizeAggregateOrder SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after OutputRequirements
+01)GlobalLimitExec: skip=0, fetch=10
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet
+physical_plan after LimitAggregation SAME TEXT AS ABOVE
+physical_plan after LimitPushPastWindows SAME TEXT AS ABOVE
+physical_plan after HashJoinBuffering SAME TEXT AS ABOVE
+physical_plan after LimitPushdown DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet
+physical_plan after TopKRepartition SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after PushdownSort SAME TEXT AS ABOVE
+physical_plan after EnsureCooperative SAME TEXT AS ABOVE
+physical_plan after FilterPushdown(Post) SAME TEXT AS ABOVE
+physical_plan after SanityCheckPlan SAME TEXT AS ABOVE
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet
+physical_plan_with_stats DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, statistics=[Rows=Exact(8), Bytes=Absent, [(Col[0]: ScanBytes=Exact(32)),(Col[1]: ScanBytes=Inexact(24)),(Col[2]: ScanBytes=Exact(32)),(Col[3]: ScanBytes=Exact(32)),(Col[4]: ScanBytes=Exact(32)),(Col[5]: ScanBytes=Exact(64)),(Col[6]: ScanBytes=Exact(32)),(Col[7]: ScanBytes=Exact(64)),(Col[8]: ScanBytes=Inexact(88)),(Col[9]: ScanBytes=Inexact(49)),(Col[10]: ScanBytes=Exact(64))]]
+physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/parquet-testing/data/alltypes_plain.parquet]]}, projection=[id, bool_col, tinyint_col, smallint_col, int_col, bigint_col, float_col, double_col, date_string_col, string_col, timestamp_col], limit=10, file_type=parquet, schema=[id:Int32;N, bool_col:Boolean;N, tinyint_col:Int32;N, smallint_col:Int32;N, int_col:Int32;N, bigint_col:Int64;N, float_col:Float32;N, double_col:Float64;N, date_string_col:BinaryView;N, string_col:BinaryView;N, timestamp_col:Timestamp(ns);N]
+
+
+# Config reset
+statement ok
+reset datafusion.execution.collect_statistics;
+
+# Explain ArrayFunctions
+
+statement ok
+set datafusion.explain.physical_plan_only = false
+
+query TT
+explain select make_array(make_array(1, 2, 3), make_array(4, 5, 6));
+----
+logical_plan
+01)Projection: List([[1, 2, 3], [4, 5, 6]]) AS make_array(make_array(Int64(1),Int64(2),Int64(3)),make_array(Int64(4),Int64(5),Int64(6)))
+02)--EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[[[1, 2, 3], [4, 5, 6]] as make_array(make_array(Int64(1),Int64(2),Int64(3)),make_array(Int64(4),Int64(5),Int64(6)))]
+02)--PlaceholderRowExec
+
+query TT
+explain select [[1, 2, 3], [4, 5, 6]];
+----
+logical_plan
+01)Projection: List([[1, 2, 3], [4, 5, 6]]) AS make_array(make_array(Int64(1),Int64(2),Int64(3)),make_array(Int64(4),Int64(5),Int64(6)))
+02)--EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[[[1, 2, 3], [4, 5, 6]] as make_array(make_array(Int64(1),Int64(2),Int64(3)),make_array(Int64(4),Int64(5),Int64(6)))]
+02)--PlaceholderRowExec
+
+# Explain Struct
+
+query TT
+explain select struct(1, 2.3, 'abc');
+----
+logical_plan
+01)Projection: Struct({c0:1,c1:2.3,c2:abc}) AS struct(Int64(1),Float64(2.3),Utf8("abc"))
+02)--EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[{c0:1,c1:2.3,c2:abc} as struct(Int64(1),Float64(2.3),Utf8("abc"))]
+02)--PlaceholderRowExec
+
+
+statement ok
+create table t1(a int);
+
+statement ok
+create table t2(b int);
+
+query TT
+explain select a from t1 where exists (select count(*) from t2);
+----
+logical_plan
+01)LeftSemi Join: 
+02)--TableScan: t1 projection=[a]
+03)--SubqueryAlias: __correlated_sq_1
+04)----EmptyRelation: rows=1
+physical_plan
+01)NestedLoopJoinExec: join_type=LeftSemi
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+03)--PlaceholderRowExec
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+## Tests for explain format
+
+statement ok
+create table foo (x int, y int) as values (1,2), (1,3), (2,4);
+
+# defaults to indent mode
+query TT
+explain select * from values (1);
+----
+logical_plan Values: (Int64(1))
+physical_plan DataSourceExec: partitions=1, partition_sizes=[1]
+
+# can explicitly request indent mode
+query TT
+explain format indent select * from values (1);
+----
+logical_plan Values: (Int64(1))
+physical_plan DataSourceExec: partitions=1, partition_sizes=[1]
+
+# tree mode
+query TT
+explain format tree select * from values (1);
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       DataSourceExec      │
+03)│    --------------------   │
+04)│         bytes: 128        │
+05)│       format: memory      │
+06)│          rows: 1          │
+07)└───────────────────────────┘
+
+# is not case sensitive
+query TT
+explain format TrEE select * from values (1);
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       DataSourceExec      │
+03)│    --------------------   │
+04)│         bytes: 128        │
+05)│       format: memory      │
+06)│          rows: 1          │
+07)└───────────────────────────┘
+
+# wrapped in single quotes
+query TT
+explain format 'tree' select * from values (1);
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       DataSourceExec      │
+03)│    --------------------   │
+04)│         bytes: 128        │
+05)│       format: memory      │
+06)│          rows: 1          │
+07)└───────────────────────────┘
+
+# wrapped in double quotes
+query TT
+explain format "tree" select * from values (1);
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       DataSourceExec      │
+03)│    --------------------   │
+04)│         bytes: 128        │
+05)│       format: memory      │
+06)│          rows: 1          │
+07)└───────────────────────────┘
+
+# number is not a valid format
+query error DataFusion error: SQL error: ParserError\("Expected: an explain format such as TREE, found: 123 at Line: 1, Column: 16"\)
+explain format 123 select * from values (1);
+
+# verbose tree mode not supported
+query error DataFusion error: Error during planning: EXPLAIN VERBOSE with FORMAT is not supported
+explain verbose format tree select * from values (1);
+
+# valid explain format
+query error
+set datafusion.explain.format = "xxx";
+----
+DataFusion error: Error setting config datafusion.explain.format
+caused by
+Invalid or Unsupported Configuration: Invalid explain format. Expected 'indent', 'tree', 'pgjson' or 'graphviz'. Got 'xxx'
+
+
+# verbose uses indent mode even when a different mode (e.g tree) is set
+
+statement ok
+set datafusion.explain.format = "tree";
+
+query TT
+EXPLAIN VERBOSE SELECT a, b, c FROM simple_explain_test
+----
+initial_logical_plan
+01)Projection: simple_explain_test.a, simple_explain_test.b, simple_explain_test.c
+02)--TableScan: simple_explain_test
+logical_plan after resolve_grouping_function SAME TEXT AS ABOVE
+logical_plan after type_coercion SAME TEXT AS ABOVE
+analyzed_logical_plan SAME TEXT AS ABOVE
+logical_plan after rewrite_set_comparison SAME TEXT AS ABOVE
+logical_plan after optimize_unions SAME TEXT AS ABOVE
+logical_plan after unions_to_filter SAME TEXT AS ABOVE
+logical_plan after simplify_expressions SAME TEXT AS ABOVE
+logical_plan after replace_distinct_aggregate SAME TEXT AS ABOVE
+logical_plan after eliminate_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_predicate_subquery SAME TEXT AS ABOVE
+logical_plan after scalar_subquery_to_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_lateral_join SAME TEXT AS ABOVE
+logical_plan after extract_equijoin_predicate SAME TEXT AS ABOVE
+logical_plan after eliminate_duplicated_expr SAME TEXT AS ABOVE
+logical_plan after eliminate_filter SAME TEXT AS ABOVE
+logical_plan after eliminate_cross_join SAME TEXT AS ABOVE
+logical_plan after eliminate_limit SAME TEXT AS ABOVE
+logical_plan after propagate_empty_relation SAME TEXT AS ABOVE
+logical_plan after filter_null_join_keys SAME TEXT AS ABOVE
+logical_plan after eliminate_outer_join SAME TEXT AS ABOVE
+logical_plan after push_down_limit SAME TEXT AS ABOVE
+logical_plan after push_down_filter SAME TEXT AS ABOVE
+logical_plan after single_distinct_aggregation_to_group_by SAME TEXT AS ABOVE
+logical_plan after eliminate_group_by_constant SAME TEXT AS ABOVE
+logical_plan after common_sub_expression_eliminate SAME TEXT AS ABOVE
+logical_plan after extract_leaf_expressions SAME TEXT AS ABOVE
+logical_plan after push_down_leaf_projections SAME TEXT AS ABOVE
+logical_plan after optimize_projections TableScan: simple_explain_test projection=[a, b, c]
+logical_plan after rewrite_set_comparison SAME TEXT AS ABOVE
+logical_plan after optimize_unions SAME TEXT AS ABOVE
+logical_plan after unions_to_filter SAME TEXT AS ABOVE
+logical_plan after simplify_expressions SAME TEXT AS ABOVE
+logical_plan after replace_distinct_aggregate SAME TEXT AS ABOVE
+logical_plan after eliminate_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_predicate_subquery SAME TEXT AS ABOVE
+logical_plan after scalar_subquery_to_join SAME TEXT AS ABOVE
+logical_plan after decorrelate_lateral_join SAME TEXT AS ABOVE
+logical_plan after extract_equijoin_predicate SAME TEXT AS ABOVE
+logical_plan after eliminate_duplicated_expr SAME TEXT AS ABOVE
+logical_plan after eliminate_filter SAME TEXT AS ABOVE
+logical_plan after eliminate_cross_join SAME TEXT AS ABOVE
+logical_plan after eliminate_limit SAME TEXT AS ABOVE
+logical_plan after propagate_empty_relation SAME TEXT AS ABOVE
+logical_plan after filter_null_join_keys SAME TEXT AS ABOVE
+logical_plan after eliminate_outer_join SAME TEXT AS ABOVE
+logical_plan after push_down_limit SAME TEXT AS ABOVE
+logical_plan after push_down_filter SAME TEXT AS ABOVE
+logical_plan after single_distinct_aggregation_to_group_by SAME TEXT AS ABOVE
+logical_plan after eliminate_group_by_constant SAME TEXT AS ABOVE
+logical_plan after common_sub_expression_eliminate SAME TEXT AS ABOVE
+logical_plan after extract_leaf_expressions SAME TEXT AS ABOVE
+logical_plan after push_down_leaf_projections SAME TEXT AS ABOVE
+logical_plan after optimize_projections SAME TEXT AS ABOVE
+logical_plan TableScan: simple_explain_test projection=[a, b, c]
+initial_physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+initial_physical_plan_with_stats DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, statistics=[Rows=Absent, Bytes=Absent, [(Col[0]:),(Col[1]:),(Col[2]:)]]
+initial_physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, schema=[a:Int32;N, b:Int32;N, c:Int32;N]
+physical_plan after OutputRequirements
+01)OutputRequirementExec: order_by=[], dist_by=Unspecified
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan after aggregate_statistics SAME TEXT AS ABOVE
+physical_plan after join_selection SAME TEXT AS ABOVE
+physical_plan after LimitedDistinctAggregation SAME TEXT AS ABOVE
+physical_plan after FilterPushdown SAME TEXT AS ABOVE
+physical_plan after WindowTopN SAME TEXT AS ABOVE
+physical_plan after EnsureRequirements SAME TEXT AS ABOVE
+physical_plan after CombinePartialFinalAggregate SAME TEXT AS ABOVE
+physical_plan after OptimizeAggregateOrder SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after OutputRequirements DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan after LimitAggregation SAME TEXT AS ABOVE
+physical_plan after LimitPushPastWindows SAME TEXT AS ABOVE
+physical_plan after HashJoinBuffering SAME TEXT AS ABOVE
+physical_plan after LimitPushdown SAME TEXT AS ABOVE
+physical_plan after TopKRepartition SAME TEXT AS ABOVE
+physical_plan after ProjectionPushdown SAME TEXT AS ABOVE
+physical_plan after PushdownSort SAME TEXT AS ABOVE
+physical_plan after EnsureCooperative SAME TEXT AS ABOVE
+physical_plan after FilterPushdown(Post) SAME TEXT AS ABOVE
+physical_plan after SanityCheckPlan SAME TEXT AS ABOVE
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true
+physical_plan_with_stats DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, statistics=[Rows=Absent, Bytes=Absent, [(Col[0]:),(Col[1]:),(Col[2]:)]]
+physical_plan_with_schema DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/example.csv]]}, projection=[a, b, c], file_type=csv, has_header=true, schema=[a:Int32;N, b:Int32;N, c:Int32;N]
+
+# Set back to original default value
+statement ok
+set datafusion.explain.format = "indent";
+
+# no such thing as json mode
+query error DataFusion error: Invalid or Unsupported Configuration: Invalid explain format\. Expected 'indent', 'tree', 'pgjson' or 'graphviz'\. Got 'json'
+explain format json select * from values (1);
+
+query error DataFusion error: Invalid or Unsupported Configuration: Invalid explain format\. Expected 'indent', 'tree', 'pgjson' or 'graphviz'\. Got 'foo'
+explain format foo select * from values (1);
+
+# pgjson mode
+query TT
+explain format pgjson select * from values (1);
+----
+logical_plan
+01)[
+02)--{
+03)----"Plan": {
+04)------"Node Type": "Values",
+05)------"Values": "(Int64(1))",
+06)------"Plans": [],
+07)------"Output": [
+08)--------"column1"
+09)------]
+10)----}
+11)--}
+12)]
+
+# graphviz mode
+query TT
+explain format graphviz select * from values (1);
+----
+logical_plan
+01)
+02)// Begin DataFusion GraphViz Plan,
+03)// display it online here: https://dreampuf.github.io/GraphvizOnline
+04)
+05)digraph {
+06)--subgraph cluster_1
+07)--{
+08)----graph[label="LogicalPlan"]
+09)----2[shape=box label="Values: (Int64(1))"]
+10)--}
+11)--subgraph cluster_3
+12)--{
+13)----graph[label="Detailed LogicalPlan"]
+14)----4[shape=box label="Values: (Int64(1))\nSchema: [column1:Int64]"]
+15)--}
+16)}
+17)// End DataFusion GraphViz Plan
+
+# unknown mode
+
+statement ok
+drop table foo;
+
+# ------------------------------------------------------------------
+# Postgres-style `EXPLAIN (option, ...)` tests (dialect-gated).
+#
+# These require a dialect whose `supports_explain_with_utility_options()`
+# returns true. DataFusion's default Generic dialect also declares this
+# (mirroring sqlparser-rs 0.61.0), so the parenthesized form works there
+# too. We set PostgreSQL explicitly for clarity.
+# ------------------------------------------------------------------
+
+statement ok
+set datafusion.sql_parser.dialect = 'PostgreSQL';
+
+# `EXPLAIN (FORMAT tree)` matches the legacy `EXPLAIN FORMAT tree` form.
+query TT
+EXPLAIN (FORMAT tree) SELECT 1;
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       ProjectionExec      │
+03)│    --------------------   │
+04)│        Int64(1): 1        │
+05)└─────────────┬─────────────┘
+06)┌─────────────┴─────────────┐
+07)│     PlaceholderRowExec    │
+08)└───────────────────────────┘
+
+# Unknown options are rejected with a clear error.
+statement error DataFusion error: Error during planning: unknown EXPLAIN option: FOO
+EXPLAIN (FOO) SELECT 1;
+
+# Postgres-only options return a "not supported" message pointing at METRICS.
+statement error DataFusion error: This feature is not implemented: EXPLAIN option BUFFERS is not supported by DataFusion
+EXPLAIN (BUFFERS) SELECT 1;
+
+statement error DataFusion error: This feature is not implemented: EXPLAIN option WAL is not supported by DataFusion
+EXPLAIN (WAL) SELECT 1;
+
+# LEVEL / METRICS / TIMING / SUMMARY all require ANALYZE.
+statement error DataFusion error: Error during planning: EXPLAIN option LEVEL requires ANALYZE
+EXPLAIN (LEVEL dev) SELECT 1;
+
+statement error DataFusion error: Error during planning: EXPLAIN option METRICS requires ANALYZE
+EXPLAIN (METRICS 'rows') SELECT 1;
+
+# COSTS and ANALYZE are mutually exclusive (COSTS only applies to plan-only
+# EXPLAIN).
+statement error DataFusion error: Error during planning: EXPLAIN option COSTS cannot be combined with ANALYZE
+EXPLAIN (ANALYZE, COSTS ON) SELECT 1;
+
+# TIMING and SUMMARY are sugar for METRICS/LEVEL and likewise need ANALYZE.
+statement error DataFusion error: Error during planning: EXPLAIN option METRICS requires ANALYZE
+EXPLAIN (TIMING ON) SELECT 1;
+
+statement error DataFusion error: Error during planning: EXPLAIN option LEVEL requires ANALYZE
+EXPLAIN (SUMMARY ON) SELECT 1;
+
+# VERBOSE is incompatible with any FORMAT, and ANALYZE only supports the
+# `indent` and `pgjson` formats — `tree` and `graphviz` are rejected (these
+# mappings come from the planner, not the parser).
+statement error DataFusion error: Error during planning: EXPLAIN ANALYZE with FORMAT tree is not supported
+EXPLAIN (ANALYZE, FORMAT tree) SELECT 1;
+
+statement error DataFusion error: Error during planning: EXPLAIN VERBOSE with FORMAT is not supported
+EXPLAIN (VERBOSE, FORMAT tree) SELECT 1;
+
+# FORMAT argument can be a bare identifier (already tested) or a quoted
+# string and produces the same plan either way.
+query TT
+EXPLAIN (FORMAT 'tree') SELECT 1;
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       ProjectionExec      │
+03)│    --------------------   │
+04)│        Int64(1): 1        │
+05)└─────────────┬─────────────┘
+06)┌─────────────┴─────────────┐
+07)│     PlaceholderRowExec    │
+08)└───────────────────────────┘
+
+# Bool option arguments accept bare/ON|OFF/TRUE|FALSE/1|0/=value forms.
+# `ANALYZE OFF` is the same as a plain `EXPLAIN`.
+query TT
+EXPLAIN (ANALYZE OFF, FORMAT tree) SELECT 1;
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       ProjectionExec      │
+03)│    --------------------   │
+04)│        Int64(1): 1        │
+05)└─────────────┬─────────────┘
+06)┌─────────────┴─────────────┐
+07)│     PlaceholderRowExec    │
+08)└───────────────────────────┘
+
+# `COSTS OFF` overrides `datafusion.explain.show_statistics` per-statement
+# (ANALYZE+COSTS is rejected above).
+query TT
+EXPLAIN (COSTS OFF) SELECT 1;
+----
+logical_plan
+01)Projection: Int64(1)
+02)--EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[1 as Int64(1)]
+02)--PlaceholderRowExec
+
+# Bool argument forms: ON / TRUE / 1 all enable the option. The parenthesized
+# form does not support `= value` for booleans (sqlparser's utility option
+# grammar). Quoted-string booleans are accepted by the option parser.
+statement ok
+EXPLAIN (COSTS ON) SELECT 1;
+
+statement ok
+EXPLAIN (COSTS TRUE) SELECT 1;
+
+statement ok
+EXPLAIN (COSTS 1) SELECT 1;
+
+statement ok
+EXPLAIN (COSTS 'true') SELECT 1;
+
+# Unrecognized argument for a boolean option.
+statement error DataFusion error: Error during planning: expected boolean for EXPLAIN option costs, got 'maybe'
+EXPLAIN (COSTS maybe) SELECT 1;
+
+# Unrecognized argument for a string/ident option.
+statement error DataFusion error: Invalid or Unsupported Configuration: Invalid explain format\. Expected 'indent', 'tree', 'pgjson' or 'graphviz'\. Got 'bogus'
+EXPLAIN (FORMAT bogus) SELECT 1;
+
+# Legacy keyword form still works on PostgreSQL dialect.
+query TT
+EXPLAIN FORMAT tree SELECT 1;
+----
+physical_plan
+01)┌───────────────────────────┐
+02)│       ProjectionExec      │
+03)│    --------------------   │
+04)│        Int64(1): 1        │
+05)└─────────────┬─────────────┘
+06)┌─────────────┴─────────────┐
+07)│     PlaceholderRowExec    │
+08)└───────────────────────────┘
+
+statement ok
+reset datafusion.sql_parser.dialect;

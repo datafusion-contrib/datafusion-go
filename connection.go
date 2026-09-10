@@ -198,34 +198,18 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 	if err != nil {
 		return nil, err
 	}
-	rows, err := newRows(reader)
-	if err != nil {
-		closeReader(reader)
-		return nil, driverError(ErrorScan, "could not create DataFusion rows", err)
-	}
-	return rows, nil
+	return queryRows(reader)
 }
 
 // QueryArrowContext executes a query and returns Arrow record batches.
 func (conn *Conn) QueryArrowContext(ctx context.Context, query string, args []driver.NamedValue) (ArrowReader, error) {
-	reader, unlock, err := conn.queryArrowContext(ctx, query, args)
-	if err != nil {
-		return nil, err
-	}
-	return newSerializedArrowReader(reader, unlock), nil
+	return runArrowQuery(ctx, args, func() (queryOperation, error) {
+		return conn.prepareOperation(query)
+	})
 }
 
-func (conn *Conn) queryArrowContext(ctx context.Context, query string, args []driver.NamedValue) (ArrowReader, func(), error) {
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
-	named, err := normalizeNamedValueSlice(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Once prepared, the statement owns its session reference and can execute
-	// outside conn.mu.
+func (conn *Conn) prepareOperation(query string) (queryOperation, error) {
+	// A temporary statement owns its session reference and executes outside conn.mu.
 	var stmt *native.Statement
 	if err := conn.withNative(func(nc *native.Connection) error {
 		prepared, err := nc.Prepare(query)
@@ -235,39 +219,16 @@ func (conn *Conn) queryArrowContext(ctx context.Context, query string, args []dr
 		stmt = prepared
 		return nil
 	}); err != nil {
-		return nil, nil, err
+		return queryOperation{}, err
 	}
-	defer stmt.Close()
-
-	unlock, err := conn.lockSerializedStatement(ctx, stmt.Serializes())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	reader, err := stmt.ExecuteArrow(ctx, named)
-	if err != nil {
-		if unlock != nil {
-			unlock()
-		}
-		return nil, nil, driverError(ErrorExecute, "could not execute DataFusion statement", err)
-	}
-
-	arrowReader, ok := reader.(ArrowReader)
-	if !ok {
-		closeReader(reader)
-		if unlock != nil {
-			unlock()
-		}
-		return nil, nil, driverError(ErrorNative, "DataFusion Arrow reader is not closeable", nil)
-	}
-	return arrowReader, unlock, nil
-}
-
-func (conn *Conn) lockSerializedStatement(ctx context.Context, serializes bool) (func(), error) {
-	if conn.connector == nil {
-		return nil, nil
-	}
-	return conn.connector.lockSerializedStatement(ctx, serializes)
+	return queryOperation{
+		connector:  conn.connector,
+		serializes: stmt.Serializes(),
+		execute: func(ctx context.Context, args []driver.NamedValue) (native.RecordReader, error) {
+			return executeNativeStatement(ctx, stmt, args)
+		},
+		close: stmt.Close,
+	}, nil
 }
 
 func (conn *Conn) checkOpen() error {

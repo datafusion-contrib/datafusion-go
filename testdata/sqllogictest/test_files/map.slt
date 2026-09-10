@@ -1,0 +1,1201 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+statement ok
+CREATE TABLE map_array_table_1
+AS VALUES
+  (MAP {1: [1, NULL, 3], 2: [4, NULL, 6], 3: [7, 8, 9]}, 1, 1.0, '1'),
+  (MAP {4: [1, NULL, 3], 5: [4, NULL, 6], 6: [7, 8, 9]}, 5, 5.0, '5'),
+  (MAP {7: [1, NULL, 3], 8: [9, NULL, 6], 9: [7, 8, 9]}, 4, 4.0, '4')
+;
+
+statement ok
+INSERT INTO map_array_table_1 VALUES (NULL, 2, 1.0, '3');
+
+statement ok
+CREATE TABLE map_array_table_2
+AS VALUES
+  (MAP {'1': [1, NULL, 3], '2': [4, NULL, 6], '3': [7, 8, 9]}, 1, 1.0, '1'),
+  (MAP {'4': [1, NULL, 3], '5': [4, NULL, 6], '6': [7, 8, 9]}, 5, 5.0, '5'),
+  (MAP {'7': [1, NULL, 3], '8': [9, NULL, 6], '9': [7, 8, 9]}, 4, 4.0, '4')
+;
+
+statement ok
+CREATE EXTERNAL TABLE data
+STORED AS PARQUET
+LOCATION '../core/tests/data/parquet_map.parquet';
+
+# Show shape of data: 3 columns, 209 rows
+query TTT
+describe data;
+----
+ints Map("entries": non-null Struct("key": non-null Utf8, "value": non-null Int64), unsorted) NO
+strings Map("entries": non-null Struct("key": non-null Utf8, "value": non-null Utf8), unsorted) NO
+timestamp Utf8View NO
+
+query ??T
+SELECT * FROM data ORDER by ints['bytes'] DESC LIMIT 10;
+----
+{bytes: 49960} {host: 21.169.210.169, method: GET, protocol: HTTP/1.1, referer: https://up.de/booper/bopper/mooper/mopper, request: /user/booperbot124, status: 500, user-identifier: shaneIxD} 06/Oct/2023:17:53:58
+{bytes: 49689} {host: 244.231.56.81, method: PATCH, protocol: HTTP/2.0, referer: https://names.de/this/endpoint/prints/money, request: /controller/setup, status: 500, user-identifier: ahmadajmi} 06/Oct/2023:17:53:54
+{bytes: 48768} {host: 127.152.34.105, method: POST, protocol: HTTP/1.1, referer: https://for.com/secret-info/open-sesame, request: /secret-info/open-sesame, status: 200, user-identifier: Karimmove} 06/Oct/2023:17:53:59
+{bytes: 48574} {host: 121.67.176.60, method: POST, protocol: HTTP/2.0, referer: https://names.com/this/endpoint/prints/money, request: /apps/deploy, status: 401, user-identifier: benefritz} 06/Oct/2023:17:54:02
+{bytes: 48274} {host: 39.37.198.203, method: DELETE, protocol: HTTP/1.0, referer: https://some.de/booper/bopper/mooper/mopper, request: /secret-info/open-sesame, status: 550, user-identifier: ahmadajmi} 06/Oct/2023:17:54:00
+{bytes: 47775} {host: 50.89.77.82, method: OPTION, protocol: HTTP/1.0, referer: https://random.com/observability/metrics/production, request: /controller/setup, status: 200, user-identifier: meln1ks} 06/Oct/2023:17:53:54
+{bytes: 47557} {host: 108.242.133.203, method: OPTION, protocol: HTTP/2.0, referer: https://we.org/observability/metrics/production, request: /apps/deploy, status: 500, user-identifier: meln1ks} 06/Oct/2023:17:53:48
+{bytes: 47552} {host: 206.248.141.240, method: HEAD, protocol: HTTP/1.1, referer: https://up.us/user/booperbot124, request: /wp-admin, status: 400, user-identifier: jesseddy} 06/Oct/2023:17:53:50
+{bytes: 47342} {host: 110.222.38.8, method: HEAD, protocol: HTTP/2.0, referer: https://we.com/controller/setup, request: /do-not-access/needs-work, status: 301, user-identifier: ahmadajmi} 06/Oct/2023:17:53:59
+{bytes: 47238} {host: 241.134.69.76, method: POST, protocol: HTTP/2.0, referer: https://up.de/do-not-access/needs-work, request: /controller/setup, status: 503, user-identifier: ahmadajmi} 06/Oct/2023:17:53:58
+
+query I
+SELECT COUNT(*) FROM data;
+----
+209
+
+query I
+SELECT SUM(ints['bytes']) FROM data;
+----
+5636785
+
+query I
+SELECT SUM(ints['bytes']) FROM data WHERE strings['method'] == 'GET';
+----
+649668
+
+query TI
+SELECT strings['method'] AS method, COUNT(*) as count FROM data GROUP BY method ORDER BY count DESC;
+----
+POST 41
+HEAD 33
+PATCH 30
+OPTION 29
+GET 27
+PUT 25
+DELETE 24
+
+query T
+SELECT strings['not_found'] FROM data LIMIT 1;
+----
+NULL
+
+# Select non existent key, expect NULL for each row
+query I
+SELECT COUNT(CASE WHEN strings['not_found'] IS NULL THEN 1 ELSE 0 END) FROM data;
+----
+209
+
+statement ok
+drop table data;
+
+query I?
+select * from table_with_map where int_field > 0;
+----
+
+# Testing explain on a table with a map filter, registered in test_context.rs.
+query TT
+explain select * from table_with_map where int_field > 0;
+----
+logical_plan
+01)Filter: table_with_map.int_field > Int64(0)
+02)--TableScan: table_with_map projection=[int_field, map_field]
+physical_plan
+01)FilterExec: int_field@0 > 0
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+
+statement ok
+drop table table_with_map;
+
+query ?
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33, 'PATCH', 30, 'OPTION', 29, 'GET', 27, 'PUT', 25, 'DELETE', 24) AS method_count;
+----
+{POST: 41, HEAD: 33, PATCH: 30, OPTION: 29, GET: 27, PUT: 25, DELETE: 24}
+
+query I
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33)['POST'];
+----
+41
+
+query ?
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33, 'PATCH', null);
+----
+{POST: 41, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAKE_MAP('POST', null, 'HEAD', 33, 'PATCH', null);
+----
+{POST: NULL, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAKE_MAP(1, null, 2, 33, 3, null);
+----
+{1: NULL, 2: 33, 3: NULL}
+
+query ?
+SELECT MAKE_MAP([1,2], ['a', 'b'], [3,4], ['b']);
+----
+{[1, 2]: [a, b], [3, 4]: [b]}
+
+query ?
+SELECT MAKE_MAP('POST', 41, 'HEAD', 53, 'PATCH', 30);
+----
+{POST: 41, HEAD: 53, PATCH: 30}
+
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'ab' to value of Int64 type
+SELECT MAKE_MAP('POST', 41, 'HEAD', 'ab', 'PATCH', 30);
+
+# Map keys can not be NULL
+query error
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33, null, 30);
+
+query ?
+SELECT MAKE_MAP()
+----
+{}
+
+query error
+SELECT MAKE_MAP('POST', 41, 'HEAD');
+
+query ?
+SELECT MAP(['POST', 'HEAD', 'PATCH'], [41, 33, 30]);
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP('type', 'test');
+----
+{type: test}
+
+query ?
+SELECT MAP('a', 2, 'b', 3);
+----
+{a: 2, b: 3}
+
+query ?
+SELECT MAP(['POST', 'HEAD', 'PATCH'], [41, 33, null]);
+----
+{POST: 41, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAP([[1,2], [3,4]], ['a', 'b']);
+----
+{[1, 2]: a, [3, 4]: b}
+
+query error
+SELECT MAP()
+
+query error DataFusion error: Error during planning: make_map requires an even number of arguments
+SELECT MAP(['POST', 'HEAD'])
+
+query error DataFusion error: Execution error: map key cannot be null
+SELECT MAP(null, [41, 33, 30]);
+
+query error DataFusion error: Execution error: map requires key and value lists to have the same length
+SELECT MAP(['POST', 'HEAD', 'PATCH'], [41, 33]);
+
+query error DataFusion error: Execution error: map key cannot be null
+SELECT MAP(['POST', 'HEAD', null], [41, 33, 30]);
+
+statement error DataFusion error: Execution error: map key cannot be null
+CREATE TABLE duplicated_keys_table
+AS VALUES
+  (MAP {1: [1, NULL, 3], NULL: [4, NULL, 6]});
+
+# Test duplicate keys
+# key is a scalar type
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: POST
+SELECT MAP(['POST', 'HEAD', 'POST'], [41, 33, null]);
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: POST
+SELECT MAP(make_array('POST', 'HEAD', 'POST'), make_array(41, 33, 30));
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: POST
+SELECT make_map('POST', 41, 'HEAD', 33, 'POST', 30);
+
+statement error DataFusion error: Execution error: map key must be unique, duplicate key found: 1
+CREATE TABLE duplicated_keys_table
+AS VALUES
+  (MAP {1: [1, NULL, 3], 1: [4, NULL, 6]});
+
+statement ok
+create table duplicate_keys_table as values
+('a', 1, 'a', 10, ['k1', 'k1'], [1, 2]);
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: a
+SELECT make_map(column1, column2, column3, column4) FROM duplicate_keys_table;
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: k1
+SELECT map(column5, column6) FROM duplicate_keys_table;
+
+# key is a nested type
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: \[1, 2\]
+SELECT MAP([[1,2], [1,2]], [41, 33]);
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: \[\{1:1\}\]
+SELECT MAP([Map {1:'1'}, Map {1:'1'}, Map {2:'2'}], [41, 33, null]);
+
+
+query ?
+SELECT MAP(make_array('POST', 'HEAD', 'PATCH'), make_array(41, 33, 30));
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(arrow_cast(make_array('POST', 'HEAD', 'PATCH'), 'FixedSizeList(3, Utf8)'), arrow_cast(make_array(41, 33, 30), 'FixedSizeList(3, Int64)'));
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(arrow_cast(make_array('POST', 'HEAD', 'PATCH'), 'LargeList(Utf8)'), arrow_cast(make_array(41, 33, 30), 'LargeList(Int64)'));
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(make_array(X'6162', X'6364'), make_array(1, 2));
+----
+{6162: 1, 6364: 2}
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: \[100, 117, 112\]
+SELECT MAP(make_array(X'647570', X'647570'), make_array(1, 2));
+
+# StringView test: map with StringView keys
+query ?
+SELECT MAP(arrow_cast(make_array('POST', 'HEAD', 'PATCH'), 'List(Utf8View)'), make_array(41, 33, 30));
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query error DataFusion error: Execution error: map key cannot be null
+SELECT MAP(arrow_cast(make_array('POST', null, 'PATCH'), 'List(Utf8View)'), make_array(41, 33, 30));
+
+# BinaryView test: map with BinaryView keys
+query ?
+SELECT MAP(arrow_cast(make_array(X'6162', X'6364'), 'List(BinaryView)'), make_array(1, 2));
+----
+{6162: 1, 6364: 2}
+
+query error DataFusion error: Execution error: map key must be unique, duplicate key found: \[100, 117, 112\]
+SELECT MAP(arrow_cast(make_array(X'647570', X'647570'), 'List(BinaryView)'), make_array(1, 2));
+
+statement ok
+create table t as values
+('a', 1, 'k1', 10, ['k1', 'k2'], [1, 2], 'POST', [[1,2,3]], ['a']),
+('b', 2, 'k3', 30, ['k3'], [3], 'PUT', [[4]], ['b']),
+('d', 4, 'k5', 50, ['k5'], [5], null, [[1,2]], ['c']);
+
+query ?
+SELECT make_map(column1, column2, column3, column4) FROM t;
+----
+{a: 1, k1: 10}
+{b: 2, k3: 30}
+{d: 4, k5: 50}
+
+query ?
+SELECT map(column5, column6) FROM t;
+----
+{k1: 1, k2: 2}
+{k3: 3}
+{k5: 5}
+
+query ?
+SELECT map(column8, column9) FROM t;
+----
+{[1, 2, 3]: a}
+{[4]: b}
+{[1, 2]: c}
+
+query ?
+SELECT map(column6, column7) FROM t;
+----
+{[1, 2]: POST}
+{[3]: PUT}
+{[5]: NULL}
+
+query ?
+select Map {column6: column7} from t;
+----
+{[1, 2]: POST}
+{[3]: PUT}
+{[5]: NULL}
+
+query ?
+select Map {column8: column7} from t;
+----
+{[[1, 2, 3]]: POST}
+{[[4]]: PUT}
+{[[1, 2]]: NULL}
+
+query error
+select Map {column7: column8} from t;
+
+query ?
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33, 'PATCH', 30, 'OPTION', 29, 'GET', 27, 'PUT', 25, 'DELETE', 24) AS method_count from t;
+----
+{POST: 41, HEAD: 33, PATCH: 30, OPTION: 29, GET: 27, PUT: 25, DELETE: 24}
+{POST: 41, HEAD: 33, PATCH: 30, OPTION: 29, GET: 27, PUT: 25, DELETE: 24}
+{POST: 41, HEAD: 33, PATCH: 30, OPTION: 29, GET: 27, PUT: 25, DELETE: 24}
+
+query I
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33)['POST']  from t;
+----
+41
+41
+41
+
+query ?
+SELECT MAKE_MAP('POST', 41, 'HEAD', 33, 'PATCH', null) from t;
+----
+{POST: 41, HEAD: 33, PATCH: NULL}
+{POST: 41, HEAD: 33, PATCH: NULL}
+{POST: 41, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAKE_MAP('POST', null, 'HEAD', 33, 'PATCH', null) from t;
+----
+{POST: NULL, HEAD: 33, PATCH: NULL}
+{POST: NULL, HEAD: 33, PATCH: NULL}
+{POST: NULL, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAKE_MAP(1, null, 2, 33, 3, null) from t;
+----
+{1: NULL, 2: 33, 3: NULL}
+{1: NULL, 2: 33, 3: NULL}
+{1: NULL, 2: 33, 3: NULL}
+
+query ?
+SELECT MAKE_MAP([1,2], ['a', 'b'], [3,4], ['b']) from t;
+----
+{[1, 2]: [a, b], [3, 4]: [b]}
+{[1, 2]: [a, b], [3, 4]: [b]}
+{[1, 2]: [a, b], [3, 4]: [b]}
+
+query ?
+SELECT MAP(['POST', 'HEAD', 'PATCH'], [41, 33, 30]) from t;
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(['POST', 'HEAD', 'PATCH'], [41, 33, null]) from t;
+----
+{POST: 41, HEAD: 33, PATCH: NULL}
+{POST: 41, HEAD: 33, PATCH: NULL}
+{POST: 41, HEAD: 33, PATCH: NULL}
+
+query ?
+SELECT MAP([[1,2], [3,4]], ['a', 'b']) from t;
+----
+{[1, 2]: a, [3, 4]: b}
+{[1, 2]: a, [3, 4]: b}
+{[1, 2]: a, [3, 4]: b}
+
+query ?
+SELECT MAP(make_array('POST', 'HEAD', 'PATCH'), make_array(41, 33, 30)) from t;
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(arrow_cast(make_array('POST', 'HEAD', 'PATCH'), 'FixedSizeList(3, Utf8)'), arrow_cast(make_array(41, 33, 30), 'FixedSizeList(3, Int64)'))  from t;
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+
+query ?
+SELECT MAP(arrow_cast(make_array('POST', 'HEAD', 'PATCH'), 'LargeList(Utf8)'), arrow_cast(make_array(41, 33, 30), 'LargeList(Int64)')) from t;
+----
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+{POST: 41, HEAD: 33, PATCH: 30}
+
+
+query ?
+VALUES (MAP(['a'], [1])), (MAP(['b'], [2])), (MAP(['c', 'a'], [3, 1]))
+----
+{a: 1}
+{b: 2}
+{c: 3, a: 1}
+
+query ?
+SELECT MAP {'a':1, 'b':2, 'c':3};
+----
+{a: 1, b: 2, c: 3}
+
+query ?
+SELECT MAP {'a':1, 'b':2, 'c':3 } FROM t;
+----
+{a: 1, b: 2, c: 3}
+{a: 1, b: 2, c: 3}
+{a: 1, b: 2, c: 3}
+
+query I
+SELECT MAP {'a':1, 'b':2, 'c':3}['a'];
+----
+1
+
+query I
+SELECT MAP {'a':1, 'b':2, 'c':3 }['a'] FROM t;
+----
+1
+1
+1
+
+query ?
+SELECT MAP {};
+----
+{}
+
+# values contain null
+query ?
+SELECT MAP {'a': 1, 'b': null};
+----
+{a: 1, b: NULL}
+
+# keys contain null
+query error DataFusion error: Execution error: map key cannot be null
+SELECT MAP {'a': 1, null: 2}
+
+# array as key
+query ?
+SELECT MAP {[1,2,3]:1, [2,4]:2};
+----
+{[1, 2, 3]: 1, [2, 4]: 2}
+
+# array with different type as key
+# expect to fail due to type coercion error
+query error
+SELECT MAP {[1,2,3]:1, ['a', 'b']:2};
+
+# array as value
+query ?
+SELECT MAP {'a':[1,2,3], 'b':[2,4]};
+----
+{a: [1, 2, 3], b: [2, 4]}
+
+# array with different type as value
+# expect to fail due to type coercion error
+query error
+SELECT MAP {'a':[1,2,3], 'b':['a', 'b']};
+
+# struct as key
+query ?
+SELECT MAP {{'a':1, 'b':2}:1, {'a':3, 'b':4}:2};
+----
+{{a: 1, b: 2}: 1, {a: 3, b: 4}: 2}
+
+# struct with different fields as key
+# expect to fail due to type coercion error
+query error
+SELECT MAP {{'a':1, 'b':2}:1, {'c':3, 'd':4}:2};
+
+# struct as value
+query ?
+SELECT MAP {'a':{'b':1, 'c':2}, 'b':{'b':3, 'c':4}};
+----
+{a: {b: 1, c: 2}, b: {b: 3, c: 4}}
+
+# struct with different fields as value
+# expect to fail due to type coercion error
+query error
+SELECT MAP {'a':{'b':1, 'c':2}, 'b':{'c':3, 'd':4}};
+
+# map as key
+query ?
+SELECT MAP { MAP {1:'a', 2:'b'}:1, MAP {1:'c', 2:'d'}:2 };
+----
+{{1: a, 2: b}: 1, {1: c, 2: d}: 2}
+
+# map with different keys as key
+query ?
+SELECT MAP { MAP {1:'a', 2:'b', 3:'c'}:1, MAP {2:'c', 4:'d'}:2 };
+----
+{{1: a, 2: b, 3: c}: 1, {2: c, 4: d}: 2}
+
+# map as value
+query ?
+SELECT MAP {1: MAP {1:'a', 2:'b'}, 2: MAP {1:'c', 2:'d'} };
+----
+{1: {1: a, 2: b}, 2: {1: c, 2: d}}
+
+# map with different keys as value
+query ?
+SELECT MAP {'a': MAP {1:'a', 2:'b', 3:'c'}, 'b': MAP {2:'c', 4:'d'} };
+----
+{a: {1: a, 2: b, 3: c}, b: {2: c, 4: d}}
+
+# complex map for each row
+query ?
+SELECT MAP {'a': MAP {1:'a', 2:'b', 3:'c'}, 'b': MAP {2:'c', 4:'d'} } from t;
+----
+{a: {1: a, 2: b, 3: c}, b: {2: c, 4: d}}
+{a: {1: a, 2: b, 3: c}, b: {2: c, 4: d}}
+{a: {1: a, 2: b, 3: c}, b: {2: c, 4: d}}
+
+# access map with non-existent key
+query ?
+SELECT MAP {'a': MAP {1:'a', 2:'b', 3:'c'}, 'b': MAP {2:'c', 4:'d'} }['c'];
+----
+NULL
+
+# access map with null key
+query error
+SELECT MAP {'a': MAP {1:'a', 2:'b', 3:'c'}, 'b': MAP {2:'c', 4:'d'} }[NULL];
+
+query ?
+SELECT MAP { 'a': 1, 'b': 3 };
+----
+{a: 1, b: 3}
+
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'a' to value of Int64 type
+SELECT MAP { 'a': 1, 2: 3 };
+
+# accessing map with non-string key
+query T
+SELECT MAP { 1: 'a', 2: 'b', 3: 'c' }[1];
+----
+a
+
+# accessing map with string key
+query I
+SELECT MAP { 'a': 1, 'b': 2, 'c': 3 }['a'];
+----
+1
+
+# accessing map with non-string key in case expression
+query I
+SELECT (CASE WHEN 1 > 0 THEN MAP {'x': 100} ELSE MAP {'y': 200} END)['x'];
+----
+100
+
+# fix accessing map with nested key
+query I
+SELECT MAP { MAP {1:'a', 2:'b'}:1, MAP {1:'c', 2:'d'}:2 }[MAP {1:'a', 2:'b'}];
+----
+1
+
+query I
+SELECT MAP { MAP {1:'a', 2:'b'}:1, MAP {1:'c', 2:'d'}:2 }[MAP {2:'b', 1:'a'}];
+----
+NULL
+
+# TODO(https://github.com/apache/datafusion/pull/18394): Test accessing map with empty map as key
+# TODO(https://github.com/apache/datafusion/pull/18394): Test accessing map with null map as key
+
+# accessing map with non-string key
+query I
+SELECT MAKE_MAP(1, null, 2, 33, 3, null)[2];
+----
+33
+
+## cardinality
+
+# cardinality scalar function
+query IIII
+select cardinality(map([1, 2, 3], ['a', 'b', 'c'])), cardinality(MAP {'a': 1, 'b': null}), cardinality(MAP([],[])),
+       cardinality(MAP {'a': MAP {1:'a', 2:'b', 3:'c'}, 'b': MAP {2:'c', 4:'d'} });
+----
+3 2 0 2
+
+# map_extract
+# key is string
+query ????
+select map_extract(MAP {'a': 1, 'b': NULL, 'c': 3}, 'a'), map_extract(MAP {'a': 1, 'b': NULL, 'c': 3}, 'b'),
+       map_extract(MAP {'a': 1, 'b': NULL, 'c': 3}, 'c'), map_extract(MAP {'a': 1, 'b': NULL, 'c': 3}, 'd');
+----
+[1] [NULL] [3] [NULL]
+
+# key is integer
+query ????
+select map_extract(MAP {1: 1, 2: NULL, 3:3}, 1), map_extract(MAP {1: 1, 2: NULL, 3:3}, 2),
+       map_extract(MAP {1: 1, 2: NULL, 3:3}, 3), map_extract(MAP {1: 1, 2: NULL, 3:3}, 4);
+----
+[1] [NULL] [3] [NULL]
+
+# value is list
+query ????
+select map_extract(MAP {1: [1, 2], 2: NULL, 3:[3]}, 1), map_extract(MAP {1: [1, 2], 2: NULL, 3:[3]}, 2),
+       map_extract(MAP {1: [1, 2], 2: NULL, 3:[3]}, 3), map_extract(MAP {1: [1, 2], 2: NULL, 3:[3]}, 4);
+----
+[[1, 2]] [NULL] [[3]] [NULL]
+
+# key in map and query key are different types
+query ?????
+select map_extract(MAP {1: 1, 2: 2, 3:3}, '1'), map_extract(MAP {1: 1, 2: 2, 3:3}, 1.0),
+       map_extract(MAP {1.0: 1, 2: 2, 3:3}, '1'), map_extract(MAP {'1': 1, '2': 2, '3':3}, 1.0),
+       map_extract(MAP {arrow_cast('1', 'Utf8View'): 1, arrow_cast('2', 'Utf8View'): 2, arrow_cast('3', 'Utf8View'):3}, '1');
+----
+[1] [1] [1] [NULL] [1]
+
+# null arg
+query ?
+select map_extract(NULL, 'a');
+----
+NULL
+
+# map_extract with columns
+query ???
+select map_extract(column1, 1), map_extract(column1, 5), map_extract(column1, 7) from map_array_table_1;
+----
+[[1, NULL, 3]] [NULL] [NULL]
+[NULL] [[4, NULL, 6]] [NULL]
+[NULL] [NULL] [[1, NULL, 3]]
+[NULL] [NULL] [NULL]
+
+query ?
+select column1[1] from map_array_table_1;
+----
+[1, NULL, 3]
+NULL
+NULL
+NULL
+
+query ?
+select column1[-1000 + 1001] from map_array_table_1;
+----
+[1, NULL, 3]
+NULL
+NULL
+NULL
+
+# test for negative scenario
+query ?
+SELECT column1[-1] FROM map_array_table_1;
+----
+NULL
+NULL
+NULL
+NULL
+
+query ?
+SELECT column1[1000] FROM map_array_table_1;
+----
+NULL
+NULL
+NULL
+NULL
+
+
+query error DataFusion error: Arrow error: Invalid argument error
+SELECT column1[NULL] FROM map_array_table_1;
+
+query ???
+select map_extract(column1, column2), map_extract(column1, column3), map_extract(column1, column4) from map_array_table_1;
+----
+[[1, NULL, 3]] [[1, NULL, 3]] [[1, NULL, 3]]
+[[4, NULL, 6]] [[4, NULL, 6]] [[4, NULL, 6]]
+[NULL] [NULL] [NULL]
+[NULL] [NULL] [NULL]
+
+query ???
+select map_extract(column1, column2), map_extract(column1, column3), map_extract(column1, column4) from map_array_table_2;
+----
+[[1, NULL, 3]] [NULL] [[1, NULL, 3]]
+[[4, NULL, 6]] [NULL] [[4, NULL, 6]]
+[NULL] [NULL] [NULL]
+
+query ???
+select map_extract(column1, 1), map_extract(column1, 5), map_extract(column1, 7) from map_array_table_2;
+----
+[[1, NULL, 3]] [NULL] [NULL]
+[NULL] [[4, NULL, 6]] [NULL]
+[NULL] [NULL] [[1, NULL, 3]]
+
+# Tests for map_entries
+
+query ?
+SELECT map_entries(MAP { 'a': 1, 'b': 3 });
+----
+[{key: a, value: 1}, {key: b, value: 3}]
+
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'a' to value of Int64 type
+SELECT map_entries(MAP { 'a': 1, 2: 3 });
+
+query ?
+SELECT map_entries(MAP {'a':1, 'b':2, 'c':3 }) FROM t;
+----
+[{key: a, value: 1}, {key: b, value: 2}, {key: c, value: 3}]
+[{key: a, value: 1}, {key: b, value: 2}, {key: c, value: 3}]
+[{key: a, value: 1}, {key: b, value: 2}, {key: c, value: 3}]
+
+query ?
+SELECT map_entries(Map{column1: column2, column3: column4}) FROM t;
+----
+[{key: a, value: 1}, {key: k1, value: 10}]
+[{key: b, value: 2}, {key: k3, value: 30}]
+[{key: d, value: 4}, {key: k5, value: 50}]
+
+query ?
+SELECT map_entries(map(column5, column6)) FROM t;
+----
+[{key: k1, value: 1}, {key: k2, value: 2}]
+[{key: k3, value: 3}]
+[{key: k5, value: 5}]
+
+query ?
+SELECT map_entries(map(column8, column9)) FROM t;
+----
+[{key: [1, 2, 3], value: a}]
+[{key: [4], value: b}]
+[{key: [1, 2], value: c}]
+
+query ?
+SELECT map_entries(Map{});
+----
+[]
+
+query ?
+SELECT map_entries(column1) from map_array_table_1;
+----
+[{key: 1, value: [1, NULL, 3]}, {key: 2, value: [4, NULL, 6]}, {key: 3, value: [7, 8, 9]}]
+[{key: 4, value: [1, NULL, 3]}, {key: 5, value: [4, NULL, 6]}, {key: 6, value: [7, 8, 9]}]
+[{key: 7, value: [1, NULL, 3]}, {key: 8, value: [9, NULL, 6]}, {key: 9, value: [7, 8, 9]}]
+NULL
+
+# Tests for map_keys
+
+query ?
+SELECT map_keys(MAP { 'a': 1, 'b': 3 });
+----
+[a, b]
+
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'a' to value of Int64 type
+SELECT map_keys(MAP { 'a': 1, 2: 3 });
+
+query ?
+SELECT map_keys(MAP {'a':1, 'b':2, 'c':3 }) FROM t;
+----
+[a, b, c]
+[a, b, c]
+[a, b, c]
+
+query ?
+SELECT map_keys(Map{column1: column2, column3: column4}) FROM t;
+----
+[a, k1]
+[b, k3]
+[d, k5]
+
+query ?
+SELECT map_keys(map(column5, column6)) FROM t;
+----
+[k1, k2]
+[k3]
+[k5]
+
+query ?
+SELECT map_keys(map(column8, column9)) FROM t;
+----
+[[1, 2, 3]]
+[[4]]
+[[1, 2]]
+
+query ?
+SELECT map_keys(Map{});
+----
+[]
+
+query ?
+SELECT map_keys(column1) from map_array_table_1;
+----
+[1, 2, 3]
+[4, 5, 6]
+[7, 8, 9]
+NULL
+
+
+# Tests for map_values
+
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'a' to value of Int64 type
+SELECT map_values(MAP { 'a': 1, 2: 3 });
+
+query ?
+SELECT map_values(MAP { 'a': 1, 'b': 3 });
+----
+[1, 3]
+
+query ?
+SELECT map_values(MAP {'a':1, 'b':2, 'c':3 }) FROM t;
+----
+[1, 2, 3]
+[1, 2, 3]
+[1, 2, 3]
+
+query ?
+SELECT map_values(Map{column1: column2, column3: column4}) FROM t;
+----
+[1, 10]
+[2, 30]
+[4, 50]
+
+query ?
+SELECT map_values(map(column5, column6)) FROM t;
+----
+[1, 2]
+[3]
+[5]
+
+query ?
+SELECT map_values(map(column8, column9)) FROM t;
+----
+[a]
+[b]
+[c]
+
+query ?
+SELECT map_values(Map{});
+----
+[]
+
+query ?
+SELECT map_values(column1) from map_array_table_1;
+----
+[[1, NULL, 3], [4, NULL, 6], [7, 8, 9]]
+[[1, NULL, 3], [4, NULL, 6], [7, 8, 9]]
+[[1, NULL, 3], [9, NULL, 6], [7, 8, 9]]
+NULL
+
+statement ok
+drop table map_array_table_1;
+
+statement ok
+drop table map_array_table_2;
+
+
+statement ok
+create table tt as values(MAP{[1,2,3]:1}, MAP {{'a':1, 'b':2}:2}, MAP{true: 3});
+
+# accessing using an array
+query I
+select column1[make_array(1, 2, 3)] from tt;
+----
+1
+
+# accessing using a struct
+query I
+select column2[{a:1, b: 2}] from tt;
+----
+2
+
+# accessing using Bool
+query I
+select column3[true] from tt;
+----
+3
+
+# https://github.com/apache/datafusion/issues/16187
+# should be NULL in case of out of bounds for Null Type
+query ?
+select map_values(map([named_struct('a', 1, 'b', null)], [named_struct('a', 1, 'b', null)]))[0] as a;
+----
+NULL
+
+statement ok
+drop table tt;
+
+# mixed scalar/array inputs
+query ?
+SELECT map(['a','b'], [column1, column1 * 10]) FROM (VALUES (1), (2), (3)) t;
+----
+{a: 1, b: 10}
+{a: 2, b: 20}
+{a: 3, b: 30}
+
+query ?
+SELECT map([column1, column1 * 10], ['x','y']) FROM (VALUES (1), (2), (3)) t;
+----
+{1: x, 10: y}
+{2: x, 20: y}
+{3: x, 30: y}
+
+# tests for DISTINCT / GROUP BY / aggregation on map columns
+# https://github.com/apache/datafusion/issues/15428
+
+# NOTE: the CAST(NULL AS BIGINT) in the VALUES list below predates the fix for
+# https://github.com/apache/datafusion/issues/23474 and is no longer required.
+# It is kept as-is to document the historical workaround; the un-cast form is
+# exercised in the "map NULL value coercion in VALUES" section further below.
+statement ok
+CREATE TABLE map_distinct_table AS VALUES
+  (MAP {'k1': 1, 'k2': 2}, 'a', 1),
+  (MAP {'k1': 1, 'k2': 2}, 'a', 2),
+  (MAP {'k1': 1, 'k2': 2}, 'b', 3),
+  (MAP {'k1': 3}, 'a', 4),
+  (MAP {'k1': CAST(NULL AS BIGINT)}, 'b', 5);
+
+statement ok
+INSERT INTO map_distinct_table VALUES (NULL, 'a', 6), (NULL, 'a', 7), (NULL, 'b', 8);
+
+# distinct on a map column collapses duplicate maps and duplicate NULLs
+query ? rowsort
+SELECT DISTINCT column1 FROM map_distinct_table;
+----
+NULL
+{k1: 1, k2: 2}
+{k1: 3}
+{k1: NULL}
+
+# exact reproducer from #15428: DISTINCT on a map column with LIMIT
+query ? rowsort
+SELECT DISTINCT column1 FROM map_distinct_table LIMIT 10;
+----
+NULL
+{k1: 1, k2: 2}
+{k1: 3}
+{k1: NULL}
+
+# distinct over a map column together with a scalar column
+query ?T rowsort
+SELECT DISTINCT column1, column2 FROM map_distinct_table;
+----
+NULL a
+NULL b
+{k1: 1, k2: 2} a
+{k1: 1, k2: 2} b
+{k1: 3} a
+{k1: NULL} b
+
+# group by a map column
+query ?II rowsort
+SELECT column1, COUNT(*), SUM(column3) FROM map_distinct_table GROUP BY column1;
+----
+NULL 3 21
+{k1: 1, k2: 2} 3 6
+{k1: 3} 1 4
+{k1: NULL} 1 5
+
+# group by a map column and a scalar column
+query ?TI rowsort
+SELECT column1, column2, COUNT(*) FROM map_distinct_table GROUP BY column1, column2;
+----
+NULL a 2
+NULL b 1
+{k1: 1, k2: 2} a 2
+{k1: 1, k2: 2} b 1
+{k1: 3} a 1
+{k1: NULL} b 1
+
+# empty maps compare equal under DISTINCT and are distinct from NULL
+query ? rowsort
+SELECT DISTINCT column1 FROM (VALUES (MAP {}), (MAP {}), (NULL)) t(column1);
+----
+NULL
+{}
+
+# HAVING clause with a map grouping key
+query ?I rowsort
+SELECT column1, COUNT(*) FROM map_distinct_table GROUP BY column1 HAVING COUNT(*) > 1;
+----
+NULL 3
+{k1: 1, k2: 2} 3
+
+# count and count distinct on a map column
+query II
+SELECT COUNT(column1), COUNT(DISTINCT column1) FROM map_distinct_table;
+----
+5 3
+
+# map column as input to an aggregate function
+query T?
+SELECT column2, array_agg(column1 ORDER BY column3) FROM map_distinct_table GROUP BY column2 ORDER BY column2;
+----
+a [{k1: 1, k2: 2}, {k1: 1, k2: 2}, {k1: 3}, NULL, NULL]
+b [{k1: 1, k2: 2}, {k1: NULL}, NULL]
+
+# UNION (distinct) on map columns
+query ?
+SELECT MAP {'a': 1} UNION SELECT MAP {'a': 1};
+----
+{a: 1}
+
+# unsorted maps are compared by entry order: maps with the same entries in a
+# different order are treated as distinct values
+query ? rowsort
+SELECT DISTINCT column1 FROM (SELECT MAP {'k1': 1, 'k2': 2} AS column1 UNION ALL SELECT MAP {'k2': 2, 'k1': 1});
+----
+{k1: 1, k2: 2}
+{k2: 2, k1: 1}
+
+statement ok
+DROP TABLE map_distinct_table;
+
+# distinct / group by on map columns read from parquet
+statement ok
+CREATE EXTERNAL TABLE map_data
+STORED AS PARQUET
+LOCATION '../core/tests/data/parquet_map.parquet';
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT ints, strings FROM map_data);
+----
+209
+
+query TI rowsort
+SELECT strings['method'] AS method, COUNT(*) FROM (SELECT DISTINCT strings FROM map_data) GROUP BY method;
+----
+DELETE 24
+GET 27
+HEAD 33
+OPTION 29
+PATCH 30
+POST 41
+PUT 25
+
+statement ok
+DROP TABLE map_data;
+
+# map NULL value coercion in VALUES
+# https://github.com/apache/datafusion/issues/23474
+# A bare NULL map value used to fail type unification across a VALUES list
+# ("Inconsistent data type across values list") and required an explicit
+# CAST(NULL AS <type>). The map value type now unifies with concrete value
+# types following the same rules as scalar VALUES coercion.
+
+# concrete-typed row first, NULL-valued row second (the issue reproducer)
+statement ok
+CREATE TABLE map_null_concrete_first AS VALUES
+  (MAP {'k1': 1, 'k2': 2}),
+  (MAP {'k1': NULL});
+
+# NULL must round-trip as NULL after coercion, not a default value
+query ? rowsort
+SELECT * FROM map_null_concrete_first;
+----
+{k1: 1, k2: 2}
+{k1: NULL}
+
+# the NULL value type is coerced to the concrete value type (Int64)
+query T
+SELECT arrow_typeof(column1) FROM map_null_concrete_first LIMIT 1;
+----
+Map("entries": non-null Struct("key": non-null Utf8, "value": Int64), unsorted)
+
+statement ok
+DROP TABLE map_null_concrete_first;
+
+# NULL-valued row first, concrete-typed row second (coercion is symmetric)
+statement ok
+CREATE TABLE map_null_first AS VALUES
+  (MAP {'k1': NULL}),
+  (MAP {'k1': 1, 'k2': 2});
+
+query ? rowsort
+SELECT * FROM map_null_first;
+----
+{k1: 1, k2: 2}
+{k1: NULL}
+
+statement ok
+DROP TABLE map_null_first;
+
+# every row has a NULL value: succeeds and the value type stays Null
+statement ok
+CREATE TABLE map_all_null_values AS VALUES
+  (MAP {'k': NULL}),
+  (MAP {'k': NULL});
+
+query ? rowsort
+SELECT * FROM map_all_null_values;
+----
+{k: NULL}
+{k: NULL}
+
+query T
+SELECT arrow_typeof(column1) FROM map_all_null_values LIMIT 1;
+----
+Map("entries": non-null Struct("key": non-null Utf8, "value": Null), unsorted)
+
+statement ok
+DROP TABLE map_all_null_values;
+
+# multiple keys where only one value is NULL
+query ? rowsort
+SELECT * FROM (VALUES
+  (MAP {'a': 1, 'b': NULL}),
+  (MAP {'a': 2, 'b': 3})) t(column1);
+----
+{a: 1, b: NULL}
+{a: 2, b: 3}
+
+# three rows with the NULL-valued row in the middle
+query ? rowsort
+SELECT * FROM (VALUES
+  (MAP {'k': 1}),
+  (MAP {'k': NULL}),
+  (MAP {'k': 2})) t(column1);
+----
+{k: 1}
+{k: 2}
+{k: NULL}
+
+# numeric widening across a NULL-valued row follows the scalar rule
+# (Int64 + Float64 -> Float64)
+statement ok
+CREATE TABLE map_null_widening AS VALUES
+  (MAP {'k': 1}),
+  (MAP {'k': NULL}),
+  (MAP {'k': 1.5});
+
+query ? rowsort
+SELECT * FROM map_null_widening;
+----
+{k: 1.0}
+{k: 1.5}
+{k: NULL}
+
+query T
+SELECT arrow_typeof(column1) FROM map_null_widening LIMIT 1;
+----
+Map("entries": non-null Struct("key": non-null Utf8, "value": Float64), unsorted)
+
+statement ok
+DROP TABLE map_null_widening;
+
+# incompatible concrete value types with a NULL-valued row in between still
+# error; Int64/Utf8 follows the scalar VALUES rule (coerce to the numeric
+# type, then fail to cast the non-numeric string)
+query error Cast error: Cannot cast string 'hello' to value of Int64 type
+SELECT * FROM (VALUES
+  (MAP {'k': 1}),
+  (MAP {'k': NULL}),
+  (MAP {'k': 'hello'})) t(column1);
+
+# NULL value type unification recurses into nested maps
+query ? rowsort
+SELECT * FROM (VALUES
+  (MAP {'outer': MAP {'inner': 1}}),
+  (MAP {'outer': MAP {'inner': NULL}})) t(column1);
+----
+{outer: {inner: 1}}
+{outer: {inner: NULL}}
+
+# INSERT INTO ... VALUES also accepts a NULL map value without a cast
+statement ok
+CREATE TABLE map_null_insert AS VALUES (MAP {'k1': 1, 'k2': 2});
+
+statement ok
+INSERT INTO map_null_insert VALUES (MAP {'k1': NULL});
+
+query ? rowsort
+SELECT * FROM map_null_insert;
+----
+{k1: 1, k2: 2}
+{k1: NULL}
+
+statement ok
+DROP TABLE map_null_insert;

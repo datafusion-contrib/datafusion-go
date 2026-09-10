@@ -1,0 +1,1729 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+query II
+select * from (WITH source AS (select 1 as e) SELECT * FROM source) t1,   (WITH source AS (select 1 as e) SELECT * FROM source) t2
+----
+1 1
+
+# Ensure table aliases can be case sensitive
+query I
+WITH "T" AS (SELECT 1 a) SELECT "T".* FROM "T"
+----
+1
+
+# Ensure table aliases can be case sensitive
+query TT
+EXPLAIN WITH "NUMBERS" AS (SELECT 1 as a, 2 as b, 3 as c) SELECT "NUMBERS".* FROM "NUMBERS"
+----
+logical_plan
+01)SubqueryAlias: NUMBERS
+02)--Projection: Int64(1) AS a, Int64(2) AS b, Int64(3) AS c
+03)----EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[1 as a, 2 as b, 3 as c]
+02)--PlaceholderRowExec
+
+# cte_use_same_name_multiple_times
+statement error DataFusion error: Error during planning: WITH query name "a" specified more than once
+WITH a AS (SELECT 1), a AS (SELECT 2) SELECT * FROM a;
+
+
+##########
+## CTE Reference Resolution
+##########
+
+# These tests exercise CTE reference resolution with and without identifier
+# normalization. The session is configured with a strict catalog/schema provider
+# (see `datafusion/sqllogictest/src/test_context.rs`) that only provides the
+# `orders` table and panics on any unexpected table lookup.
+#
+# This makes it observable if DataFusion incorrectly treats a CTE reference as a
+# catalog lookup.
+#
+# Refs: https://github.com/apache/datafusion/issues/18932
+#
+# NOTE: This test relies on a strict schema provider registered in
+# `datafusion/sqllogictest/src/test_context.rs` that provides only the `orders`
+# table and panics on unexpected lookups.
+
+# Use the strict schema provider
+statement ok
+set datafusion.catalog.default_schema = "strict_schema";
+
+statement ok
+set datafusion.sql_parser.enable_ident_normalization = true;
+
+query I
+with barbaz as (select * from orders) select * from "barbaz";
+----
+1
+2
+
+query I
+with BarBaz as (select * from orders) select * from "barbaz";
+----
+1
+2
+
+query I
+with barbaz as (select * from orders) select * from barbaz;
+----
+1
+2
+
+statement ok
+set datafusion.sql_parser.enable_ident_normalization = false;
+
+query I
+with barbaz as (select * from orders) select * from "barbaz";
+----
+1
+2
+
+query I
+with barbaz as (select * from orders) select * from barbaz;
+----
+1
+2
+
+# Reset to default configs
+statement ok
+set datafusion.sql_parser.enable_ident_normalization = true;
+
+statement ok
+set datafusion.catalog.default_schema = "public";
+
+## CTE reference resolution tests end ##
+
+
+
+# Test disabling recursive CTE
+statement ok
+set datafusion.execution.enable_recursive_ctes = false;
+
+query error DataFusion error: This feature is not implemented: Recursive CTEs are not enabled
+WITH RECURSIVE nodes AS (
+    SELECT 1 as id
+    UNION ALL
+    SELECT id + 1 as id
+    FROM nodes
+    WHERE id < 3
+) SELECT * FROM nodes
+
+statement ok
+set datafusion.execution.enable_recursive_ctes = true;
+
+# trivial recursive CTE works
+query I rowsort
+WITH RECURSIVE nodes AS (
+    SELECT 1 as id
+    UNION ALL
+    SELECT id + 1 as id
+    FROM nodes
+    WHERE id < 10
+)
+SELECT * FROM nodes
+----
+1
+10
+2
+3
+4
+5
+6
+7
+8
+9
+
+# explain trivial recursive CTE
+query TT
+EXPLAIN WITH RECURSIVE nodes AS (
+    SELECT 1 as id
+    UNION ALL
+    SELECT id + 1 as id
+    FROM nodes
+    WHERE id < 10
+)
+SELECT * FROM nodes
+----
+logical_plan
+01)SubqueryAlias: nodes
+02)--RecursiveQuery: is_distinct=false
+03)----Projection: Int64(1) AS id
+04)------EmptyRelation: rows=1
+05)----Projection: nodes.id + Int64(1) AS id
+06)------Filter: nodes.id < Int64(10)
+07)--------TableScan: nodes projection=[id]
+physical_plan
+01)RecursiveQueryExec: name=nodes, is_distinct=false
+02)--ProjectionExec: expr=[CAST(1 AS Int64) as id]
+03)----PlaceholderRowExec
+04)--CoalescePartitionsExec
+05)----ProjectionExec: expr=[id@0 + 1 as id]
+06)------FilterExec: id@0 < 10
+07)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)----------WorkTableExec: name=nodes
+
+# recursive CTE with a column-list alias (e.g. `t(n)`): the declared names must be
+# applied to the static term so the recursive self-reference can resolve them
+query I rowsort
+WITH RECURSIVE t(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM t WHERE n < 10
+)
+SELECT n FROM t
+----
+1
+10
+2
+3
+4
+5
+6
+7
+8
+9
+
+# recursive CTE with a multi-column column-list alias
+query II rowsort
+WITH RECURSIVE t(a, b) AS (
+    SELECT 1, 2
+    UNION ALL
+    SELECT a + 1, b * 2 FROM t WHERE a < 5
+)
+SELECT a, b FROM t
+----
+1 2
+2 4
+3 8
+4 16
+5 32
+
+# recursive CTE with a column-list alias and UNION (DISTINCT)
+query I rowsort
+WITH RECURSIVE t(n) AS (
+    SELECT 1
+    UNION
+    SELECT n + 1 FROM t WHERE n < 5
+)
+SELECT n FROM t
+----
+1
+2
+3
+4
+5
+
+# recursive CTE column-list alias arity mismatch is rejected cleanly (raised at
+# the static term, rather than the old confusing "No field named ...")
+query error DataFusion error: Error during planning: Source table contains 1 columns but only 2 names given as column alias
+WITH RECURSIVE t(a, b) AS (
+    SELECT 1
+    UNION ALL
+    SELECT a + 1 FROM t WHERE a < 3
+)
+SELECT * FROM t
+
+# explain a column-list-aliased recursive CTE: the declared name is applied to
+# the static term, so there is no extra projection on top of RecursiveQuery
+query TT
+EXPLAIN WITH RECURSIVE t(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM t WHERE n < 10
+)
+SELECT * FROM t
+----
+logical_plan
+01)SubqueryAlias: t
+02)--RecursiveQuery: is_distinct=false
+03)----Projection: Int64(1) AS n
+04)------EmptyRelation: rows=1
+05)----Projection: t.n + Int64(1)
+06)------Filter: t.n < Int64(10)
+07)--------TableScan: t projection=[n]
+physical_plan
+01)RecursiveQueryExec: name=t, is_distinct=false
+02)--ProjectionExec: expr=[CAST(1 AS Int64) as n]
+03)----PlaceholderRowExec
+04)--CoalescePartitionsExec
+05)----ProjectionExec: expr=[n@0 + 1 as n]
+06)------FilterExec: n@0 < 10
+07)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)----------WorkTableExec: name=t
+
+# recursive CTE with a quoted, case-sensitive column-list alias: `"N"` must be
+# preserved (not lowercased) so the recursive self-reference resolves it
+query I rowsort
+WITH RECURSIVE t("N") AS (
+    SELECT 1
+    UNION ALL
+    SELECT "N" + 1 FROM t WHERE "N" < 5
+)
+SELECT "N" FROM t
+----
+1
+2
+3
+4
+5
+
+# simple deduplicating recursive CTE works
+query I
+WITH RECURSIVE nodes AS (
+    SELECT id from (VALUES (1), (2)) nodes(id)
+    UNION
+    SELECT id + 1 as id
+    FROM nodes
+    WHERE id < 4
+)
+SELECT * FROM nodes
+----
+1
+2
+3
+4
+
+# deduplicating recursive CTE with two variables works
+query II
+WITH RECURSIVE ranges AS (
+    SELECT min, max from (VALUES (1, 1), (2, 2)) ranges(min, max)
+    UNION
+    SELECT min, max + 1 as max
+    FROM ranges
+    WHERE max < 4
+)
+SELECT * FROM ranges
+----
+1 1
+2 2
+1 2
+2 3
+1 3
+2 4
+1 4
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE balance STORED as CSV LOCATION '../core/tests/data/recursive_cte/balance.csv' OPTIONS ('format.has_header' 'true');
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE growth STORED as CSV LOCATION '../core/tests/data/recursive_cte/growth.csv' OPTIONS ('format.has_header' 'true');
+
+# setup
+statement ok
+set datafusion.execution.batch_size = 2;
+
+# recursive CTE with static term derived from table works.
+# use explain to ensure that batch size is set to 2. This should produce multiple batches per iteration since the input
+# table 'balances' has 4 rows
+query TT
+EXPLAIN WITH RECURSIVE balances AS (
+    SELECT * from balance
+    UNION ALL
+    SELECT time + 1 as time, name, account_balance + 10 as account_balance
+    FROM balances
+    WHERE time < 10
+)
+SELECT * FROM balances
+ORDER BY time, name, account_balance
+----
+logical_plan
+01)Sort: balances.time ASC NULLS LAST, balances.name ASC NULLS LAST, balances.account_balance ASC NULLS LAST
+02)--SubqueryAlias: balances
+03)----RecursiveQuery: is_distinct=false
+04)------TableScan: balance projection=[time, name, account_balance]
+05)------Projection: balances.time + Int64(1) AS time, balances.name, balances.account_balance + Int64(10) AS account_balance
+06)--------Filter: balances.time < Int64(10)
+07)----------TableScan: balances projection=[time, name, account_balance]
+physical_plan
+01)SortExec: expr=[time@0 ASC NULLS LAST, name@1 ASC NULLS LAST, account_balance@2 ASC NULLS LAST], preserve_partitioning=[false]
+02)--RecursiveQueryExec: name=balances, is_distinct=false
+03)----DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/recursive_cte/balance.csv]]}, projection=[time, name, account_balance], file_type=csv, has_header=true
+04)----CoalescePartitionsExec
+05)------ProjectionExec: expr=[time@0 + 1 as time, name@1 as name, account_balance@2 + 10 as account_balance]
+06)--------FilterExec: time@0 < 10
+07)----------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)------------WorkTableExec: name=balances
+
+# recursive CTE with static term derived from table works
+# note that this is run with batch size set to 2. This should produce multiple batches per iteration since the input
+# table 'balances' has 4 rows
+query ITI
+WITH RECURSIVE balances AS (
+    SELECT * from balance
+    UNION ALL
+    SELECT time + 1 as time, name, account_balance + 10 as account_balance
+    FROM balances
+    WHERE time < 10
+)
+SELECT * FROM balances
+ORDER BY time, name, account_balance
+----
+1 John 100
+1 Tim 200
+2 John 110
+2 John 300
+2 Tim 210
+2 Tim 400
+3 John 120
+3 John 310
+3 Tim 220
+3 Tim 410
+4 John 130
+4 John 320
+4 Tim 230
+4 Tim 420
+5 John 140
+5 John 330
+5 Tim 240
+5 Tim 430
+6 John 150
+6 John 340
+6 Tim 250
+6 Tim 440
+7 John 160
+7 John 350
+7 Tim 260
+7 Tim 450
+8 John 170
+8 John 360
+8 Tim 270
+8 Tim 460
+9 John 180
+9 John 370
+9 Tim 280
+9 Tim 470
+10 John 190
+10 John 380
+10 Tim 290
+10 Tim 480
+
+# reset batch size to default
+statement ok
+set datafusion.execution.batch_size = 8182;
+
+# recursive CTE with recursive join works
+query ITI
+WITH RECURSIVE balances AS (
+    SELECT time as time, name as name, account_balance as account_balance
+    FROM balance
+    UNION ALL
+    SELECT time + 1 as time, balances.name, account_balance + growth.account_growth as account_balance
+    FROM balances
+    JOIN growth
+    ON balances.name = growth.name
+    WHERE time < 10
+)
+SELECT * FROM balances
+ORDER BY time, name, account_balance
+----
+1 John 100
+1 Tim 200
+2 John 103
+2 John 300
+2 Tim 220
+2 Tim 400
+3 John 106
+3 John 303
+3 Tim 240
+3 Tim 420
+4 John 109
+4 John 306
+4 Tim 260
+4 Tim 440
+5 John 112
+5 John 309
+5 Tim 280
+5 Tim 460
+6 John 115
+6 John 312
+6 Tim 300
+6 Tim 480
+7 John 118
+7 John 315
+7 Tim 320
+7 Tim 500
+8 John 121
+8 John 318
+8 Tim 340
+8 Tim 520
+9 John 124
+9 John 321
+9 Tim 360
+9 Tim 540
+10 John 127
+10 John 324
+10 Tim 380
+10 Tim 560
+
+# recursive CTE with aggregations works
+query I rowsort
+WITH RECURSIVE nodes AS (
+    SELECT 1 as id
+    UNION ALL
+    SELECT id + 1 as id
+    FROM nodes
+    WHERE id < 10
+)
+SELECT sum(id) FROM nodes
+----
+55
+
+# setup
+statement ok
+CREATE TABLE t(a BIGINT) AS VALUES(1),(2),(3);
+
+# referencing CTE multiple times does not error
+query II rowsort
+WITH RECURSIVE my_cte AS (
+    SELECT a from t
+    UNION ALL
+    SELECT a+2 as a
+    FROM my_cte
+    WHERE a<5
+)
+SELECT * FROM my_cte t1, my_cte
+----
+1 1
+1 2
+1 3
+1 3
+1 4
+1 5
+1 5
+1 6
+2 1
+2 2
+2 3
+2 3
+2 4
+2 5
+2 5
+2 6
+3 1
+3 1
+3 2
+3 2
+3 3
+3 3
+3 3
+3 3
+3 4
+3 4
+3 5
+3 5
+3 5
+3 5
+3 6
+3 6
+4 1
+4 2
+4 3
+4 3
+4 4
+4 5
+4 5
+4 6
+5 1
+5 1
+5 2
+5 2
+5 3
+5 3
+5 3
+5 3
+5 4
+5 4
+5 5
+5 5
+5 5
+5 5
+5 6
+5 6
+6 1
+6 2
+6 3
+6 3
+6 4
+6 5
+6 5
+6 6
+
+# CTE within recursive CTE works and does not result in 'index out of bounds: the len is 0 but the index is 0'
+query I
+WITH RECURSIVE "recursive_cte" AS (
+    SELECT 1 as "val"
+  UNION ALL (
+    WITH "sub_cte" AS (
+      SELECT
+        time,
+        1 as "val"
+      FROM
+        (SELECT DISTINCT "time" FROM "balance")
+    )
+    SELECT
+      2 as "val"
+    FROM
+      "recursive_cte"
+      FULL JOIN "sub_cte" ON 1 = 1
+    WHERE
+      "recursive_cte"."val" < 2
+  )
+)
+SELECT
+   *
+FROM
+  "recursive_cte";
+----
+1
+2
+2
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE prices STORED as CSV LOCATION '../core/tests/data/recursive_cte/prices.csv' OPTIONS ('format.has_header' 'true');
+
+# CTE within window function inside nested CTE works. This test demonstrates using a nested window function to recursively iterate over a column.
+query RRII
+WITH RECURSIVE "recursive_cte" AS (
+  (
+    WITH "min_prices_row_num_cte" AS (
+      SELECT
+        MIN("prices"."prices_row_num") AS "prices_row_num"
+      FROM
+        "prices"
+    ),
+    "min_prices_row_num_cte_second" AS (
+      SELECT
+        MIN("prices"."prices_row_num") AS "prices_row_num_advancement"
+      FROM
+        "prices"
+      WHERE
+        "prices"."prices_row_num" > (
+          SELECT
+            "prices_row_num"
+          FROM
+            "min_prices_row_num_cte"
+        )
+    )
+    SELECT
+      0.0 AS "beg",
+      (0.0 + 50) AS "end",
+      (
+        SELECT
+          "prices_row_num"
+        FROM
+          "min_prices_row_num_cte"
+      ) AS "prices_row_num",
+      (
+        SELECT
+          "prices_row_num_advancement"
+        FROM
+          "min_prices_row_num_cte_second"
+      ) AS "prices_row_num_advancement"
+    FROM
+      "prices"
+    WHERE
+      "prices"."prices_row_num" = (
+        SELECT
+          DISTINCT "prices_row_num"
+        FROM
+          "min_prices_row_num_cte"
+      )
+  )
+  UNION ALL (
+    WITH "min_prices_row_num_cte" AS (
+      SELECT
+        "prices"."prices_row_num" AS "prices_row_num",
+        LEAD("prices"."prices_row_num", 1) OVER (
+          ORDER BY "prices_row_num"
+        ) AS "prices_row_num_advancement"
+      FROM
+        (
+          SELECT
+            DISTINCT "prices_row_num"
+          FROM
+            "prices"
+        ) AS "prices"
+    )
+    SELECT
+      "recursive_cte"."end" AS "beg",
+      ("recursive_cte"."end" + 50) AS "end",
+      "min_prices_row_num_cte"."prices_row_num" AS "prices_row_num",
+      "min_prices_row_num_cte"."prices_row_num_advancement" AS "prices_row_num_advancement"
+    FROM
+      "recursive_cte"
+      FULL JOIN "prices" ON "prices"."prices_row_num" = "recursive_cte"."prices_row_num_advancement"
+      FULL JOIN "min_prices_row_num_cte" ON "min_prices_row_num_cte"."prices_row_num" = COALESCE(
+        "prices"."prices_row_num",
+        "recursive_cte"."prices_row_num_advancement"
+      )
+    WHERE
+      "recursive_cte"."prices_row_num_advancement" IS NOT NULL
+  )
+)
+SELECT
+  DISTINCT *
+FROM
+  "recursive_cte"
+ORDER BY
+  "prices_row_num" ASC;
+----
+0 50 1 2
+50 100 2 3
+100 150 3 4
+150 200 4 5
+200 250 5 6
+250 300 6 7
+300 350 7 8
+350 400 8 9
+400 450 9 10
+450 500 10 11
+500 550 11 12
+550 600 12 13
+600 650 13 14
+650 700 14 15
+700 750 15 16
+750 800 16 17
+800 850 17 18
+850 900 18 19
+900 950 19 20
+950 1000 20 21
+1000 1050 21 22
+1050 1100 22 23
+1100 1150 23 24
+1150 1200 24 25
+1200 1250 25 26
+1250 1300 26 27
+1300 1350 27 28
+1350 1400 28 29
+1400 1450 29 30
+1450 1500 30 31
+1500 1550 31 32
+1550 1600 32 33
+1600 1650 33 34
+1650 1700 34 35
+1700 1750 35 36
+1750 1800 36 37
+1800 1850 37 38
+1850 1900 38 39
+1900 1950 39 40
+1950 2000 40 41
+2000 2050 41 42
+2050 2100 42 43
+2100 2150 43 44
+2150 2200 44 45
+2200 2250 45 46
+2250 2300 46 47
+2300 2350 47 48
+2350 2400 48 49
+2400 2450 49 50
+2450 2500 50 51
+2500 2550 51 52
+2550 2600 52 53
+2600 2650 53 54
+2650 2700 54 55
+2700 2750 55 56
+2750 2800 56 57
+2800 2850 57 58
+2850 2900 58 59
+2900 2950 59 60
+2950 3000 60 61
+3000 3050 61 62
+3050 3100 62 63
+3100 3150 63 64
+3150 3200 64 65
+3200 3250 65 66
+3250 3300 66 67
+3300 3350 67 68
+3350 3400 68 69
+3400 3450 69 70
+3450 3500 70 71
+3500 3550 71 72
+3550 3600 72 73
+3600 3650 73 74
+3650 3700 74 75
+3700 3750 75 76
+3750 3800 76 77
+3800 3850 77 78
+3850 3900 78 79
+3900 3950 79 80
+3950 4000 80 81
+4000 4050 81 82
+4050 4100 82 83
+4100 4150 83 84
+4150 4200 84 85
+4200 4250 85 86
+4250 4300 86 87
+4300 4350 87 88
+4350 4400 88 89
+4400 4450 89 90
+4450 4500 90 91
+4500 4550 91 92
+4550 4600 92 93
+4600 4650 93 94
+4650 4700 94 95
+4700 4750 95 96
+4750 4800 96 97
+4800 4850 97 98
+4850 4900 98 99
+4900 4950 99 100
+4950 5000 100 NULL
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE sales STORED as CSV LOCATION '../core/tests/data/recursive_cte/sales.csv' OPTIONS ('format.has_header' 'true');
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE salespersons STORED as CSV LOCATION '../core/tests/data/recursive_cte/salespersons.csv' OPTIONS ('format.has_header' 'true');
+
+
+# group by works within recursive cte. This test case demonstrates rolling up a hierarchy of salespeople to their managers.
+query III
+WITH RECURSIVE region_sales AS (
+    -- Anchor member
+    SELECT
+        s.salesperson_id AS salesperson_id,
+        SUM(s.sale_amount) AS amount,
+        0 as level
+    FROM
+        sales s
+    GROUP BY
+        s.salesperson_id
+    UNION ALL
+    -- Recursive member
+    SELECT
+      sp.manager_id AS salesperson_id,
+      SUM(rs.amount) AS amount,
+      MIN(rs.level) + 1 as level
+    FROM
+        region_sales rs
+    INNER JOIN salespersons sp ON rs.salesperson_id = sp.salesperson_id
+    WHERE sp.manager_id IS NOT NULL
+    GROUP BY
+      sp.manager_id
+)
+SELECT
+    salesperson_id,
+    MAX(amount) as amount,
+    MAX(level) as hierarchy_level
+FROM
+    region_sales
+GROUP BY
+  salesperson_id
+ORDER BY
+  hierarchy_level ASC, salesperson_id ASC;
+----
+4 700 0
+5 600 0
+6 500 0
+7 900 0
+2 1300 1
+3 1400 1
+1 2700 2
+
+#nested recursive ctes
+query I
+WITH RECURSIVE outer_cte AS (
+    SELECT 1 as a
+    UNION ALL (
+        WITH RECURSIVE nested_cte AS (
+           SELECT 1 as a
+           UNION ALL
+           SELECT a + 2 as a
+           FROM nested_cte where a < 3
+        )
+        SELECT outer_cte.a + 2 as a
+        FROM outer_cte JOIN nested_cte USING(a)
+        WHERE nested_cte.a < 4
+    )
+)
+SELECT a FROM outer_cte;
+----
+1
+3
+5
+
+# Check that CTE name shadowing is returning an error
+query error DataFusion error: Error during planning: WITH query name "outer_cte" specified more than once
+WITH RECURSIVE outer_cte AS (
+    SELECT 1 as a
+    UNION ALL (
+        WITH RECURSIVE nested_cte AS (
+           SELECT 1 as a
+           UNION ALL (
+               WITH RECURSIVE outer_cte AS (
+                    SELECT 1 as a
+                    UNION ALL
+                    SELECT a + 2 as a
+                    FROM outer_cte where a < 3
+               )
+               SELECT nested_cte.a + outer_cte.a as a
+               FROM nested_cte JOIN outer_cte USING(a)
+               WHERE outer_cte_cte.a < 8
+           )
+        )
+        SELECT outer_cte.a + nested_cte.a as a
+        FROM outer_cte JOIN nested_cte USING(a)
+        WHERE nested_cte.a < 8
+    )
+)
+SELECT a FROM outer_cte;
+
+# expect error when recursive CTE is referenced multiple times in the recursive term
+query error DataFusion error: This feature is not implemented: Multiple recursive references to the same CTE are not supported
+WITH RECURSIVE my_cte AS (
+    SELECT 1 as a
+    UNION ALL
+    SELECT my_cte.a+2 as a
+    FROM my_cte join my_cte c2 using(a)
+    WHERE my_cte.a<5
+)
+SELECT a FROM my_cte;
+
+
+# Test issue: https://github.com/apache/datafusion/issues/9680
+query I
+WITH RECURSIVE recursive_cte AS (
+  SELECT 1 as val
+  UNION ALL
+    (
+      WITH sub_cte AS (
+      SELECT 2 as val
+    )
+    SELECT
+      2 as val
+    FROM recursive_cte
+      CROSS JOIN sub_cte
+    WHERE recursive_cte.val < 2
+  )
+)
+SELECT * FROM recursive_cte;
+----
+1
+2
+
+# Test issue: https://github.com/apache/datafusion/issues/9680
+# 'recursive_cte' should be on the left of the cross join, as this is the test purpose of the above query.
+query TT
+explain WITH RECURSIVE recursive_cte AS (
+  SELECT 1 as val
+  UNION ALL
+    (
+      WITH sub_cte AS (
+      SELECT 2 as val
+    )
+    SELECT
+      2 as val
+    FROM recursive_cte
+      CROSS JOIN sub_cte
+    WHERE recursive_cte.val < 2
+  )
+)
+SELECT * FROM recursive_cte;
+----
+logical_plan
+01)SubqueryAlias: recursive_cte
+02)--RecursiveQuery: is_distinct=false
+03)----Projection: Int64(1) AS val
+04)------EmptyRelation: rows=1
+05)----Projection: Int64(2) AS val
+06)------Cross Join:
+07)--------Projection:
+08)----------Filter: recursive_cte.val < Int64(2)
+09)------------TableScan: recursive_cte projection=[val]
+10)--------SubqueryAlias: sub_cte
+11)----------EmptyRelation: rows=1
+physical_plan
+01)RecursiveQueryExec: name=recursive_cte, is_distinct=false
+02)--ProjectionExec: expr=[1 as val]
+03)----PlaceholderRowExec
+04)--ProjectionExec: expr=[2 as val]
+05)----CrossJoinExec
+06)------CoalescePartitionsExec
+07)--------FilterExec: val@0 < 2, projection=[]
+08)----------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+09)------------WorkTableExec: name=recursive_cte
+10)------PlaceholderRowExec
+
+# Test issue: https://github.com/apache/datafusion/issues/9794
+# Non-recursive term and recursive term have different types
+query IT rowsort
+WITH RECURSIVE my_cte AS(
+    SELECT 1::int AS a
+    UNION ALL
+    SELECT a::bigint+2 FROM my_cte WHERE a<3
+) SELECT *, arrow_typeof(a) FROM my_cte;
+----
+1 Int32
+3 Int32
+
+# Test issue: https://github.com/apache/datafusion/issues/9794
+# Non-recursive term and recursive term have different number of columns
+query error DataFusion error: Error during planning: Non\-recursive term and recursive term must have the same number of columns \(1 != 3\)
+WITH RECURSIVE my_cte AS (
+    SELECT 1::bigint AS a
+    UNION ALL
+    SELECT a+2, 'a','c' FROM my_cte WHERE a<3
+) SELECT * FROM my_cte;
+
+# Test issue: https://github.com/apache/datafusion/issues/9794
+# Non-recursive term and recursive term have different types, and cannot be casted
+query error DataFusion error: Optimizer rule 'simplify_expressions' failed[\s\S]*Arrow error: Cast error: Cannot cast string 'abc' to value of Int64 type
+WITH RECURSIVE my_cte AS (
+    SELECT 1 AS a
+    UNION ALL
+    SELECT 'abc' FROM my_cte WHERE CAST(a AS text) !='abc'
+) SELECT * FROM my_cte;
+
+# Define a non-recursive CTE in the recursive WITH clause.
+# Test issue: https://github.com/apache/datafusion/issues/9804
+query I
+WITH RECURSIVE cte AS (
+    SELECT a FROM (VALUES(1)) AS t(a) WHERE a > 2
+    UNION ALL
+    SELECT 2
+) SELECT * FROM cte;
+----
+2
+
+# Define a non-recursive CTE in the recursive WITH clause.
+# UNION ALL
+query I rowsort
+WITH RECURSIVE cte AS (
+    SELECT 1
+    UNION ALL
+    SELECT 2
+) SELECT * FROM cte;
+----
+1
+2
+
+# Define a non-recursive CTE in the recursive WITH clause.
+# DISTINCT UNION
+query I
+WITH RECURSIVE cte AS (
+    SELECT 2
+    UNION
+    SELECT 2
+) SELECT * FROM cte;
+----
+2
+
+# Define a non-recursive CTE in the recursive WITH clause.
+# UNION is not present.
+query I
+WITH RECURSIVE cte AS (
+    SELECT 1
+) SELECT * FROM cte;
+----
+1
+
+# Define a recursive CTE and a non-recursive CTE at the same time.
+query II rowsort
+WITH RECURSIVE
+non_recursive_cte AS (
+  SELECT 1
+),
+recursive_cte AS (
+  SELECT 1 AS a UNION ALL SELECT a+2 FROM recursive_cte WHERE a < 3
+)
+SELECT * FROM non_recursive_cte, recursive_cte;
+----
+1 1
+1 3
+
+# Name shadowing:
+# The first `t` refers to the table, the second to the CTE.
+query I
+WITH t AS (SELECT * FROM t where t.a < 2) SELECT * FROM t
+----
+1
+
+# Issue: https://github.com/apache/datafusion/issues/10914
+# The CTE defined within the subquery is only visible inside that subquery.
+query I rowsort
+(WITH t AS (SELECT 400) SELECT * FROM t) UNION (SELECT * FROM t);
+----
+1
+2
+3
+400
+
+query error DataFusion error: Error during planning: table 'datafusion\.public\.cte' not found
+(WITH cte AS (SELECT 400) SELECT * FROM cte) UNION (SELECT * FROM cte);
+
+# Test duplicate CTE names in different subqueries in the FROM clause.
+query III rowsort
+SELECT * FROM
+  (WITH t AS (select 400 as e) SELECT * FROM t) t1,
+  (WITH t AS (select 500 as e) SELECT * FROM t) t2,
+  t
+----
+400 500 1
+400 500 2
+400 500 3
+
+query error DataFusion error: Error during planning: Source table contains 3 columns but only 1 names given as column alias
+with numbers(a) as (select 1, 2, 3) select * from numbers;
+
+query TT
+explain with numbers(a,b,c) as (select 1 as x, 2 as y, 3 as z) select * from numbers;
+----
+logical_plan
+01)SubqueryAlias: numbers
+02)--Projection: Int64(1) AS a, Int64(2) AS b, Int64(3) AS c
+03)----EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[1 as a, 2 as b, 3 as c]
+02)--PlaceholderRowExec
+
+query TT
+explain with numbers(a,b,c) as (select 1,2,3) select * from numbers;
+----
+logical_plan
+01)SubqueryAlias: numbers
+02)--Projection: Int64(1) AS a, Int64(2) AS b, Int64(3) AS c
+03)----EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[1 as a, 2 as b, 3 as c]
+02)--PlaceholderRowExec
+
+query TT
+explain with numbers as (select 1 as a, 2 as b, 3 as c) select * from numbers;
+----
+logical_plan
+01)SubqueryAlias: numbers
+02)--Projection: Int64(1) AS a, Int64(2) AS b, Int64(3) AS c
+03)----EmptyRelation: rows=1
+physical_plan
+01)ProjectionExec: expr=[1 as a, 2 as b, 3 as c]
+02)--PlaceholderRowExec
+
+statement count 0
+create table person (id int, name string, primary key(id))
+
+query TT
+explain with cte as (select * from person) SELECT * FROM person WHERE EXISTS (SELECT * FROM cte WHERE id = person.id);
+----
+logical_plan
+01)LeftSemi Join: person.id = __correlated_sq_1.id
+02)--TableScan: person projection=[id, name]
+03)--SubqueryAlias: __correlated_sq_1
+04)----SubqueryAlias: cte
+05)------TableScan: person projection=[id]
+physical_plan
+01)HashJoinExec: mode=CollectLeft, join_type=LeftSemi, on=[(id@0, id@0)]
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+03)--DataSourceExec: partitions=1, partition_sizes=[0]
+
+statement count 0
+drop table person;
+
+statement count 0
+create table j1(a int);
+
+statement count 0
+create table j2(b int);
+
+query TT
+explain SELECT * FROM j1, LATERAL (SELECT 1) AS j2;
+----
+logical_plan
+01)Cross Join: 
+02)--TableScan: j1 projection=[a]
+03)--SubqueryAlias: j2
+04)----Projection: Int64(1)
+05)------EmptyRelation: rows=1
+physical_plan
+01)CrossJoinExec
+02)--DataSourceExec: partitions=1, partition_sizes=[0]
+03)--ProjectionExec: expr=[1 as Int64(1)]
+04)----PlaceholderRowExec
+
+statement count 0
+drop table j1;
+
+statement count 0
+drop table j2;
+
+query TT
+explain WITH RECURSIVE numbers AS (
+  select 1 as n
+  UNION ALL
+  select n + 1 FROM numbers WHERE n < 10
+) select * from numbers;
+----
+logical_plan
+01)SubqueryAlias: numbers
+02)--RecursiveQuery: is_distinct=false
+03)----Projection: Int64(1) AS n
+04)------EmptyRelation: rows=1
+05)----Projection: numbers.n + Int64(1)
+06)------Filter: numbers.n < Int64(10)
+07)--------TableScan: numbers projection=[n]
+physical_plan
+01)RecursiveQueryExec: name=numbers, is_distinct=false
+02)--ProjectionExec: expr=[CAST(1 AS Int64) as n]
+03)----PlaceholderRowExec
+04)--CoalescePartitionsExec
+05)----ProjectionExec: expr=[n@0 + 1 as n]
+06)------FilterExec: n@0 < 10
+07)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)----------WorkTableExec: name=numbers
+
+query TT
+explain WITH RECURSIVE numbers AS (
+  select 1 as n
+  UNION ALL
+  select n + 1 FROM numbers WHERE n < 10
+) select * from numbers;
+----
+logical_plan
+01)SubqueryAlias: numbers
+02)--RecursiveQuery: is_distinct=false
+03)----Projection: Int64(1) AS n
+04)------EmptyRelation: rows=1
+05)----Projection: numbers.n + Int64(1)
+06)------Filter: numbers.n < Int64(10)
+07)--------TableScan: numbers projection=[n]
+physical_plan
+01)RecursiveQueryExec: name=numbers, is_distinct=false
+02)--ProjectionExec: expr=[CAST(1 AS Int64) as n]
+03)----PlaceholderRowExec
+04)--CoalescePartitionsExec
+05)----ProjectionExec: expr=[n@0 + 1 as n]
+06)------FilterExec: n@0 < 10
+07)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+08)----------WorkTableExec: name=numbers
+
+# Test for issue #16998: SortExec shares DynamicFilterPhysicalExpr across multiple executions
+query II
+with recursive r as (
+  select 0 as k, 0 as v
+  union all
+  (
+    select *
+    from r
+    order by v
+    limit 1
+  )
+)
+select *
+from r
+limit 5;
+----
+0 0
+0 0
+0 0
+0 0
+0 0
+
+query TT
+explain
+with recursive r as (
+  select 0 as k, 0 as v
+  union all
+  (
+    select *
+    from r
+    order by v
+    limit 1
+  )
+)
+select *
+from r
+limit 5;
+----
+logical_plan
+01)SubqueryAlias: r
+02)--Limit: skip=0, fetch=5
+03)----RecursiveQuery: is_distinct=false
+04)------Projection: Int64(0) AS k, Int64(0) AS v
+05)--------EmptyRelation: rows=1
+06)------Sort: r.v ASC NULLS LAST, fetch=1
+07)--------TableScan: r projection=[k, v]
+physical_plan
+01)GlobalLimitExec: skip=0, fetch=5
+02)--RecursiveQueryExec: name=r, is_distinct=false
+03)----ProjectionExec: expr=[CAST(0 AS Int64) as k, CAST(0 AS Int64) as v]
+04)------PlaceholderRowExec
+05)----SortExec: TopK(fetch=1), expr=[v@1 ASC NULLS LAST], preserve_partitioning=[false]
+06)------WorkTableExec: name=r
+
+# setup
+statement ok
+CREATE EXTERNAL TABLE closure STORED as CSV LOCATION '../core/tests/data/recursive_cte/closure.csv' OPTIONS ('format.has_header' 'true');
+
+# transitive closure with loop
+query II
+WITH RECURSIVE trans AS (
+    SELECT * FROM closure
+    UNION
+    SELECT l.start, r.end
+    FROM trans as l, closure AS r
+    WHERE l.end = r.start
+) SELECT * FROM trans ORDER BY start, end
+----
+1 1
+1 2
+1 3
+1 4
+2 1
+2 2
+2 3
+2 4
+4 1
+4 2
+4 3
+4 4
+
+query TT
+EXPLAIN WITH RECURSIVE trans AS (
+    SELECT * FROM closure
+    UNION
+    SELECT l.start, r.end
+    FROM trans as l, closure AS r
+    WHERE l.end = r.start
+) SELECT * FROM trans
+----
+logical_plan
+01)SubqueryAlias: trans
+02)--RecursiveQuery: is_distinct=true
+03)----TableScan: closure projection=[start, end]
+04)----Projection: l.start, r.end
+05)------Inner Join: l.end = r.start
+06)--------SubqueryAlias: l
+07)----------TableScan: trans projection=[start, end]
+08)--------SubqueryAlias: r
+09)----------TableScan: closure projection=[start, end]
+physical_plan
+01)RecursiveQueryExec: name=trans, is_distinct=true
+02)--DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/recursive_cte/closure.csv]]}, projection=[start, end], file_type=csv, has_header=true
+03)--CoalescePartitionsExec
+04)----HashJoinExec: mode=Partitioned, join_type=Inner, on=[(end@1, start@0)], projection=[start@0, end@3]
+05)------RepartitionExec: partitioning=Hash([end@1], 4), input_partitions=1
+06)--------WorkTableExec: name=trans
+07)------RepartitionExec: partitioning=Hash([start@0], 4), input_partitions=1
+08)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/recursive_cte/closure.csv]]}, projection=[start, end], file_type=csv, has_header=true
+
+# Regression test: recursive CTE column-name stability under ORDER BY + LIMIT.
+#
+# The recursive CTE below has an anchor that aliases a computed column
+# (`upper(val) AS val`) while the recursive term leaves the same expression
+# un-aliased (`upper(r.val)`). RecursiveQueryExec declares its output schema
+# from the anchor, so the plan-level column is `val`; but if it forwards the
+# recursive term's batches without rebinding their schema to the anchor's,
+# downstream consumers that read `batch.schema().field(i).name()` observe
+# the leaked `upper(r.val)` name. The outer `ORDER BY ts LIMIT 10` routes
+# through the TopK path in SortExec, which passes batch schemas through
+# verbatim — so the leak surfaces there.
+#
+# sqllogictest compares row values and can't assert column names directly.
+# To surface the leak inside SLT, we `COPY` the result to a CSV file with a
+# header row (the CSV writer names header columns from each batch's own
+# schema) and then read the file back as headerless CSV so the header line
+# appears as a data row we can compare against the expected column names.
+statement ok
+CREATE TABLE cte_schema_records (
+    id VARCHAR NOT NULL,
+    parent_id VARCHAR,
+    ts TIMESTAMP NOT NULL,
+    val VARCHAR
+);
+
+statement ok
+INSERT INTO cte_schema_records VALUES
+  ('a00', NULL,  TIMESTAMP '2025-01-01 00:00:00', 'v_span'),
+  ('a01', 'a00', TIMESTAMP '2025-01-01 00:00:01', 'v_log_1'),
+  ('a02', 'a01', TIMESTAMP '2025-01-01 00:00:02', 'v_log_2'),
+  ('a03', 'a02', TIMESTAMP '2025-01-01 00:00:03', 'v_log_3'),
+  ('a04', 'a03', TIMESTAMP '2025-01-01 00:00:04', 'v_log_4'),
+  ('a05', 'a04', TIMESTAMP '2025-01-01 00:00:05', 'v_log_5');
+
+query I
+COPY (WITH RECURSIVE descendants AS (
+    SELECT id, parent_id, ts, upper(val) AS val
+      FROM cte_schema_records WHERE id = 'a00'
+    UNION ALL
+    SELECT r.id, r.parent_id, r.ts, upper(r.val)
+      FROM cte_schema_records r
+      INNER JOIN descendants d ON r.parent_id = d.id
+  )
+  SELECT id, parent_id, ts, val
+    FROM descendants
+    ORDER BY ts ASC
+    LIMIT 10)
+TO 'test_files/scratch/cte/recursive_order_limit_schema/'
+STORED AS CSV OPTIONS ('format.has_header' 'true');
+----
+6
+
+statement ok
+CREATE EXTERNAL TABLE cte_schema_reread (
+    id VARCHAR, parent_id VARCHAR, ts VARCHAR, val VARCHAR
+)
+STORED AS CSV
+LOCATION 'test_files/scratch/cte/recursive_order_limit_schema/'
+OPTIONS ('format.has_header' 'false');
+
+# The CSV header row appears as a data row here because we re-read with
+# has_header='false'. It must match the CTE's declared column names; if
+# RecursiveQueryExec leaked the recursive branch's schema, the last field
+# would read `upper(r.val)` instead of `val`.
+query TTTT
+SELECT id, parent_id, ts, val
+  FROM cte_schema_reread
+  WHERE id = 'id';
+----
+id parent_id ts val
+
+statement ok
+DROP TABLE cte_schema_reread;
+
+statement ok
+DROP TABLE cte_schema_records;
+
+##########
+## Recursive CTE nullability widening
+##
+## A recursive term can introduce NULLs that the static (anchor) term never
+## produces. The recursive CTE output schema must therefore widen nullability
+## across both terms, otherwise nullability-based optimizer simplifications
+## (e.g. removing IS NULL / IS NOT NULL predicates) produce wrong results.
+##########
+
+# recursive self-reference must use conservative nullability even when the
+# anchor term uses non-null literals. Otherwise optimizer nullability-based
+# simplification can remove this semantically required IS NOT NULL guard.
+query II rowsort
+WITH RECURSIVE t(a, b) AS (
+  SELECT 0 AS a, 0 AS b
+  UNION ALL
+  SELECT b AS a, CAST(NULL AS INT) AS b FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t
+----
+0 0
+0 NULL
+NULL NULL
+
+# outer IS NOT NULL filters must see recursive output as nullable, not just the
+# non-null anchor literal.
+query II rowsort
+WITH RECURSIVE t(a, b) AS (
+  SELECT 0 AS a, 0 AS b
+  UNION ALL
+  SELECT b AS a, CAST(NULL AS INT) AS b FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t WHERE a IS NOT NULL
+----
+0 0
+0 NULL
+
+# outer IS NULL filters must see recursive output as nullable, not just the
+# non-null anchor literal.
+query I
+WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION ALL
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t WHERE a IS NULL
+----
+NULL
+
+# deduplicating recursive CTE must preserve widened nullability for outer filters.
+query I
+WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t WHERE a IS NULL
+----
+NULL
+
+# recursive output nullability must be tracked per column, not just for the
+# first column.
+query II rowsort
+WITH RECURSIVE t(a, b) AS (
+  SELECT 0 AS a, 0 AS b
+  UNION ALL
+  SELECT b AS a, CAST(NULL AS INT) AS b FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t WHERE b IS NULL
+----
+0 NULL
+NULL NULL
+
+# recursive output nullability must survive recursive term type coercion.
+query I
+WITH RECURSIVE t(a) AS (
+  SELECT 1::INT AS a
+  UNION ALL
+  SELECT CAST(NULL AS BIGINT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t WHERE a IS NULL
+----
+NULL
+
+# DESCRIBE should expose the widened recursive output nullability.
+query TTT
+DESCRIBE WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION ALL
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT * FROM t
+----
+a Int64 YES
+
+# recursive self-reference must not simplify away IS NULL guards when the
+# anchor term is nullable and the recursive term is non-null.
+query I rowsort
+WITH RECURSIVE t(a) AS (
+  SELECT CAST(NULL AS INT) AS a
+  UNION ALL
+  SELECT 1 AS a FROM t WHERE a IS NULL
+)
+SELECT * FROM t
+----
+1
+NULL
+
+# widened recursive nullability must survive aggregate physical planning.
+query III
+WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION ALL
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT COUNT(*), COUNT(a), SUM(a) FROM t
+----
+2 1 1
+
+# outer filters must still see widened nullability through a derived projection.
+query I
+WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION ALL
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT x FROM (SELECT a AS x FROM t) WHERE x IS NULL
+----
+NULL
+
+# per-column nullability widening must survive type coercion in multi-column
+# recursive terms.
+query II
+WITH RECURSIVE t(a, b) AS (
+  SELECT 1::INT AS a, 2::INT AS b
+  UNION ALL
+  SELECT a + 1 AS a, CAST(NULL AS BIGINT) AS b FROM t WHERE a < 2
+)
+SELECT * FROM t WHERE b IS NULL
+----
+2 NULL
+
+# join planning must preserve recursive output nullability for null-sensitive
+# predicates above the recursive query.
+query II
+WITH RECURSIVE t(a) AS (
+  SELECT 1 AS a
+  UNION ALL
+  SELECT CAST(NULL AS INT) AS a FROM t WHERE a IS NOT NULL
+)
+SELECT t.a, u.b FROM t LEFT JOIN (SELECT 1 AS b) u ON t.a = u.b WHERE u.b IS NULL
+----
+NULL NULL
+
+# A recursive CTE must not inherit the static term's uniqueness / primary-key
+# functional dependencies: the recursive term can append rows that duplicate
+# the static term's "unique" keys, so an outer DISTINCT must not be optimized
+# away based on a stale dependency.
+statement ok
+CREATE TABLE recursive_cte_pk(id INT NOT NULL PRIMARY KEY);
+
+statement ok
+INSERT INTO recursive_cte_pk VALUES (2), (1);
+
+query I rowsort
+SELECT DISTINCT id FROM (
+  WITH RECURSIVE t(id) AS (
+    SELECT id FROM recursive_cte_pk
+    UNION ALL
+    SELECT id - 1 FROM t WHERE id > 1
+  )
+  SELECT id FROM t
+)
+----
+1
+2
+
+statement ok
+DROP TABLE recursive_cte_pk;
+
+statement count 0
+set datafusion.execution.enable_recursive_ctes = false;
+
+query error DataFusion error: This feature is not implemented: Recursive CTEs are not enabled
+explain WITH RECURSIVE numbers AS (
+  select 1 as n
+  UNION ALL
+  select n + 1 FROM numbers WHERE n < 10
+) select * from numbers;
+
+# Config reset
+statement ok
+RESET datafusion.execution.batch_size;
+
+statement ok
+RESET datafusion.execution.enable_recursive_ctes;
+
+statement ok
+RESET datafusion.sql_parser.enable_ident_normalization;
+
+
+# Test projection optimization in recursive CTEs
+
+# https://github.com/apache/datafusion/issues/22249
+query I
+with recursive t(k, v) as (
+  select 1 k, 10 v
+  union all
+  select 2, 20 from t where k = 1
+)
+select v
+from t
+order by 1;
+----
+10
+20
+
+# https://github.com/apache/datafusion/issues/22249
+query I
+with recursive t(k, v) as (
+  select 1 k, 10 v
+  union all
+  select 2, 20 from t where v = 10
+)
+select v
+from t
+order by 1;
+----
+10
+20
+
+# Keep columns that are not selected by the outer query, but still affect
+# recursive UNION distinctness.
+query I
+with recursive t(k, v) as (
+  select 1 k, 10 v
+  union
+  select 2, 10 from t where v = 10
+)
+select v
+from t
+order by 1;
+----
+10
+10
+
+statement ok
+copy (
+  select i as k, i as v1, i as v2
+  from generate_series(1, 3) t(i)
+) to 'test_files/scratch/cte/test.parquet';
+
+statement ok
+create external table test stored as parquet location 'test_files/scratch/cte/test.parquet';
+
+# check that both the static and recursive terms are optimized
+query TT
+explain
+with recursive r as (
+    select k, v1 -- only needs to project k and v1 from table test
+    from test
+    union all
+    select k * 10, v1
+    from r
+    where k < ( -- only needs to project k and v2 from table test
+      select v2
+      from test
+      where k = 2
+    )
+)
+select *
+from r
+order by 1, 2;
+----
+logical_plan
+01)Sort: r.k ASC NULLS LAST, r.v1 ASC NULLS LAST
+02)--SubqueryAlias: r
+03)----RecursiveQuery: is_distinct=false
+04)------TableScan: test projection=[k, v1]
+05)------Projection: r.k * Int64(10), r.v1
+06)--------Filter: r.k < (<subquery>)
+07)----------Subquery:
+08)------------Projection: test.v2
+09)--------------Filter: test.k = Int64(2)
+10)----------------TableScan: test projection=[k, v2], partial_filters=[test.k = Int64(2)]
+11)----------TableScan: r projection=[k, v1]
+physical_plan
+01)ScalarSubqueryExec: subqueries=1
+02)--SortExec: expr=[k@0 ASC NULLS LAST, v1@1 ASC NULLS LAST], preserve_partitioning=[false]
+03)----RecursiveQueryExec: name=r, is_distinct=false
+04)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/cte/test.parquet]]}, projection=[CAST(k@0 AS Int64) as k, CAST(v1@1 AS Int64) as v1], output_ordering=[k@0 ASC NULLS LAST], file_type=parquet
+05)------CoalescePartitionsExec
+06)--------ProjectionExec: expr=[k@0 * 10 as k, v1@1 as v1]
+07)----------FilterExec: k@0 < scalar_subquery(<pending>)
+08)------------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+09)--------------WorkTableExec: name=r
+10)--FilterExec: k@0 = 2, projection=[v2@1]
+11)----RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+12)------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/sqllogictest/test_files/scratch/cte/test.parquet]]}, projection=[k, v2], output_ordering=[k@0 ASC NULLS LAST], file_type=parquet, predicate=k@0 = 2, pruning_predicate=k_null_count@2 != row_count@3 AND k_min@0 <= 2 AND 2 <= k_max@1, required_guarantees=[k in (2)]
+
+query II
+with recursive r as (
+    select k, v1
+    from test
+    union all
+    select k * 10, v1
+    from r
+    where k < (
+      select v2
+      from test
+      where k = 2
+    )
+)
+select *
+from r
+order by 1, 2;
+----
+1 1
+2 2
+3 3
+10 1
+
+statement ok
+drop table test;

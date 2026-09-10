@@ -1,0 +1,18 @@
+# Preserve the documented spellings when the generic syntax inventory
+# canonicalizes != to <> or cannot parse PostgreSQL's # operator.
+
+statement ok
+SET datafusion.sql_parser.dialect = PostgreSQL
+
+query B
+SELECT 1 != 2
+----
+true
+
+query I
+SELECT 7 # 3
+----
+4
+
+statement ok
+RESET datafusion.sql_parser.dialect

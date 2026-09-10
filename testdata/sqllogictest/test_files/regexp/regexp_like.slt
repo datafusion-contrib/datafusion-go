@@ -1,0 +1,370 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Import common test data
+include ./init_data.slt.part
+
+query B
+SELECT regexp_like(str, pattern, flags) FROM regexp_test_data;
+----
+NULL
+true
+true
+true
+false
+false
+false
+true
+true
+true
+true
+true
+
+query B
+SELECT str ~ NULL FROM regexp_test_data;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query B
+select str ~ right('foo', NULL) FROM regexp_test_data;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query B
+select right('foo', NULL) !~ str FROM regexp_test_data;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query B
+SELECT regexp_like('foobarbequebaz', '');
+----
+true
+
+query B
+SELECT regexp_like('', '');
+----
+true
+
+query B
+SELECT regexp_like('foobarbequebaz', '(bar)(beque)');
+----
+true
+
+query B
+SELECT regexp_like('fooBarbeQuebaz', '(bar).*(que)', 'is');
+----
+true
+
+query B
+SELECT regexp_like('foobarbequebaz', '(ba3r)(bequ34e)');
+----
+false
+
+query B
+SELECT regexp_like('foobarbequebaz', '^.*(barbequ[0-9]*e).*$', 'm');
+----
+true
+
+query B
+SELECT regexp_like('aaa-0', '.*-(\d)');
+----
+true
+
+query B
+SELECT regexp_like('bb-1', '.*-(\d)');
+----
+true
+
+query B
+SELECT regexp_like('aa', '.*-(\d)');
+----
+false
+
+query B
+SELECT regexp_like(NULL, '.*-(\d)');
+----
+NULL
+
+query B
+SELECT regexp_like('aaa-0', NULL);
+----
+NULL
+
+query B
+SELECT regexp_like(null, '.*-(\d)');
+----
+NULL
+
+query error Error during planning: regexp_like\(\) does not support the "global" option
+SELECT regexp_like('bb-1', '.*-(\d)', 'g');
+
+query error Error during planning: regexp_like\(\) does not support the "global" option
+SELECT regexp_like('bb-1', '.*-(\d)', 'g');
+
+query error Arrow error: Compute error: Regular expression did not compile: CompiledTooBig\(10485760\)
+SELECT regexp_like('aaaaa', 'a{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}{5}');
+
+# look-around is not supported and will just return false
+query B
+SELECT regexp_like('(?<=[A-Z]\w )Smith', 'John Smith', 'i');
+----
+false
+
+query B
+select regexp_like('aaa-555', '.*-(\d*)');
+----
+true
+
+# multiline string
+query B
+SELECT 'foo\nbar\nbaz' ~ 'bar';
+----
+true
+
+query B
+SELECT regexp_like(E'a\nb', '^b', 'm');
+----
+true
+
+query B
+SELECT regexp_like(E'a\nb', '^b');
+----
+false
+
+statement error
+Error during planning: Cannot infer common argument type for regex operation List(Field { name: "item", data_type: Int64, nullable: true, metadata: {} }) ~ List(Field { name: "item", data_type: Int64, nullable: true, metadata: {} })
+select [1,2] ~ [3];
+
+query B
+SELECT 'foo\nbar\nbaz' LIKE '%bar%';
+----
+true
+
+query B
+SELECT NULL LIKE NULL;
+----
+NULL
+
+query B
+SELECT NULL iLIKE NULL;
+----
+NULL
+
+query B
+SELECT NULL not LIKE NULL;
+----
+NULL
+
+query B
+SELECT NULL not iLIKE NULL;
+----
+NULL
+
+statement ok
+create or replace table strings as values
+  ('FooBar'),
+  ('Foo'),
+  ('Foo'),
+  ('Bar'),
+  ('FooBar'),
+  ('Bar'),
+  ('Baz');
+
+statement ok
+create or replace table dict_table as
+select arrow_cast(column1, 'Dictionary(Int32, Utf8)') as column1
+from strings;
+
+query T
+select column1 from dict_table where column1 LIKE '%oo%';
+----
+FooBar
+Foo
+Foo
+FooBar
+
+query T
+select column1 from dict_table where column1 NOT LIKE '%oo%';
+----
+Bar
+Bar
+Baz
+
+query T
+select column1 from dict_table where column1 ILIKE '%oO%';
+----
+FooBar
+Foo
+Foo
+FooBar
+
+query T
+select column1 from dict_table where column1 NOT ILIKE '%oO%';
+----
+Bar
+Bar
+Baz
+
+
+# plan should not cast the column, instead it should use the dictionary directly
+query TT
+explain select column1 from dict_table where column1 LIKE '%oo%';
+----
+logical_plan
+01)Filter: dict_table.column1 LIKE Utf8("%oo%")
+02)--TableScan: dict_table projection=[column1]
+physical_plan
+01)FilterExec: column1@0 LIKE %oo%
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+# Ensure casting / coercion works for all operators
+# (there should be no casts to Utf8)
+query TT
+explain select
+  column1 LIKE '%oo%',
+  column1 NOT LIKE '%oo%',
+  column1 ILIKE '%oo%',
+  column1 NOT ILIKE '%oo%'
+from dict_table;
+----
+logical_plan
+01)Projection: dict_table.column1 LIKE Utf8("%oo%"), dict_table.column1 NOT LIKE Utf8("%oo%"), dict_table.column1 ILIKE Utf8("%oo%"), dict_table.column1 NOT ILIKE Utf8("%oo%")
+02)--TableScan: dict_table projection=[column1]
+physical_plan
+01)ProjectionExec: expr=[column1@0 LIKE %oo% as dict_table.column1 LIKE Utf8("%oo%"), column1@0 NOT LIKE %oo% as dict_table.column1 NOT LIKE Utf8("%oo%"), column1@0 ILIKE %oo% as dict_table.column1 ILIKE Utf8("%oo%"), column1@0 NOT ILIKE %oo% as dict_table.column1 NOT ILIKE Utf8("%oo%")]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement ok
+drop table strings
+
+statement ok
+drop table dict_table
+
+# Dict value types that themselves need further coercion against the literal
+statement ok
+create table dict_inner as
+select arrow_cast(arrow_cast(c, 'Binary'), 'Dictionary(UInt32, Binary)') as bin_col,
+       arrow_cast(arrow_cast(c, 'Dictionary(UInt32, Utf8)'),
+                  'Dictionary(Int32, Dictionary(UInt32, Utf8))') as nested_col
+from (values ('foo'), ('bar')) as t(c);
+
+query BB
+select bin_col LIKE 'foo', nested_col ~ 'foo' from dict_inner;
+----
+true true
+false false
+
+statement ok
+drop table dict_inner
+
+# Ensure that regexp_like is rewritten to use the (more optimized) regex operators
+statement ok
+create table regexp_test as values
+  ('foobar', 'i'),
+  ('Foo', 'i'),
+  ('bar', 'mi') ;
+
+# Expressions that can be rewritten to use the ~ operator (which is more optimized)
+# (expect the plans to use the ~ / ~* operators, not the REGEXP_LIKE function)
+query TT
+explain select
+  regexp_like(column1, 'fo.*'),
+  regexp_like(column1, 'fo.*', 'i'),
+from regexp_test;
+----
+logical_plan
+01)Projection: regexp_test.column1 ~ Utf8("fo.*") AS regexp_like(regexp_test.column1,Utf8("fo.*")), regexp_test.column1 ~* Utf8("fo.*") AS regexp_like(regexp_test.column1,Utf8("fo.*"),Utf8("i"))
+02)--TableScan: regexp_test projection=[column1]
+physical_plan
+01)ProjectionExec: expr=[column1@0 ~ fo.* as regexp_like(regexp_test.column1,Utf8("fo.*")), column1@0 ~* fo.* as regexp_like(regexp_test.column1,Utf8("fo.*"),Utf8("i"))]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query BB
+select
+  regexp_like(column1, 'fo.*'),
+  regexp_like(column1, 'fo.*', 'i'),
+from regexp_test;
+----
+true true
+false true
+false false
+
+# Expressions that can not be rewritten to use the ~ / ~* operators
+# (expect the plans to use the REGEXP_LIKE function)
+query TT
+explain select
+  regexp_like(column1, 'f.*r', 'mi'), -- args
+  regexp_like(column1, 'f.*r', column2) -- non scalar flags
+from regexp_test;
+----
+logical_plan
+01)Projection: regexp_like(regexp_test.column1, Utf8("f.*r"), Utf8("mi")), regexp_like(regexp_test.column1, Utf8("f.*r"), regexp_test.column2)
+02)--TableScan: regexp_test projection=[column1, column2]
+physical_plan
+01)ProjectionExec: expr=[regexp_like(column1@0, f.*r, mi) as regexp_like(regexp_test.column1,Utf8("f.*r"),Utf8("mi")), regexp_like(column1@0, f.*r, column2@1) as regexp_like(regexp_test.column1,Utf8("f.*r"),regexp_test.column2)]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query BB
+select
+  regexp_like(column1, 'f.*r', 'mi'), -- args
+  regexp_like(column1, 'f.*r', column2) -- non scalar flags
+from regexp_test;
+----
+true true
+false false
+false false
+
+query TT
+select * from regexp_test where regexp_like('f', regexp_replace((('v\r') like ('f_*sP6H1*')), '339629555', '-1459539013'));
+----
+
+
+statement ok
+drop table if exists dict_table;

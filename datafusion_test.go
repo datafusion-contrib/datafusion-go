@@ -35,11 +35,15 @@ func (r schemaOnlyReader) Read() (arrow.RecordBatch, error) {
 	return nil, io.EOF
 }
 
+func (r schemaOnlyReader) Close() error { return nil }
+
 type oneRecordReader struct {
 	rec       arrow.RecordBatch
 	readCount int
 	closed    bool
 }
+
+func (r *oneRecordReader) Schema() *arrow.Schema { return r.rec.Schema() }
 
 func (r *oneRecordReader) Read() (arrow.RecordBatch, error) {
 	r.readCount++

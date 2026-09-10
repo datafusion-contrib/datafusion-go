@@ -1,0 +1,108 @@
+name: SQLLogicTest
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sqllogictest-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sql:
+    name: Complete SQL corpus (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {platform: linux-amd64, runner: ubuntu-22.04}
+          - {platform: darwin-arm64, runner: macos-15}
+          - {platform: windows-amd64, runner: windows-2025}
+    env:
+      TOKIO_WORKER_THREADS: "4"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.27.1'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable branch
+        with:
+          toolchain: '1.96.0'
+          targets: ${{ matrix.platform == 'windows-amd64' && 'x86_64-pc-windows-gnu' || '' }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: rust -> target/sqllogictest
+          key: sqllogictest-${{ matrix.platform }}
+          cache-on-failure: true
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        if: matrix.platform == 'windows-amd64'
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+      - name: Run all SQL assertions
+        if: matrix.platform != 'windows-amd64'
+        run: |
+          python3 scripts/sqllogictest.py prepare
+          make test.sqllogic
+      - name: Run all SQL assertions (Windows)
+        if: matrix.platform == 'windows-amd64'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: '1'
+          CC: gcc
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: |
+          python3 scripts/sqllogictest.py prepare
+          make test.sqllogic
+      - name: Compare failed SQL files with native DataFusion
+        if: failure() && matrix.platform != 'windows-amd64'
+        timeout-minutes: 10
+        run: make test.sqllogic.oracle
+      - name: Compare failed SQL files with native DataFusion (Windows)
+        if: failure() && matrix.platform == 'windows-amd64'
+        timeout-minutes: 10
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: '1'
+          CC: gcc
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: make test.sqllogic.oracle
+      - name: Diagnose quarantined parallel spilling
+        if: ${{ !cancelled() && matrix.platform != 'windows-amd64' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: make test.sqllogic.spill
+      - name: Diagnose quarantined parallel spilling (Windows)
+        if: ${{ !cancelled() && matrix.platform == 'windows-amd64' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: '1'
+          CC: gcc
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: make test.sqllogic.spill
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: sqllogictest-${{ matrix.platform }}
+          path: .cache/sqllogictest/reports/current/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true

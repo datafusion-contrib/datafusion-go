@@ -1,0 +1,41 @@
+{
+  "repository": "scalytics/tpch-docker",
+  "commit": "3c1de87e8835068b875156b586ca145e8104b934",
+  "sha256": "2a28ca5229f3c731b8a8e5d11b641576866b79e448c5d0e6c6a15d8fee70f0b3",
+  "directory": "data/tpch/2.18.0_rc2/dbgen",
+  "scale": "0.1",
+  "files": {
+    "customer.tbl": {
+      "bytes": 2426114,
+      "sha256": "952d7f4ee8787657c94e488aae78524439f904fde9113382943ced58ba7895fa"
+    },
+    "lineitem.tbl": {
+      "bytes": 74246996,
+      "sha256": "6fe51474be8c04e04737c83f1cea2feaf3179e4f3bd6ba08c5065928d96ee60b"
+    },
+    "nation.tbl": {
+      "bytes": 2224,
+      "sha256": "66f96949939fa8fdf1c4ffed1e5f6c2842fe11a14b51fdc6ed1e17460031e8c5"
+    },
+    "orders.tbl": {
+      "bytes": 16893122,
+      "sha256": "5e9fabe33d7f15596225a00da871f8c18b3da76f515c91119840c7115c50d101"
+    },
+    "part.tbl": {
+      "bytes": 2391090,
+      "sha256": "f262984f0a5063d20b2aff651c5ac8ca1eea182b3ee75b6a5dab3854eb471997"
+    },
+    "partsupp.tbl": {
+      "bytes": 11728193,
+      "sha256": "9a50586162af988723fa2c64969454ca34840e9a602bb9fbc974b9c3808f6620"
+    },
+    "region.tbl": {
+      "bytes": 389,
+      "sha256": "6022658d673924389b54dcb70fa8c3d6da1b0d7afa3c1c017bab62a019df404f"
+    },
+    "supplier.tbl": {
+      "bytes": 139625,
+      "sha256": "75d5d11bd57607c5386295e74bb8edec4af5dd08d43c5831b67c224473be9a08"
+    }
+  }
+}

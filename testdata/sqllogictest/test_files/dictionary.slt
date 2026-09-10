@@ -1,0 +1,653 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Tests for querying on dictionary encoded data
+
+# Note: These tables model data as is common for timeseries, such as in InfluxDB IOx
+# There are three types of columns:
+# 1. tag columns, which are string dictionaries, often with low cardinality
+# 2. field columns, which are typed,
+# 3. a `time` columns, which is a nanosecond timestamp
+
+# It is common to group and filter on the "tag" columns (and thus on dictionary
+# encoded values)
+
+# Table m1 with a tag column `tag_id` 4 fields `f1` - `f4`, and `time`
+
+statement ok
+CREATE VIEW m1 AS
+SELECT
+    arrow_cast(column1, 'Dictionary(Int32, Utf8)') as tag_id,
+    arrow_cast(column2, 'Float64') as f1,
+    arrow_cast(column3, 'Utf8') as f2,
+    arrow_cast(column4, 'Utf8') as f3,
+    arrow_cast(column5, 'Float64') as f4,
+    arrow_cast(column6, 'Timestamp(ns)') as time
+FROM (
+    VALUES
+    -- equivalent to the following line protocol data
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=1.0 1703030400000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=2.0 1703031000000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=3.0 1703031600000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=4.0 1703032200000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=5.0 1703032800000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=6.0 1703033400000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=7.0 1703034000000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=8.0 1703034600000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=9.0 1703035200000000000
+    -- m1,tag_id=1000 f1=32,f2="foo",f3="True",f4=10.0 1703035800000000000
+    ('1000', 32, 'foo', 'True', 1.0, 1703030400000000000),
+    ('1000', 32, 'foo', 'True', 2.0, 1703031000000000000),
+    ('1000', 32, 'foo', 'True', 3.0, 1703031600000000000),
+    ('1000', 32, 'foo', 'True', 4.0, 1703032200000000000),
+    ('1000', 32, 'foo', 'True', 5.0, 1703032800000000000),
+    ('1000', 32, 'foo', 'True', 6.0, 1703033400000000000),
+    ('1000', 32, 'foo', 'True', 7.0, 1703034000000000000),
+    ('1000', 32, 'foo', 'True', 8.0, 1703034600000000000),
+    ('1000', 32, 'foo', 'True', 9.0, 1703035200000000000),
+    ('1000', 32, 'foo', 'True', 10.0, 1703035800000000000)
+);
+
+query TRTTRP
+SELECT * FROM m1;
+----
+1000 32 foo True 1 2023-12-20T00:00:00
+1000 32 foo True 2 2023-12-20T00:10:00
+1000 32 foo True 3 2023-12-20T00:20:00
+1000 32 foo True 4 2023-12-20T00:30:00
+1000 32 foo True 5 2023-12-20T00:40:00
+1000 32 foo True 6 2023-12-20T00:50:00
+1000 32 foo True 7 2023-12-20T01:00:00
+1000 32 foo True 8 2023-12-20T01:10:00
+1000 32 foo True 9 2023-12-20T01:20:00
+1000 32 foo True 10 2023-12-20T01:30:00
+
+# Note that te type of the tag column is `Dictionary(Int32, Utf8)`
+query TTT
+DESCRIBE m1;
+----
+tag_id Dictionary(Int32, Utf8) NO
+f1 Float64 NO
+f2 Utf8 NO
+f3 Utf8 NO
+f4 Float64 NO
+time Timestamp(ns) NO
+
+# in list with dictionary input
+query BBB
+SELECT
+    tag_id in ('1000'), '1000' in (tag_id, null), arrow_cast('999','Dictionary(Int32, Utf8)') in (tag_id, null)
+FROM m1
+----
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+true true NULL
+
+# Table m2 with a tag columns `tag_id` and `type`, a field column `f5`, and `time`
+statement ok
+CREATE VIEW m2 AS
+SELECT
+    arrow_cast(column1, 'Dictionary(Int32, Utf8)') as type,
+    arrow_cast(column2, 'Dictionary(Int32, Utf8)') as tag_id,
+    arrow_cast(column3, 'Float64') as f5,
+    arrow_cast(column4, 'Timestamp(ns)') as time
+FROM (
+    VALUES
+    -- equivalent to the following line protocol data
+    -- m2,type=active,tag_id=1000 f5=100 1701648000000000000
+    -- m2,type=active,tag_id=1000 f5=200 1701648600000000000
+    -- m2,type=active,tag_id=1000 f5=300 1701649200000000000
+    -- m2,type=active,tag_id=1000 f5=400 1701649800000000000
+    -- m2,type=active,tag_id=1000 f5=500 1701650400000000000
+    -- m2,type=active,tag_id=1000 f5=600 1701651000000000000
+    -- m2,type=passive,tag_id=2000 f5=700 1701651600000000000
+    -- m2,type=passive,tag_id=1000 f5=800 1701652200000000000
+    -- m2,type=passive,tag_id=1000 f5=900 1701652800000000000
+    -- m2,type=passive,tag_id=1000 f5=1000 1701653400000000000
+    ('active', '1000', 100, 1701648000000000000),
+    ('active', '1000', 200, 1701648600000000000),
+    ('active', '1000', 300, 1701649200000000000),
+    ('active', '1000', 400, 1701649800000000000),
+    ('active', '1000', 500, 1701650400000000000),
+    ('active', '1000', 600, 1701651000000000000),
+    ('passive', '1000', 700, 1701651600000000000),
+    ('passive', '1000', 800, 1701652200000000000),
+    ('passive', '1000', 900, 1701652800000000000),
+    ('passive', '1000', 1000, 1701653400000000000)
+);
+
+query TTRP
+SELECT * FROM m2;
+----
+active 1000 100 2023-12-04T00:00:00
+active 1000 200 2023-12-04T00:10:00
+active 1000 300 2023-12-04T00:20:00
+active 1000 400 2023-12-04T00:30:00
+active 1000 500 2023-12-04T00:40:00
+active 1000 600 2023-12-04T00:50:00
+passive 1000 700 2023-12-04T01:00:00
+passive 1000 800 2023-12-04T01:10:00
+passive 1000 900 2023-12-04T01:20:00
+passive 1000 1000 2023-12-04T01:30:00
+
+query TTT
+DESCRIBE m2;
+----
+type Dictionary(Int32, Utf8) NO
+tag_id Dictionary(Int32, Utf8) NO
+f5 Float64 NO
+time Timestamp(ns) NO
+
+query I
+select count(*) from m1 where tag_id = '1000' and time < '2024-01-03T14:46:35+01:00';
+----
+10
+
+query RRR rowsort
+select min(f5), max(f5), avg(f5) from m2 where tag_id = '1000' and time < '2024-01-03T14:46:35+01:00' group by type;
+----
+100 600 350
+700 1000 850
+
+query IRRRP
+select count(*), min(f5), max(f5), avg(f5), date_bin('30 minutes', time) as "time"
+from m2 where tag_id = '1000' and time < '2024-01-03T14:46:35+01:00'
+group by date_bin('30 minutes', time)
+order by date_bin('30 minutes', time) DESC
+----
+1 1000 1000 1000 2023-12-04T01:30:00
+3 700 900 800 2023-12-04T01:00:00
+3 400 600 500 2023-12-04T00:30:00
+3 100 300 200 2023-12-04T00:00:00
+
+# query with in list
+query BBBBBBBB
+SELECT
+    type in ('active', 'passive')
+    , 'active' in (type)
+    , 'active' in (type, null)
+    , arrow_cast('passive','Dictionary(Int8, Utf8)') in (type, null)
+    , tag_id in ('1000', '2000')
+    , tag_id in ('999')
+    , '1000' in (tag_id, null)
+    , arrow_cast('999','Dictionary(Int16, Utf8)') in (tag_id, null)
+FROM m2
+----
+true true true NULL true false true NULL
+true true true NULL true false true NULL
+true true true NULL true false true NULL
+true true true NULL true false true NULL
+true true true NULL true false true NULL
+true true true NULL true false true NULL
+true false NULL true true false true NULL
+true false NULL true true false true NULL
+true false NULL true true false true NULL
+true false NULL true true false true NULL
+
+
+# Reproducer for https://github.com/apache/datafusion/issues/8738
+# This query should work correctly
+query PTTT rowsort
+SELECT
+  "data"."timestamp" as "time",
+  "data"."tag_id",
+  "data"."field",
+  "data"."value"
+FROM (
+  (
+      SELECT "m2"."time" as "timestamp", "m2"."tag_id", 'active_power' as "field", "m2"."f5" as "value"
+        FROM "m2"
+       WHERE "m2"."time" >= '2023-12-05T14:46:35+01:00' AND "m2"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m2"."f5" IS NOT NULL
+         AND "m2"."type" IN ('active')
+         AND "m2"."tag_id" IN ('1000')
+  ) UNION (
+      SELECT "m1"."time" as "timestamp", "m1"."tag_id", 'f1' as "field", "m1"."f1" as "value"
+        FROM "m1"
+       WHERE "m1"."time" >= '2023-12-05T14:46:35+01:00' AND "m1"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m1"."f1" IS NOT NULL
+         AND "m1"."tag_id" IN ('1000')
+  ) UNION (
+      SELECT "m1"."time" as "timestamp", "m1"."tag_id", 'f2' as "field", "m1"."f2" as "value"
+        FROM "m1"
+       WHERE "m1"."time" >= '2023-12-05T14:46:35+01:00' AND "m1"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m1"."f2" IS NOT NULL
+         AND "m1"."tag_id" IN ('1000')
+  )
+) as "data"
+ORDER BY
+  "time",
+  "data"."tag_id"
+;
+----
+2023-12-20T00:00:00 1000 f1 32.0
+2023-12-20T00:00:00 1000 f2 foo
+2023-12-20T00:10:00 1000 f1 32.0
+2023-12-20T00:10:00 1000 f2 foo
+2023-12-20T00:20:00 1000 f1 32.0
+2023-12-20T00:20:00 1000 f2 foo
+2023-12-20T00:30:00 1000 f1 32.0
+2023-12-20T00:30:00 1000 f2 foo
+2023-12-20T00:40:00 1000 f1 32.0
+2023-12-20T00:40:00 1000 f2 foo
+2023-12-20T00:50:00 1000 f1 32.0
+2023-12-20T00:50:00 1000 f2 foo
+2023-12-20T01:00:00 1000 f1 32.0
+2023-12-20T01:00:00 1000 f2 foo
+2023-12-20T01:10:00 1000 f1 32.0
+2023-12-20T01:10:00 1000 f2 foo
+2023-12-20T01:20:00 1000 f1 32.0
+2023-12-20T01:20:00 1000 f2 foo
+2023-12-20T01:30:00 1000 f1 32.0
+2023-12-20T01:30:00 1000 f2 foo
+
+
+# deterministic sort (so we can avoid rowsort)
+query PTTT
+SELECT
+  "data"."timestamp" as "time",
+  "data"."tag_id",
+  "data"."field",
+  "data"."value"
+FROM (
+  (
+      SELECT "m2"."time" as "timestamp", "m2"."tag_id", 'active_power' as "field", "m2"."f5" as "value"
+        FROM "m2"
+       WHERE "m2"."time" >= '2023-12-05T14:46:35+01:00' AND "m2"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m2"."f5" IS NOT NULL
+         AND "m2"."type" IN ('active')
+         AND "m2"."tag_id" IN ('1000')
+  ) UNION (
+      SELECT "m1"."time" as "timestamp", "m1"."tag_id", 'f1' as "field", "m1"."f1" as "value"
+        FROM "m1"
+       WHERE "m1"."time" >= '2023-12-05T14:46:35+01:00' AND "m1"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m1"."f1" IS NOT NULL
+         AND "m1"."tag_id" IN ('1000')
+  ) UNION (
+      SELECT "m1"."time" as "timestamp", "m1"."tag_id", 'f2' as "field", "m1"."f2" as "value"
+        FROM "m1"
+       WHERE "m1"."time" >= '2023-12-05T14:46:35+01:00' AND "m1"."time" < '2024-01-03T14:46:35+01:00'
+         AND "m1"."f2" IS NOT NULL
+         AND "m1"."tag_id" IN ('1000')
+  )
+) as "data"
+ORDER BY
+  "time",
+  "data"."tag_id",
+  "data"."field",
+  "data"."value"
+;
+----
+2023-12-20T00:00:00 1000 f1 32.0
+2023-12-20T00:00:00 1000 f2 foo
+2023-12-20T00:10:00 1000 f1 32.0
+2023-12-20T00:10:00 1000 f2 foo
+2023-12-20T00:20:00 1000 f1 32.0
+2023-12-20T00:20:00 1000 f2 foo
+2023-12-20T00:30:00 1000 f1 32.0
+2023-12-20T00:30:00 1000 f2 foo
+2023-12-20T00:40:00 1000 f1 32.0
+2023-12-20T00:40:00 1000 f2 foo
+2023-12-20T00:50:00 1000 f1 32.0
+2023-12-20T00:50:00 1000 f2 foo
+2023-12-20T01:00:00 1000 f1 32.0
+2023-12-20T01:00:00 1000 f2 foo
+2023-12-20T01:10:00 1000 f1 32.0
+2023-12-20T01:10:00 1000 f2 foo
+2023-12-20T01:20:00 1000 f1 32.0
+2023-12-20T01:20:00 1000 f2 foo
+2023-12-20T01:30:00 1000 f1 32.0
+2023-12-20T01:30:00 1000 f2 foo
+
+# Cleanup
+statement ok
+drop view m1;
+
+statement ok
+drop view m2;
+
+######
+# Create a table using UNION ALL to get 2 partitions (very important)
+######
+statement ok
+create table m3_source as
+    select * from (values('foo', 'bar', 1))
+    UNION ALL
+    select * from (values('foo', 'baz', 1));
+
+######
+# Now, create a table with the same data, but column2 has type `Dictionary(Int32)` to trigger the fallback code
+######
+statement ok
+create table m3 as
+  select
+    column1,
+    arrow_cast(column2, 'Dictionary(Int32, Utf8)') as "column2",
+    column3
+from m3_source;
+
+# there are two values in column2
+query TTI rowsort
+SELECT *
+FROM m3;
+----
+foo bar 1
+foo baz 1
+
+# There is 1 distinct value in column1
+query I
+SELECT count(distinct column1)
+FROM m3
+GROUP BY column3;
+----
+1
+
+# There are 2 distinct values in column2
+query I
+SELECT count(distinct column2)
+FROM m3
+GROUP BY column3;
+----
+2
+
+# Should still get the same results when querying in the same query
+query II
+SELECT count(distinct column1), count(distinct column2)
+FROM m3
+GROUP BY column3;
+----
+1 2
+
+
+# Cleanup
+statement ok
+drop table m3;
+
+statement ok
+drop table m3_source;
+
+
+## Test that filtering on dictionary columns coerces the filter value to the dictionary type
+statement ok
+create table test as values
+  ('row1', arrow_cast('1', 'Dictionary(Int32, Utf8)')),
+  ('row2', arrow_cast('2', 'Dictionary(Int32, Utf8)')),
+  ('row3', arrow_cast('3', 'Dictionary(Int32, Utf8)'))
+;
+
+# query using an string '1' which must be coerced into a dictionary string
+query TT
+SELECT * from test where column2 = '1';
+----
+row1 1
+
+# filter should not have a cast on column2
+query TT
+explain SELECT * from test where column2 = '1';
+----
+logical_plan
+01)Filter: test.column2 = Dictionary(Int32, Utf8("1"))
+02)--TableScan: test projection=[column1, column2]
+physical_plan
+01)FilterExec: column2@1 = 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+# try literal = col to verify order doesn't matter
+# filter should not cast column2
+query TT
+explain SELECT * from test where '1' = column2
+----
+logical_plan
+01)Filter: test.column2 = Dictionary(Int32, Utf8("1"))
+02)--TableScan: test projection=[column1, column2]
+physical_plan
+01)FilterExec: column2@1 = 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+
+# Query using an integer literal: comparison coercion prefers numeric types,
+# so the dictionary string column is cast to Int64
+query TT
+SELECT * from test where column2 = 1;
+----
+row1 1
+
+query TT
+explain SELECT * from test where column2 = 1;
+----
+logical_plan
+01)Filter: CAST(test.column2 AS Int64) = Int64(1)
+02)--TableScan: test projection=[column1, column2]
+physical_plan
+01)FilterExec: CAST(column2@1 AS Int64) = 1
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+# Window Functions
+query I
+select dense_rank() over (order by arrow_cast('abc', 'Dictionary(UInt16, Utf8)'));
+----
+1
+
+# Test dictionary encoded column to partition column casting
+statement ok
+CREATE TABLE test0 AS VALUES ('foo',1), ('bar',2), ('foo',3);
+
+statement ok
+COPY (SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS column1, column2 FROM test0) TO 'test_files/scratch/dictionary/part_dict_test' STORED AS PARQUET PARTITIONED BY (column1);
+
+
+# Dictionary-encoded large hashes repeated across 10 rows (3 unique hashes)
+statement ok
+CREATE TABLE dict_hash_src AS
+SELECT
+  arrow_cast(column1, 'Int64') AS id,
+  arrow_cast(column2, 'Dictionary(Int32, Utf8)') AS payload_hash,
+  arrow_cast(column3, 'Float64') AS metric,
+  arrow_cast(column4, 'Timestamp(ns)') AS ts
+FROM (
+  VALUES
+    (1,  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', 10.0, 1703030400000000000),
+    (2,  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', 11.0, 1703031000000000000),
+    (3,  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', 12.0, 1703031600000000000),
+    (4,  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08', 13.0, 1703032200000000000),
+    (5,  '1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53', 14.0, 1703032800000000000),
+    (6,  '1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53', 15.0, 1703033400000000000),
+    (7,  '1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53', 16.0, 1703034000000000000),
+    (8,  '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b', 17.0, 1703034600000000000),
+    (9,  '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b', 18.0, 1703035200000000000),
+    (10, '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b', 19.0, 1703035800000000000)
+);
+
+statement ok
+COPY dict_hash_src
+TO 'test_files/scratch/dictionary/dict_hash_10.parquet'
+STORED AS PARQUET;
+
+statement ok
+CREATE EXTERNAL TABLE dict_hash_10
+STORED AS PARQUET
+LOCATION 'test_files/scratch/dictionary/dict_hash_10.parquet';
+
+query TTT
+DESCRIBE dict_hash_10;
+----
+id Int64 NO
+payload_hash Dictionary(Int32, Utf8) NO
+metric Float64 NO
+ts Timestamp(ns) NO
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT payload_hash)
+FROM dict_hash_10;
+----
+10 3
+
+query I
+SELECT COUNT(*)
+FROM dict_hash_10
+WHERE payload_hash = '1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53';
+----
+3
+
+statement ok
+DROP TABLE dict_hash_10;
+
+statement ok
+DROP TABLE dict_hash_src;
+
+statement ok
+CREATE TABLE dict_large_utf8 AS
+SELECT
+  arrow_cast(column1, 'Dictionary(Int32, LargeUtf8)') AS tag,
+  arrow_cast(column2, 'Float64') AS val
+FROM (VALUES ('alpha', 1.0), ('beta', 2.0), ('alpha', 3.0), ('gamma', 4.0), ('beta', 5.0), (NULL, 6.0));
+
+query TRI rowsort
+SELECT tag, SUM(val), COUNT(*) FROM dict_large_utf8 GROUP BY tag;
+----
+NULL 6 1
+alpha 4 2
+beta 7 2
+gamma 4 1
+
+statement ok
+DROP TABLE dict_large_utf8;
+
+# multiple dictionary columns as group keys
+
+statement ok
+CREATE TABLE dict_multi_key AS
+SELECT
+  arrow_cast(column1, 'Dictionary(Int32, Utf8)')  AS region,
+  arrow_cast(column2, 'Dictionary(Int16, Utf8)')  AS status,
+  arrow_cast(column3, 'Dictionary(Int8,  Utf8)')  AS tier,
+  arrow_cast(column4, 'Float64') AS amount
+FROM (
+  VALUES
+    ('us', 'active',   'gold',   100.0),
+    ('eu', 'active',   'silver', 200.0),
+    ('us', 'active',   'gold',   300.0),
+    ('eu', 'inactive', 'gold',   400.0),
+    ('us', 'inactive', 'silver', 500.0),
+    ('eu', 'inactive', 'gold',   600.0),
+    ('us', 'active',   'silver', 150.0),
+    ('eu', 'active',   'silver', 250.0),
+    (NULL, 'active',   'gold',   700.0)
+);
+
+query TTTRI rowsort
+SELECT region, status, tier, SUM(amount), COUNT(*) FROM dict_multi_key GROUP BY region, status, tier;
+----
+NULL active gold 700 1
+eu active silver 450 2
+eu inactive gold 1000 2
+us active gold 400 2
+us active silver 150 1
+us inactive silver 500 1
+
+statement ok
+DROP TABLE dict_multi_key;
+
+# mixed dict (2) and non-dict (2) group keys with nulls spread across all columns
+
+statement ok
+CREATE TABLE dict_mixed_nulls AS
+SELECT
+  arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS region,
+  arrow_cast(column2, 'Dictionary(Int16, Utf8)') AS status,
+  arrow_cast(column3, 'Utf8') AS tier,
+  arrow_cast(column4, 'Int32') AS category,
+  arrow_cast(column5, 'Float64') AS amount
+FROM (
+  VALUES
+    ('us', 'active', 'gold',   1,    100.0),
+    ('us', 'active', 'gold',   1,    200.0),
+    ('eu', 'active', 'silver', 2,    300.0),
+    (NULL, 'active', 'gold',   1,    400.0),
+    ('us',  NULL,    'gold',   1,    500.0),
+    ('us', 'active',  NULL,    1,    600.0),
+    ('us', 'active', 'gold',   NULL, 700.0)
+);
+
+query TTTIRI rowsort
+SELECT region, status, tier, category, SUM(amount), COUNT(*) FROM dict_mixed_nulls GROUP BY region, status, tier, category;
+----
+NULL active gold 1 400 1
+eu active silver 2 300 1
+us NULL gold 1 500 1
+us active NULL 1 600 1
+us active gold 1 300 2
+us active gold NULL 700 1
+
+statement ok
+DROP TABLE dict_mixed_nulls;
+
+##########
+## Aggregation tests: COUNT(DISTINCT) on dictionary columns
+##########
+
+statement ok
+CREATE TABLE dict_count_distinct AS
+SELECT
+  arrow_cast(column1, 'Dictionary(Int64, Utf8)') AS region,
+  arrow_cast(column2, 'Dictionary(Int8, Utf8)') AS sensor
+FROM (
+  VALUES
+    ('north', 's1'), ('north', 's2'), ('north', 's1'), ('north', 's3'),
+    ('south', 's3'), ('south', 's3'), ('south', 's4'),
+    ('east',  's1'),
+    (NULL,    's5'),
+    ('north', NULL)
+);
+
+query TI rowsort
+SELECT region, COUNT(DISTINCT sensor) FROM dict_count_distinct GROUP BY region;
+----
+NULL 1
+east 1
+north 3
+south 2
+
+statement ok
+DROP TABLE dict_count_distinct;
+
+# same dictionary type but value order differs across batches so key ids refer to different strings;
+# grouping must use the logical value, not the raw key id
+query TI rowsort
+WITH
+  first_batch AS (
+    SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS region
+    FROM (VALUES ('west'), ('west'), ('west'), ('east'), (NULL)) AS t(column1)
+  ),
+  second_batch AS (
+    SELECT arrow_cast(column1, 'Dictionary(Int32, Utf8)') AS region
+    FROM (VALUES ('east'), ('east'), ('east'), ('west'), (NULL)) AS t(column1)
+  )
+SELECT region, count(*)
+FROM (SELECT region FROM first_batch UNION ALL SELECT region FROM second_batch)
+GROUP BY region;
+----
+NULL 2
+east 4
+west 4

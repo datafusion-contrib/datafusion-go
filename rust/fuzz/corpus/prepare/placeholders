@@ -1,0 +1,2 @@
+select '雪?' as literal, ? as first, -- ? comment
+  'Ω' || ? as second, /* ? block */ ? as third

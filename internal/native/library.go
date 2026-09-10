@@ -29,6 +29,10 @@ const (
 //go:embed lib/SHA256SUMS
 var nativeChecksumManifest string
 
+// Kept as a dependency so installation tests can use a private cache in a
+// fresh process without changing the user's home directory or platform rules.
+var nativeUserCacheDir = os.UserCacheDir
+
 func resolveNativeLibrary() (string, error) {
 	return resolveNativeLibraryForExecution(secureExecution())
 }
@@ -81,7 +85,7 @@ func downloadNativeLibrary() (string, error) {
 		return "", fmt.Errorf("datafusion-go release checksums do not include %s; set %s to a compatible libdatafusion_go shared library", asset, nativeLibraryEnv)
 	}
 
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := nativeUserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("could not locate user cache directory for datafusion-go native library: %w", err)
 	}

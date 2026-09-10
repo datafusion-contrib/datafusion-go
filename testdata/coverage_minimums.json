@@ -1,0 +1,15 @@
+{
+  "Go .": 75,
+  "Go internal/native": 80,
+  "Go internal/conformance": 90,
+  "Go internal/tools/genabi": 85,
+  "Go internal/tools/genversions": 85,
+  "Rust rust/src/abi.rs": 80,
+  "Rust rust/src/error.rs": 85,
+  "Rust rust/src/parameters.rs": 75,
+  "Rust rust/src/query.rs": 80,
+  "Rust rust/src/registration.rs": 95,
+  "Rust rust/src/session.rs": 90,
+  "Rust rust/src/stream.rs": 95,
+  "C internal/native/dynamic_loader.h": 75
+}

@@ -184,13 +184,8 @@ func namedValues(args []any) ([]driver.NamedValue, error) {
 	return named, nil
 }
 
-func closeReader(reader arrio.Reader) {
-	switch closer := reader.(type) {
-	case interface{ Close() error }:
-		_ = closer.Close()
-	case interface{ Close() }:
-		closer.Close()
-	}
+func closeReader(reader interface{ Close() error }) {
+	_ = reader.Close()
 }
 
 type serializedArrowReader struct {

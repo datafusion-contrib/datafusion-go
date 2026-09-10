@@ -9,7 +9,6 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
-	"github.com/apache/arrow-go/v18/arrow/arrio"
 )
 
 type result struct {
@@ -24,7 +23,7 @@ func (r result) RowsAffected() (int64, error) {
 	return r.rowsAffected, nil
 }
 
-func execResult(reader arrio.Reader) (driver.Result, error) {
+func execResult(reader ArrowReader) (driver.Result, error) {
 	defer closeReader(reader)
 
 	var rowsAffected int64

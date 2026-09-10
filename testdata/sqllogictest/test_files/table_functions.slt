@@ -1,0 +1,634 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Test generate_series table function
+query I
+SELECT * FROM generate_series(6)
+----
+0
+1
+2
+3
+4
+5
+6
+
+
+
+query I rowsort
+SELECT * FROM generate_series(1, 5)
+----
+1
+2
+3
+4
+5
+
+query I rowsort
+SELECT * FROM generate_series(1, 1)
+----
+1
+
+query I rowsort
+SELECT * FROM generate_series(3, 6)
+----
+3
+4
+5
+6
+
+# #generated_data > batch_size
+query I
+SELECT count(v1) FROM generate_series(-66666,66666) t1(v1)
+----
+133333
+
+
+
+
+query I rowsort
+SELECT SUM(v1) FROM generate_series(1, 5) t1(v1)
+----
+15
+
+query I
+SELECT * FROM generate_series(6, -1, -2)
+----
+6
+4
+2
+0
+
+query I
+SELECT * FROM generate_series(6, 66, 666)
+----
+6
+
+
+
+# Test generate_series with WHERE clause
+query I rowsort
+SELECT * FROM generate_series(1, 10) t1(v1) WHERE v1 % 2 = 0
+----
+10
+2
+4
+6
+8
+
+# Test generate_series with ORDER BY
+query I
+SELECT * FROM generate_series(1, 5) t1(v1) ORDER BY v1 DESC
+----
+5
+4
+3
+2
+1
+
+# Ensures the physical plan doesn't include `SortExec`.
+# Tests that generate_series() on Int64 auto-detects output sort order.
+query TT
+EXPLAIN FORMAT INDENT SELECT * FROM generate_series(100000) AS t1(v1) ORDER BY v1
+----
+logical_plan
+01)Sort: t1.v1 ASC NULLS LAST
+02)--SubqueryAlias: t1
+03)----Projection: generate_series().value AS v1
+04)------TableScan: generate_series() projection=[value]
+physical_plan
+01)ProjectionExec: expr=[value@0 as v1]
+02)--LazyMemoryExec: partitions=1, batch_generators=[generate_series: start=0, end=100000, batch_size=8192]
+
+# Test generate_series with LIMIT
+query I rowsort
+SELECT * FROM generate_series(1, 100) t1(v1) LIMIT 5
+----
+1
+2
+3
+4
+5
+
+# Test generate_series in subquery
+query I rowsort
+SELECT v1 + 10 FROM (SELECT * FROM generate_series(1, 3) t1(v1))
+----
+11
+12
+13
+
+# Test generate_series with JOIN
+query II rowsort
+SELECT a.v1, b.v1
+FROM generate_series(1, 3) a(v1)
+JOIN generate_series(2, 4) b(v1)
+ON a.v1 = b.v1 - 1
+----
+1 2
+2 3
+3 4
+
+#
+# Test generate_series with null arguments
+#
+
+query I
+SELECT * FROM generate_series(NULL, 5)
+----
+
+query I
+SELECT * FROM generate_series(1, NULL)
+----
+
+query I
+SELECT * FROM generate_series(NULL, NULL)
+----
+
+query I
+SELECT * FROM generate_series(1, 5, NULL)
+----
+
+
+query TT
+EXPLAIN SELECT * FROM generate_series(1, 5)
+----
+logical_plan TableScan: generate_series() projection=[value]
+physical_plan LazyMemoryExec: partitions=1, batch_generators=[generate_series: start=1, end=5, batch_size=8192]
+
+#
+# Test generate_series with invalid arguments
+#
+
+query I
+SELECT * FROM generate_series(5, 1)
+----
+
+query I
+SELECT * FROM generate_series(-6, 6, -1)
+----
+
+query error DataFusion error: Error during planning: Step cannot be zero
+SELECT * FROM generate_series(-6, 6, 0)
+
+query I
+SELECT * FROM generate_series(6, -6, 1)
+----
+
+
+statement error DataFusion error: Error during planning: generate_series function requires 1 to 3 arguments
+SELECT * FROM generate_series(1, 2, 3, 4)
+
+
+statement error DataFusion error: Error during planning: Argument \#1 must be an INTEGER, TIMESTAMP, DATE or NULL, got Utf8
+SELECT * FROM generate_series('foo', 'bar')
+
+# Regression test for https://github.com/apache/datafusion/issues/22208
+# A step that would overflow i64 after the last reachable value must return the
+# reachable values instead of panicking, matching PostgreSQL/DuckDB behavior.
+query I
+SELECT * FROM generate_series(9223372036854775806, 9223372036854775807, 2)
+----
+9223372036854775806
+
+# Same, in the descending direction
+query I
+SELECT * FROM generate_series(-9223372036854775806, -9223372036854775808, -2)
+----
+-9223372036854775806
+-9223372036854775808
+
+# Landing exactly on i64::MAX must include it
+query I
+SELECT * FROM generate_series(9223372036854775805, 9223372036854775807, 2)
+----
+9223372036854775805
+9223372036854775807
+
+# Same overflow behavior for `range` (end exclusive)
+query I
+SELECT * FROM range(9223372036854775806, 9223372036854775807, 2)
+----
+9223372036854775806
+
+# Regression test for https://github.com/apache/datafusion/issues/22193
+# Dates outside the nanosecond timestamp range must produce a clean planning
+# error instead of panicking (debug) or silently wrapping (release).
+statement error DataFusion error: Error during planning: First argument for generate_series is out of range of nanosecond timestamps
+SELECT * FROM generate_series(DATE '0001-01-01', DATE '2000-01-01', INTERVAL '1' DAY)
+
+statement error DataFusion error: Error during planning: Second argument for generate_series is out of range of nanosecond timestamps
+SELECT * FROM generate_series(DATE '2000-01-01', DATE '3000-01-01', INTERVAL '1' DAY)
+
+# Reaching the maximum representable date must not attempt to advance beyond it.
+query P
+SELECT * FROM generate_series(DATE '2262-04-11', DATE '2262-04-11', INTERVAL '1' DAY)
+----
+2262-04-11T00:00:00
+
+# Same for the maximum representable nanosecond timestamp.
+query P
+SELECT * FROM generate_series(TIMESTAMP '2262-04-11T23:47:16.854775807', TIMESTAMP '2262-04-11T23:47:16.854775807', INTERVAL '1' NANOSECOND)
+----
+2262-04-11T23:47:16.854775807
+
+# A timestamp step that exceeds the nanosecond range must terminate after the
+# last reachable value instead of returning an overflow error.
+query P
+SELECT * FROM generate_series(TIMESTAMP '2262-04-11T23:47:16.854775806', TIMESTAMP '2262-04-11T23:47:16.854775807', INTERVAL '2' NANOSECOND)
+----
+2262-04-11T23:47:16.854775806
+
+# Same behavior for date series, which use the timestamp implementation.
+query P
+SELECT * FROM generate_series(DATE '2262-04-10', DATE '2262-04-11', INTERVAL '2' DAY)
+----
+2262-04-10T00:00:00
+
+# UDF and UDTF `generate_series` can be used simultaneously
+query ? rowsort
+SELECT generate_series(1, t1.end) FROM generate_series(3, 5) as t1(end)
+----
+[1, 2, 3, 4, 5]
+[1, 2, 3, 4]
+[1, 2, 3]
+
+# join with projection on generate_series
+query I
+select g1.value from generate_series(1, 3) g1 CROSS JOIN generate_series(1, 3) g2;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+
+# Test range table function
+query I
+SELECT * FROM range(6)
+----
+0
+1
+2
+3
+4
+5
+
+
+
+query I rowsort
+SELECT * FROM range(1, 5)
+----
+1
+2
+3
+4
+
+query I rowsort
+SELECT * FROM range(1, 1)
+----
+
+query I rowsort
+SELECT * FROM range(3, 6)
+----
+3
+4
+5
+
+query I rowsort
+SELECT * FROM range(1, 1+2)
+----
+1
+2
+
+# #generated_data > batch_size
+query I
+SELECT count(v1) FROM range(-66666,66666) t1(v1)
+----
+133332
+
+query I rowsort
+SELECT SUM(v1) FROM range(1, 5) t1(v1)
+----
+10
+
+query I
+SELECT * FROM range(6, -1, -2)
+----
+6
+4
+2
+0
+
+query I
+SELECT * FROM range(6, 66, 666)
+----
+6
+
+
+
+#
+# Test range with null arguments
+#
+
+query I
+SELECT * FROM range(NULL, 5)
+----
+
+query I
+SELECT * FROM range(1, NULL)
+----
+
+query I
+SELECT * FROM range(NULL, NULL)
+----
+
+query I
+SELECT * FROM range(1, 5, NULL)
+----
+
+
+query TT
+EXPLAIN SELECT * FROM range(1, 5)
+----
+logical_plan TableScan: range() projection=[value]
+physical_plan LazyMemoryExec: partitions=1, batch_generators=[range: start=1, end=5, batch_size=8192]
+
+#
+# Test range with invalid arguments
+#
+
+query I
+SELECT * FROM range(5, 1)
+----
+
+query I
+SELECT * FROM range(-6, 6, -1)
+----
+
+query error DataFusion error: Error during planning: Step cannot be zero
+SELECT * FROM range(-6, 6, 0)
+
+query I
+SELECT * FROM range(6, -6, 1)
+----
+
+
+statement error DataFusion error: Error during planning: range function requires 1 to 3 arguments
+SELECT * FROM range(1, 2, 3, 4)
+
+
+statement error DataFusion error: Error during planning: Argument \#1 must be an INTEGER, TIMESTAMP, DATE or NULL, got Utf8
+SELECT * FROM range('foo', 'bar')
+
+statement error DataFusion error: Error during planning: Argument #2 must be an INTEGER or NULL, got Literal\(Utf8\("bar"\), None\)
+SELECT * FROM range(1, 'bar')
+
+# UDF and UDTF `range` can be used simultaneously
+query ? rowsort
+SELECT range(1, t1.end) FROM range(3, 5) as t1(end)
+----
+[1, 2, 3]
+[1, 2]
+
+#
+# Test timestamp ranges
+#
+
+# Basic timestamp range with 1 day interval
+query P rowsort
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-04T00:00:00', INTERVAL '1' DAY)
+----
+2023-01-01T00:00:00
+2023-01-02T00:00:00
+2023-01-03T00:00:00
+
+# Timestamp range with hour interval
+query P rowsort
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-01T03:00:00', INTERVAL '1' HOUR)
+----
+2023-01-01T00:00:00
+2023-01-01T01:00:00
+2023-01-01T02:00:00
+
+# Timestamp range with month interval
+query P rowsort
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-04-01T00:00:00', INTERVAL '1' MONTH)
+----
+2023-01-01T00:00:00
+2023-02-01T00:00:00
+2023-03-01T00:00:00
+
+# Timestamp generate_series (includes end)
+query P rowsort
+SELECT * FROM generate_series(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-03T00:00:00', INTERVAL '1' DAY)
+----
+2023-01-01T00:00:00
+2023-01-02T00:00:00
+2023-01-03T00:00:00
+
+# Timestamp range with timezone
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00+00:00', TIMESTAMP '2023-01-03T00:00:00+00:00', INTERVAL '1' DAY)
+----
+2023-01-01T00:00:00
+2023-01-02T00:00:00
+
+# Negative timestamp range (going backwards)
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-03T00:00:00', TIMESTAMP '2023-01-01T00:00:00', INTERVAL '-1' DAY)
+----
+2023-01-03T00:00:00
+2023-01-02T00:00:00
+
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-03T00:00:00', TIMESTAMP '2023-01-01T00:00:00', INTERVAL '1' DAY)
+----
+
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-02T00:00:00', INTERVAL '-1' DAY)
+----
+
+query error DataFusion error: Error during planning: range function with timestamps requires exactly 3 arguments
+SELECT * FROM range(TIMESTAMP '2023-01-03T00:00:00', TIMESTAMP '2023-01-01T00:00:00')
+
+# Single timestamp (start == end)
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-01T00:00:00', INTERVAL '1' DAY)
+----
+
+# Timestamp range with NULL values
+query P
+SELECT * FROM range(NULL::TIMESTAMP, TIMESTAMP '2023-01-03T00:00:00', INTERVAL '1' DAY)
+----
+
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', NULL::TIMESTAMP, INTERVAL '1' DAY)
+----
+
+# No interval gives no rows
+query P
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-03T00:00:00', NULL::INTERVAL)
+----
+
+# Zero-length interval gives error
+query error DataFusion error: Error during planning: Step interval cannot be zero
+SELECT * FROM range(TIMESTAMP '2023-01-01T00:00:00', TIMESTAMP '2023-01-03T00:00:00', INTERVAL '0' DAY)
+
+# Timezone-aware
+query P
+SELECT * FROM range(TIMESTAMPTZ '2023-02-01T00:00:00-07:00', TIMESTAMPTZ '2023-02-01T09:00:00+01:00', INTERVAL '1' HOUR);
+----
+2023-02-01T07:00:00
+
+# Basic date range with hour interval
+query P
+SELECT * FROM range(DATE '1992-01-01', DATE '1992-01-03', INTERVAL '6' HOUR);
+----
+1992-01-01T00:00:00
+1992-01-01T06:00:00
+1992-01-01T12:00:00
+1992-01-01T18:00:00
+1992-01-02T00:00:00
+1992-01-02T06:00:00
+1992-01-02T12:00:00
+1992-01-02T18:00:00
+
+# Date range with day interval
+query P
+SELECT * FROM range(DATE '1992-09-01', DATE '1992-09-05', INTERVAL '1' DAY);
+----
+1992-09-01T00:00:00
+1992-09-02T00:00:00
+1992-09-03T00:00:00
+1992-09-04T00:00:00
+
+# Date range with month interval
+query P
+SELECT * FROM range(DATE '1992-09-01', DATE '1993-01-01', INTERVAL '1' MONTH);
+----
+1992-09-01T00:00:00
+1992-10-01T00:00:00
+1992-11-01T00:00:00
+1992-12-01T00:00:00
+
+# Date range generate_series includes end
+query P
+SELECT * FROM generate_series(DATE '1992-09-01', DATE '1992-09-03', INTERVAL '1' DAY);
+----
+1992-09-01T00:00:00
+1992-09-02T00:00:00
+1992-09-03T00:00:00
+
+query TT
+EXPLAIN SELECT * FROM generate_series(DATE '1992-09-01', DATE '1992-09-03', INTERVAL '1' DAY);
+----
+logical_plan TableScan: generate_series() projection=[value]
+physical_plan LazyMemoryExec: partitions=1, batch_generators=[generate_series: start=715305600000000000, end=715478400000000000, batch_size=8192]
+
+# Backwards date range
+query P
+SELECT * FROM range(DATE '1992-09-05', DATE '1992-09-01', INTERVAL '-1' DAY);
+----
+1992-09-05T00:00:00
+1992-09-04T00:00:00
+1992-09-03T00:00:00
+1992-09-02T00:00:00
+
+# NULL handling for dates
+query P
+SELECT * FROM range(DATE '1992-09-01', NULL::DATE, INTERVAL '1' MONTH)
+----
+
+query TT
+EXPLAIN SELECT * FROM range(DATE '1992-09-01', NULL::DATE, INTERVAL '1' MONTH)
+----
+logical_plan TableScan: range() projection=[value]
+physical_plan LazyMemoryExec: partitions=1, batch_generators=[range: empty]
+
+query P
+SELECT * FROM range(NULL::DATE, DATE '1992-09-01', INTERVAL '1' MONTH)
+----
+
+query P
+SELECT * FROM range(DATE '1992-09-01', DATE '1992-10-01', NULL::INTERVAL)
+----
+
+query P
+SELECT * FROM range(DATE '2023-01-03', DATE '2023-01-01', INTERVAL '1' DAY)
+----
+
+query P
+SELECT * FROM range(DATE '2023-01-01', DATE '2023-01-02', INTERVAL '-1' DAY)
+----
+
+query error DataFusion error: Error during planning: range function with dates requires exactly 3 arguments
+SELECT * FROM range(DATE '2023-01-01', DATE '2023-01-03')
+
+# Table function as relation
+statement ok
+CREATE OR REPLACE TABLE json_table (c INT) AS VALUES (1), (2);
+
+query II
+SELECT c, f.*  FROM json_table, LATERAL generate_series(1,2) f;
+----
+1 1
+1 2
+2 1
+2 2
+
+
+# Test generate_series in a recursive CTE to ensure the state is correctly reset
+query I rowsort
+WITH RECURSIVE t AS (
+    SELECT 1 i
+    UNION ALL
+    SELECT g.i
+    FROM generate_series(1, 1) g(i), t
+)
+SELECT *
+FROM t
+LIMIT 10;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+# Test that unsupported function argument types are properly reported
+# rather than being silently dropped (which previously caused a misleading
+# "requires 1 to 3 arguments" error instead)
+
+statement error DataFusion error: Error during planning: Unsupported function argument type: start => 1
+SELECT * FROM generate_series(start => 1, stop => 5)
+
+statement error DataFusion error: Error during planning: Unsupported function argument type: \*
+SELECT * FROM generate_series(*)
+
+statement error DataFusion error: Error during planning: Unsupported function argument type: t\.\*
+SELECT * FROM generate_series(t.*)

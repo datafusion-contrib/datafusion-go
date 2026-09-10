@@ -91,7 +91,6 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
-	"github.com/apache/arrow-go/v18/arrow/arrio"
 	"github.com/apache/arrow-go/v18/arrow/cdata"
 )
 
@@ -417,7 +416,7 @@ func (stmt *Statement) Serializes() bool {
 	return C.dfgo_statement_serializes(stmt.ptr) != 0
 }
 
-func (stmt *Statement) ExecuteArrow(ctx context.Context, args []driver.NamedValue) (arrio.Reader, error) {
+func (stmt *Statement) ExecuteArrow(ctx context.Context, args []driver.NamedValue) (RecordReader, error) {
 	if stmt == nil || stmt.ptr == nil {
 		return nil, errors.New("datafusion-go statement is closed")
 	}

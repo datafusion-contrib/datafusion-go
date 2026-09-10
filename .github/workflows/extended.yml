@@ -1,0 +1,83 @@
+name: Extended correctness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extended-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  extended:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    env:
+      CARGO_BUILD_JOBS: '2'
+      RUST_ASAN_TOOLCHAIN: nightly-2026-06-10
+      RUST_FUZZ_FLAGS: --dev
+      FUZZ_TIME: 120s
+      RUST_FUZZ_SECONDS: '120'
+      DFGO_TEST_STEPS: '10000'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.27.1'
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable branch
+        with:
+          toolchain: '1.96.0'
+          components: llvm-tools-preview
+      - name: Install native test tools
+        run: |
+          rustup toolchain install "$RUST_ASAN_TOOLCHAIN" --profile minimal --component rust-src
+          cargo install cargo-fuzz --version 0.13.2 --locked
+          cargo install cargo-llvm-cov --version 0.9.1 --locked
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: rust
+          key: extended
+          # Instrumented DataFusion builds exceed cache capacity; retain the
+          # registry, while keeping each instrumentation build independent.
+          cache-targets: false
+      - name: Build native library
+        run: make bundle
+      - name: Reproducible randomized sequences
+        run: |
+          echo "DFGO_TEST_SEED=$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+          DFGO_TEST_SEED="$GITHUB_RUN_ID" make test.sequences
+      - name: Installation and SQLite oracles
+        run: |
+          make test.install
+          make test.sqlite
+      - name: Go fuzzing
+        run: make test.fuzz
+      - name: Rust fuzzing
+        run: make rust.fuzz
+      - name: Native memory instrumentation
+        run: make test.native.asan
+      - name: Coverage across Go, Rust, and C
+        run: make test.coverage
+      - name: Coverage summary
+        if: always()
+        run: |
+          if test -f coverage/summary.md; then
+            cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: extended-correctness-${{ github.run_id }}
+          path: |
+            coverage/
+            rust/fuzz/artifacts/
+            rust/target/fuzz-corpus/
+          retention-days: 30

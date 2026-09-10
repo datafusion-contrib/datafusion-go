@@ -40,6 +40,9 @@ jobs:
       - name: No-cgo unsupported path
         run: make go.test.nocgo
 
+      - name: Portable SQL oracle
+        run: make test.sqlite
+
       - name: Lint
         run: make go.lint
 

@@ -1,0 +1,1030 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+##########
+## Predicates Tests
+##########
+
+statement ok
+set datafusion.catalog.information_schema = true;
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv' 
+OPTIONS ('format.has_header' 'true');
+
+statement ok
+CREATE EXTERNAL TABLE alltypes_plain STORED AS PARQUET LOCATION '../../parquet-testing/data/alltypes_plain.parquet';
+
+
+# async fn csv_query_with_predicate()
+query TR
+SELECT c1, c12 FROM aggregate_test_100 WHERE c12 > 0.376 AND c12 < 0.4
+----
+e 0.391444365692
+d 0.38870280984
+
+# async fn csv_query_with_negative_predicate
+query TI
+SELECT c1, c4 FROM aggregate_test_100 WHERE c3 < -55 AND -c4 > 30000
+----
+e -31500
+c -30187
+
+# async fn csv_query_with_negated_predicate()
+query I
+SELECT COUNT(1) FROM aggregate_test_100 WHERE NOT(c1 != 'a')
+----
+21
+
+# async fn csv_query_with_is_not_null_predicate
+query I
+SELECT COUNT(1) FROM aggregate_test_100 WHERE c1 IS NOT NULL
+----
+100
+
+# async fn csv_query_with_is_null_predicate
+query I
+SELECT COUNT(1) FROM aggregate_test_100 WHERE c1 IS NULL
+----
+0
+
+# async fn query_where_neg_num
+query II
+select c7, c8 from aggregate_test_100 where c7 >= -2 and c7 < 10
+----
+7 45465
+5 40622
+0 61069
+2 20120
+4 39363
+
+query II
+select c7, c8 from aggregate_test_100 where c7 >= -2.9 and c7 < 10
+----
+7 45465
+5 40622
+0 61069
+2 20120
+4 39363
+
+# async fn like
+query I
+SELECT COUNT(c1) FROM aggregate_test_100 WHERE c13 LIKE '%FB%'
+----
+1
+
+# async fn csv_between_expr
+query I
+SELECT c4 FROM aggregate_test_100 WHERE c12 BETWEEN 0.995 AND 1.0
+----
+10837
+
+# async fn csv_between_expr_negated
+query I
+SELECT c4 FROM aggregate_test_100 WHERE c12 NOT BETWEEN 0 AND 0.995
+----
+10837
+
+# async fn csv_in_set_test
+query I
+SELECT count(*) FROM aggregate_test_100 WHERE c7 in ('25','155','204','77','208','67','139','191','26','7','202','113','129','197','249','146','129','220','154','163','220','19','71','243','150','231','196','170','99','255')
+----
+36
+
+# async fn except_with_null_not_equal
+query ?I
+SELECT * FROM (SELECT null AS id1, 1 AS id2) t1
+EXCEPT
+SELECT * FROM (SELECT null AS id1, 2 AS id2) t2
+----
+NULL 1
+
+# async fn except_with_null_equal
+query ?I
+SELECT * FROM (SELECT null AS id1, 1 AS id2) t1
+EXCEPT
+SELECT * FROM (SELECT null AS id1, 1 AS id2) t2
+----
+
+statement ok
+CREATE TABLE IF NOT EXISTS test AS VALUES('foo'),('bar'),(NULL),('fazzz');
+
+# async fn like_on_strings
+query T
+SELECT * FROM test WHERE column1 LIKE '%a%'
+----
+bar
+fazzz
+
+# async fn like_on_string_dictionaries
+query T
+SELECT * FROM test WHERE column1 LIKE '%a%'
+----
+bar
+fazzz
+
+# async fn in_list_string_dictionaries_with_null
+query T
+SELECT * FROM test WHERE column1 IN ('Bar')
+----
+
+query T
+SELECT * FROM test WHERE column1 IN ('foo')
+----
+foo
+
+query T
+SELECT * FROM test WHERE column1 IN ('bar', 'foo')
+----
+foo
+bar
+
+query T
+SELECT * FROM test WHERE column1 IN ('Bar', 'foo')
+----
+foo
+
+query T
+SELECT * FROM test WHERE column1 IN ('foo', 'Bar', 'fazzz')
+----
+foo
+fazzz
+
+
+# async fn in_set_string_dictionaries
+query T
+SELECT * FROM test WHERE column1 IN ('foo', 'Bar', 'fazzz')
+----
+foo
+fazzz
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE IF NOT EXISTS test AS VALUES('foo'),('Barrr'),('Bazzz'),('ZZZZZ');
+
+# async fn test_regexp_is_match
+query error Error during planning: Cannot infer common argument type for regex operation Int64 \~ Utf8
+SELECT * FROM test WHERE 12 ~ 'z'
+
+
+query T
+SELECT * FROM test WHERE column1 ~ 'z'
+----
+Bazzz
+
+query T
+SELECT * FROM test WHERE column1 ~ '^Bazzz$'
+----
+Bazzz
+
+query T
+SELECT * FROM test WHERE column1 ~ '^(foo|Bazzz)$'
+----
+foo
+Bazzz
+
+statement ok
+CREATE TABLE test_regex_utf8view(s VARCHAR) AS VALUES ('foo'), ('Bazzz');
+
+statement ok
+set datafusion.explain.logical_plan_only = true
+
+# `~` anchored literal -> `= Utf8View(..)`
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s ~ '^Bazzz$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s = Utf8View("Bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `~*` anchored literal -> `ILIKE Utf8View(..)`
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s ~* '^bazzz$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s ILIKE Utf8View("bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `~` anchored alternation -> OR of `= Utf8View(..)` comparisons.
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s ~ '^(foo|Bazzz)$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s = Utf8View("foo") OR test_regex_utf8view.s = Utf8View("Bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `~*` anchored alternation -> NOT simplified: it falls back to a regex match,
+# because `IN`/`=` cannot express case-insensitive matching.
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s ~* '^(foo|bazzz)$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s ~* Utf8View("^(foo|bazzz)$")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `!~` -> `!= Utf8View(..)`
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s !~ '^Bazzz$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s != Utf8View("Bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `!~*` -> `NOT ILIKE Utf8View(..)`
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s !~* '^bazzz$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s NOT ILIKE Utf8View("bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `!~` anchored alternation -> AND of `!= Utf8View(..)` comparisons.
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s !~ '^(foo|Bazzz)$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s != Utf8View("foo") AND test_regex_utf8view.s != Utf8View("Bazzz")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+# `!~*` anchored alternation -> NOT simplified: it falls back to a regex match,
+# same reason as the `~*` alternation above.
+query TT
+EXPLAIN SELECT * FROM test_regex_utf8view WHERE s !~* '^(foo|bazzz)$'
+----
+logical_plan
+01)Filter: test_regex_utf8view.s !~* Utf8View("^(foo|bazzz)$")
+02)--TableScan: test_regex_utf8view projection=[s]
+
+statement ok
+set datafusion.explain.logical_plan_only = false
+
+# Result assertions
+query T
+SELECT * FROM test_regex_utf8view WHERE s ~ '^Bazzz$'
+----
+Bazzz
+
+query T
+SELECT * FROM test_regex_utf8view WHERE s ~ '^(foo|Bazzz)$'
+----
+foo
+Bazzz
+
+# Case-insensitive anchored match over Utf8View: must be simplified to ILIKE
+# (not a case-sensitive Eq) and must keep operand types as Utf8View.
+query T
+SELECT * FROM test_regex_utf8view WHERE s ~* '^bazzz$'
+----
+Bazzz
+
+# Case-insensitive anchored alternation over Utf8View
+query T rowsort
+SELECT * FROM test_regex_utf8view WHERE s ~* '^(foo|bazzz)$'
+----
+Bazzz
+foo
+
+query T rowsort
+SELECT * FROM test_regex_utf8view WHERE s !~ '^Bazzz$'
+----
+foo
+
+query T rowsort
+SELECT * FROM test_regex_utf8view WHERE s !~* '^bazzz$'
+----
+foo
+
+# Both rows match the alternation, so the negated forms return nothing.
+query T rowsort
+SELECT * FROM test_regex_utf8view WHERE s !~ '^(foo|Bazzz)$'
+----
+
+query T rowsort
+SELECT * FROM test_regex_utf8view WHERE s !~* '^(foo|bazzz)$'
+----
+
+statement ok
+DROP TABLE test_regex_utf8view;
+
+query T
+SELECT * FROM test WHERE column1 ~* 'z'
+----
+Bazzz
+ZZZZZ
+
+query T
+SELECT * FROM test WHERE column1 ~* '^barrr$'
+----
+Barrr
+
+query T
+SELECT * FROM test WHERE column1 ~* '^(barrr|bazzz)$'
+----
+Barrr
+Bazzz
+
+query T rowsort
+SELECT * FROM test WHERE column1 !~ '^Bazzz$'
+----
+Barrr
+ZZZZZ
+foo
+
+query T rowsort
+SELECT * FROM test WHERE column1 !~* '^barrr$'
+----
+Bazzz
+ZZZZZ
+foo
+
+query T
+SELECT * FROM test WHERE column1 !~ 'z'
+----
+foo
+Barrr
+ZZZZZ
+
+query T
+SELECT * FROM test WHERE column1 !~* 'z'
+----
+foo
+Barrr
+
+query T
+SELECT * FROM test WHERE column1 ~~ '__z%'
+----
+Bazzz
+
+query T
+SELECT * FROM test WHERE column1 ~~* '__z%'
+----
+Bazzz
+ZZZZZ
+
+query T
+SELECT * FROM test WHERE column1 !~~ '__z%'
+----
+foo
+Barrr
+ZZZZZ
+
+query T
+SELECT * FROM test WHERE column1 !~~* '__z%'
+----
+foo
+Barrr
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE IF NOT EXISTS test AS VALUES('foo'),('bar'),('fazzz');
+
+# async fn in_list_string_dictionaries
+query T
+SELECT * FROM test WHERE column1 IN ('Bar')
+----
+
+query T
+SELECT * FROM test WHERE column1 IN ('foo')
+----
+foo
+
+query T
+SELECT * FROM test WHERE column1 IN ('bar', 'foo')
+----
+foo
+bar
+
+query T
+SELECT * FROM test WHERE column1 IN ('Bar', 'foo')
+----
+foo
+
+query T
+SELECT * FROM test WHERE column1 IN ('foo', 'Bar', 'fazzz')
+----
+foo
+fazzz
+
+statement ok
+CREATE TABLE IF NOT EXISTS test_float AS VALUES
+ ('a', 1.2, 2.3, 1.2, -3.5, 1.1),
+ ('b', 2.1, 'NaN'::double, -1.7, -8.2, NULL),
+ ('c', NULL, NULL, '-NaN'::double, -5.4, 1.5),
+ ('d', 'NaN'::double, 'NaN'::double, 1.1, '-NaN'::double, NULL),
+ ('e', '-NaN'::double, 6.2, 'NaN'::double, -3.3, 5.6)
+ ;
+
+# IN expr for float
+query T
+SELECT column1 FROM test_float WHERE column2 IN (0.0, -1.2)
+----
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (0.0, 1.2)
+----
+a
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (2.1, 1.2)
+----
+a
+b
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (0.0, 1.2, NULL)
+----
+a
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (0.0, -1.2, NULL)
+----
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (0.0, 1.2, 'NaN'::double, '-NaN'::double)
+----
+a
+d
+e
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (column3, column4, column5, column6)
+----
+a
+d
+
+query T
+SELECT column1 FROM test_float WHERE column2 IN (column3, column4, column5, column6, 2.1, NULL, '-NaN'::double)
+----
+a
+b
+d
+e
+
+query T
+SELECT column1 FROM test_float WHERE column2 NOT IN (column3, column4, column5, column6)
+----
+e
+
+query T
+SELECT column1 FROM test_float WHERE column2 NOT IN (column3, column4, column5, column6, 2.1, NULL, '-NaN'::double)
+----
+
+
+query T
+SELECT column1 FROM test_float WHERE NULL IN (column2, column2 + 1, column2 + 2, column2 + 3)
+----
+
+query T
+SELECT column1 FROM test_float WHERE 'NaN'::double IN (column2, column2 + 1, column2 + 2, column2 + 3)
+----
+d
+
+query T
+SELECT column1 FROM test_float WHERE '-NaN'::double IN (column2, column2 + 1, column2 + 2, column2 + 3)
+----
+e
+
+query II
+SELECT c3, c7 FROM aggregate_test_100 WHERE c3 IN (c7 / 10, c7 / 20, c7 / 30, c7 / 40, 68, 103)
+----
+1 25
+103 146
+68 224
+68 121
+3 133
+
+###
+# Test logical plan simplifies large OR chains
+###
+
+statement ok
+set datafusion.explain.logical_plan_only = true
+
+# Number of OR statements is less than or equal to threshold
+query TT
+EXPLAIN SELECT * FROM test WHERE column1 = 'foo' OR column1 = 'bar' OR column1 = 'fazzz'
+----
+logical_plan
+01)Filter: test.column1 = Utf8("foo") OR test.column1 = Utf8("bar") OR test.column1 = Utf8("fazzz")
+02)--TableScan: test projection=[column1]
+
+# Number of OR statements is greater than threshold
+query TT
+EXPLAIN SELECT * FROM test WHERE column1 = 'foo' OR column1 = 'bar' OR column1 = 'fazzz' OR column1 = 'barfoo'
+----
+logical_plan
+01)Filter: test.column1 IN ([Utf8("foo"), Utf8("bar"), Utf8("fazzz"), Utf8("barfoo")])
+02)--TableScan: test projection=[column1]
+
+# Complex OR statements
+query TT
+EXPLAIN SELECT * FROM test WHERE column1 = 'foo' OR column1 = 'bar' OR column1 = 'fazzz' OR column1 = 'barfoo' OR false OR column1 = 'foobar'
+----
+logical_plan
+01)Filter: test.column1 IN ([Utf8("foo"), Utf8("bar"), Utf8("fazzz"), Utf8("barfoo"), Utf8("foobar")])
+02)--TableScan: test projection=[column1]
+
+# Balanced OR structures
+query TT
+EXPLAIN SELECT * FROM test WHERE (column1 = 'foo' OR column1 = 'bar') OR (column1 = 'fazzz' OR column1 = 'barfoo')
+----
+logical_plan
+01)Filter: test.column1 IN ([Utf8("foo"), Utf8("bar"), Utf8("fazzz"), Utf8("barfoo")])
+02)--TableScan: test projection=[column1]
+
+# Right-deep OR structures
+query TT
+EXPLAIN SELECT * FROM test WHERE column1 = 'foo' OR (column1 = 'bar' OR (column1 = 'fazzz' OR column1 = 'barfoo'))
+----
+logical_plan
+01)Filter: test.column1 IN ([Utf8("foo"), Utf8("bar"), Utf8("fazzz"), Utf8("barfoo")])
+02)--TableScan: test projection=[column1]
+
+# Not simplifiable, mixed column
+query TT
+EXPLAIN SELECT * FROM aggregate_test_100
+WHERE (c2 = 1 OR c3 = 100) OR (c2 = 2 OR c2 = 3 OR c2 = 4)
+----
+logical_plan
+01)Filter: aggregate_test_100.c2 = Int8(1) OR aggregate_test_100.c3 = Int16(100) OR aggregate_test_100.c2 = Int8(2) OR aggregate_test_100.c2 = Int8(3) OR aggregate_test_100.c2 = Int8(4)
+02)--TableScan: aggregate_test_100 projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], partial_filters=[aggregate_test_100.c2 = Int8(1) OR aggregate_test_100.c3 = Int16(100) OR aggregate_test_100.c2 = Int8(2) OR aggregate_test_100.c2 = Int8(3) OR aggregate_test_100.c2 = Int8(4)]
+
+# Partially simplifiable, mixed column
+query TT
+EXPLAIN SELECT * FROM aggregate_test_100
+WHERE (c2 = 1 OR c3 = 100) OR (c2 = 2 OR c2 = 3 OR c2 = 4 OR c2 = 5)
+----
+logical_plan
+01)Filter: aggregate_test_100.c2 = Int8(1) OR aggregate_test_100.c3 = Int16(100) OR aggregate_test_100.c2 IN ([Int8(2), Int8(3), Int8(4), Int8(5)])
+02)--TableScan: aggregate_test_100 projection=[c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], partial_filters=[aggregate_test_100.c2 = Int8(1) OR aggregate_test_100.c3 = Int16(100) OR aggregate_test_100.c2 IN ([Int8(2), Int8(3), Int8(4), Int8(5)])]
+
+statement ok
+set datafusion.explain.logical_plan_only = false
+
+
+# async fn test_expect_all
+query IR
+SELECT int_col, double_col FROM alltypes_plain where int_col > 0 EXCEPT ALL SELECT int_col, double_col FROM alltypes_plain where int_col < 1
+----
+1 10.1
+1 10.1
+1 10.1
+1 10.1
+
+# async fn test_expect_distinct
+query IR
+SELECT int_col, double_col FROM alltypes_plain where int_col > 0 EXCEPT SELECT int_col, double_col FROM alltypes_plain where int_col < 1
+----
+1 10.1
+
+
+########
+# Clean up after the test
+########
+
+statement ok
+drop table aggregate_test_100;
+
+statement ok
+drop table alltypes_plain;
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE test_float;
+
+#########
+# Predicates on memory tables / statistics generation
+# Reproducer for https://github.com/apache/datafusion/issues/7125
+#########
+
+statement ok
+CREATE TABLE t (i integer, s string, b boolean) AS VALUES
+ (1,    'One', true),
+ (2,    'Two', false),
+ (NULL, NULL,  NULL),
+ (4,    'Four', false)
+ ;
+
+query ITB
+select * from t where (b OR b) = b;
+----
+1 One true
+2 Two false
+4 Four false
+
+query ITB
+select * from t where (s LIKE 'T%') = true;
+----
+2 Two false
+
+query ITB
+select * from t where (i & 3) = 1;
+----
+1 One true
+
+
+
+
+########
+# Clean up after the test
+########
+statement ok
+DROP TABLE t;
+
+
+########
+# Test query with bloom filter
+# Refer to https://github.com/apache/datafusion/pull/7821#pullrequestreview-1688062599
+########
+
+statement ok
+CREATE EXTERNAL TABLE data_index_bloom_encoding_stats STORED AS PARQUET LOCATION '../../parquet-testing/data/data_index_bloom_encoding_stats.parquet';
+
+query TT
+SHOW datafusion.execution.parquet.bloom_filter_on_read
+----
+datafusion.execution.parquet.bloom_filter_on_read true
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" = 'foo';
+----
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" = 'test';
+----
+test
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" like '%e%';
+----
+Hello
+test
+are you
+the quick
+over
+the lazy
+
+
+########
+# Test query without bloom filter
+# Refer to https://github.com/apache/datafusion/pull/7821#pullrequestreview-1688062599
+########
+
+statement ok
+set datafusion.execution.parquet.bloom_filter_on_read=false;
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" = 'foo';
+----
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" = 'test';
+----
+test
+
+query T
+SELECT * FROM data_index_bloom_encoding_stats WHERE "String" like '%e%';
+----
+Hello
+test
+are you
+the quick
+over
+the lazy
+
+statement ok
+set datafusion.execution.parquet.bloom_filter_on_read=true;
+
+
+########
+# Clean up after the test
+########
+statement ok
+DROP TABLE data_index_bloom_encoding_stats;
+
+
+########
+# String coercion
+########
+
+statement error DataFusion error: SQL error: ParserError\("Expected: a data type name, found: , at Line: 1, Column: 30"\)
+CREATE TABLE t(vendor_id_utf8, vendor_id_dict)
+AS VALUES
+(arrow_cast('124', 'Utf8'), arrow_cast('124', 'Dictionary(Int16, Utf8)')),
+(arrow_cast('345', 'Utf8'), arrow_cast('345', 'Dictionary(Int16, Utf8)'));
+
+query error DataFusion error: Error during planning: table 'datafusion\.public\.t' not found
+SELECT * FROM t WHERE vendor_id_utf8 = 124;
+
+query error DataFusion error: Error during planning: table 'datafusion\.public\.t' not found
+SELECT * FROM t WHERE vendor_id_dict = 124
+
+query error DataFusion error: Error during planning: table 'datafusion\.public\.t' not found
+SELECT * FROM t WHERE cast(vendor_id_utf8 as varchar) = 124
+
+########
+# Multiple OR predicates
+########
+
+statement ok
+CREATE EXTERNAL TABLE IF NOT EXISTS lineitem (
+        l_orderkey BIGINT,
+        l_partkey BIGINT,
+        l_suppkey BIGINT,
+        l_linenumber INTEGER,
+        l_quantity DECIMAL(15, 2),
+        l_extendedprice DECIMAL(15, 2),
+        l_discount DECIMAL(15, 2),
+        l_tax DECIMAL(15, 2),
+        l_returnflag VARCHAR,
+        l_linestatus VARCHAR,
+        l_shipdate DATE,
+        l_commitdate DATE,
+        l_receiptdate DATE,
+        l_shipinstruct VARCHAR,
+        l_shipmode VARCHAR,
+        l_comment VARCHAR,
+) STORED AS CSV LOCATION '../core/tests/tpch-csv/lineitem.csv' OPTIONS ('format.delimiter' ',', 'format.has_header' 'true');
+
+statement ok
+CREATE EXTERNAL TABLE IF NOT EXISTS part (
+        p_partkey BIGINT,
+        p_name VARCHAR,
+        p_mfgr VARCHAR,
+        p_brand VARCHAR,
+        p_type VARCHAR,
+        p_size INT,
+        p_container VARCHAR,
+        p_retailprice DECIMAL(15, 2),
+        p_comment VARCHAR,
+) STORED AS CSV LOCATION '../core/tests/tpch-csv/part.csv' OPTIONS ('format.delimiter' ',', 'format.has_header' 'true');
+
+query TT
+EXPLAIN SELECT l_partkey FROM
+lineitem, part WHERE
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#12'
+    AND l_quantity >= 1 AND l_quantity <= 1 + 10
+    AND p_size BETWEEN 1 AND 5
+)
+OR
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#23'
+    AND l_quantity >= 10 AND l_quantity <= 10 + 10
+    AND p_size BETWEEN 1 AND 10
+)
+OR
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#34'
+    AND l_quantity >= 20 AND l_quantity <= 20 + 10
+    AND p_size BETWEEN 1 AND 15
+)
+----
+logical_plan
+01)Projection: lineitem.l_partkey
+02)--Inner Join: lineitem.l_partkey = part.p_partkey Filter: part.p_brand = Utf8View("Brand#12") AND lineitem.l_quantity >= Decimal128(1.00,15,2) AND lineitem.l_quantity <= Decimal128(11.00,15,2) AND part.p_size <= Int32(5) OR part.p_brand = Utf8View("Brand#23") AND lineitem.l_quantity >= Decimal128(10.00,15,2) AND lineitem.l_quantity <= Decimal128(20.00,15,2) AND part.p_size <= Int32(10) OR part.p_brand = Utf8View("Brand#34") AND lineitem.l_quantity >= Decimal128(20.00,15,2) AND lineitem.l_quantity <= Decimal128(30.00,15,2) AND part.p_size <= Int32(15)
+03)----Filter: lineitem.l_quantity >= Decimal128(1.00,15,2) AND lineitem.l_quantity <= Decimal128(11.00,15,2) OR lineitem.l_quantity >= Decimal128(10.00,15,2) AND lineitem.l_quantity <= Decimal128(20.00,15,2) OR lineitem.l_quantity >= Decimal128(20.00,15,2) AND lineitem.l_quantity <= Decimal128(30.00,15,2)
+04)------TableScan: lineitem projection=[l_partkey, l_quantity], partial_filters=[lineitem.l_quantity >= Decimal128(1.00,15,2) AND lineitem.l_quantity <= Decimal128(11.00,15,2) OR lineitem.l_quantity >= Decimal128(10.00,15,2) AND lineitem.l_quantity <= Decimal128(20.00,15,2) OR lineitem.l_quantity >= Decimal128(20.00,15,2) AND lineitem.l_quantity <= Decimal128(30.00,15,2)]
+05)----Filter: part.p_size >= Int32(1) AND (part.p_brand = Utf8View("Brand#12") AND part.p_size <= Int32(5) OR part.p_brand = Utf8View("Brand#23") AND part.p_size <= Int32(10) OR part.p_brand = Utf8View("Brand#34") AND part.p_size <= Int32(15))
+06)------TableScan: part projection=[p_partkey, p_brand, p_size], partial_filters=[part.p_size >= Int32(1), part.p_brand = Utf8View("Brand#12") AND part.p_size <= Int32(5) OR part.p_brand = Utf8View("Brand#23") AND part.p_size <= Int32(10) OR part.p_brand = Utf8View("Brand#34") AND part.p_size <= Int32(15)]
+physical_plan
+01)HashJoinExec: mode=Partitioned, join_type=Inner, on=[(l_partkey@0, p_partkey@0)], filter=p_brand@1 = Brand#12 AND l_quantity@0 >= 1.00 AND l_quantity@0 <= 11.00 AND p_size@2 <= 5 OR p_brand@1 = Brand#23 AND l_quantity@0 >= 10.00 AND l_quantity@0 <= 20.00 AND p_size@2 <= 10 OR p_brand@1 = Brand#34 AND l_quantity@0 >= 20.00 AND l_quantity@0 <= 30.00 AND p_size@2 <= 15, projection=[l_partkey@0]
+02)--RepartitionExec: partitioning=Hash([l_partkey@0], 4), input_partitions=4
+03)----FilterExec: l_quantity@1 >= 1.00 AND l_quantity@1 <= 11.00 OR l_quantity@1 >= 10.00 AND l_quantity@1 <= 20.00 OR l_quantity@1 >= 20.00 AND l_quantity@1 <= 30.00
+04)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+05)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/tpch-csv/lineitem.csv]]}, projection=[l_partkey, l_quantity], file_type=csv, has_header=true
+06)--RepartitionExec: partitioning=Hash([p_partkey@0], 4), input_partitions=4
+07)----FilterExec: p_size@2 >= 1 AND (p_brand@1 = Brand#12 AND p_size@2 <= 5 OR p_brand@1 = Brand#23 AND p_size@2 <= 10 OR p_brand@1 = Brand#34 AND p_size@2 <= 15)
+08)------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+09)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/tpch-csv/part.csv]]}, projection=[p_partkey, p_brand, p_size], file_type=csv, has_header=true
+
+########
+# TPCH Q19 - Pull predicates to inner join (simplified)
+########
+statement ok
+CREATE TABLE IF NOT EXISTS partsupp (
+    ps_partkey BIGINT,
+    ps_suppkey BIGINT,
+    ps_availqty INTEGER,
+    ps_supplycost DECIMAL(15, 2),
+    ps_comment VARCHAR
+) AS VALUES
+(63700, 7311, 100, 993.49, 'ven ideas. quickly even packages print. pending multipliers must have to are fluff');
+
+query IRRI
+SELECT
+    p_partkey,
+    sum(l_extendedprice),
+    avg(l_discount),
+    count(distinct ps_suppkey)
+FROM
+    lineitem,
+    part,
+    partsupp
+WHERE
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#12'
+    AND p_partkey = ps_partkey
+)
+OR
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#23'
+    AND ps_partkey = p_partkey
+)
+GROUP BY p_partkey;
+----
+63700 13309.6 0.1 1
+
+
+query TT
+EXPLAIN SELECT
+    p_partkey,
+    sum(l_extendedprice),
+    avg(l_discount),
+    count(distinct ps_suppkey)
+FROM
+    lineitem,
+    part,
+    partsupp
+WHERE
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#12'
+    AND p_partkey = ps_partkey
+)
+OR
+(
+        p_partkey = l_partkey
+    AND p_brand = 'Brand#23'
+    AND ps_partkey = p_partkey
+)
+GROUP BY p_partkey;
+----
+logical_plan
+01)Aggregate: groupBy=[[part.p_partkey]], aggr=[[sum(lineitem.l_extendedprice), avg(lineitem.l_discount), count(DISTINCT partsupp.ps_suppkey)]]
+02)--Projection: lineitem.l_extendedprice, lineitem.l_discount, part.p_partkey, partsupp.ps_suppkey
+03)----Inner Join: part.p_partkey = partsupp.ps_partkey
+04)------Projection: lineitem.l_extendedprice, lineitem.l_discount, part.p_partkey
+05)--------Inner Join: lineitem.l_partkey = part.p_partkey
+06)----------TableScan: lineitem projection=[l_partkey, l_extendedprice, l_discount]
+07)----------Projection: part.p_partkey
+08)------------Filter: part.p_brand = Utf8View("Brand#12") OR part.p_brand = Utf8View("Brand#23")
+09)--------------TableScan: part projection=[p_partkey, p_brand], partial_filters=[part.p_brand = Utf8View("Brand#12") OR part.p_brand = Utf8View("Brand#23")]
+10)------TableScan: partsupp projection=[ps_partkey, ps_suppkey]
+physical_plan
+01)AggregateExec: mode=SinglePartitioned, gby=[p_partkey@2 as p_partkey], aggr=[sum(lineitem.l_extendedprice), avg(lineitem.l_discount), count(DISTINCT partsupp.ps_suppkey)]
+02)--HashJoinExec: mode=CollectLeft, join_type=Inner, on=[(ps_partkey@0, p_partkey@2)], projection=[l_extendedprice@2, l_discount@3, p_partkey@4, ps_suppkey@1]
+03)----DataSourceExec: partitions=1, partition_sizes=[1]
+04)----HashJoinExec: mode=Partitioned, join_type=Inner, on=[(l_partkey@0, p_partkey@0)], projection=[l_extendedprice@1, l_discount@2, p_partkey@3]
+05)------RepartitionExec: partitioning=Hash([l_partkey@0], 4), input_partitions=1
+06)--------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/tpch-csv/lineitem.csv]]}, projection=[l_partkey, l_extendedprice, l_discount], file_type=csv, has_header=true
+07)------RepartitionExec: partitioning=Hash([p_partkey@0], 4), input_partitions=4
+08)--------FilterExec: p_brand@1 = Brand#12 OR p_brand@1 = Brand#23, projection=[p_partkey@0]
+09)----------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+10)------------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/tpch-csv/part.csv]]}, projection=[p_partkey, p_brand], file_type=csv, has_header=true
+
+# Simplification of a binary operator with a NULL value
+
+statement ok
+create table t(x int) as values (1), (2), (3);
+
+query TT
+EXPLAIN FORMAT INDENT SELECT x > NULL FROM t;
+----
+logical_plan
+01)Projection: Boolean(NULL) AS t.x > NULL
+02)--TableScan: t projection=[]
+physical_plan
+01)ProjectionExec: expr=[NULL as t.x > NULL]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TT
+EXPLAIN FORMAT INDENT SELECT * FROM t WHERE x > NULL;
+----
+logical_plan EmptyRelation: rows=0
+physical_plan EmptyExec
+
+query TT
+EXPLAIN FORMAT INDENT SELECT * FROM t WHERE x < 5 AND (10 * NULL < x);
+----
+logical_plan
+01)Filter: t.x < Int32(5) AND Boolean(NULL)
+02)--TableScan: t projection=[x]
+physical_plan
+01)FilterExec: x@0 < 5 AND NULL
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TT
+EXPLAIN FORMAT INDENT SELECT * FROM t WHERE x < 5 OR (10 * NULL < x);
+----
+logical_plan
+01)Filter: t.x < Int32(5) OR Boolean(NULL)
+02)--TableScan: t projection=[x]
+physical_plan
+01)FilterExec: x@0 < 5 OR NULL
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+statement ok
+drop table t;
+
+# Inlist simplification
+
+statement ok
+create table t(x int) as values (1), (2), (3);
+
+query TT
+explain select x from t where x IN (1,2,3) AND x IN (4,5);
+----
+logical_plan EmptyRelation: rows=0
+physical_plan EmptyExec
+
+query TT
+explain select x from t where x NOT IN (1,2,3,4) OR x NOT IN (5,6,7,8);
+----
+logical_plan TableScan: t projection=[x]
+physical_plan DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TT
+explain select x from t where x IN (1,2,3,4,5) AND x NOT IN (1,2,3,4);
+----
+logical_plan
+01)Filter: t.x = Int32(5)
+02)--TableScan: t projection=[x]
+physical_plan
+01)FilterExec: x@0 = 5
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TT
+explain select x from t where x NOT IN (1,2,3,4,5) AND x IN (1,2,3);
+----
+logical_plan EmptyRelation: rows=0
+physical_plan EmptyExec
+
+query error DataFusion error: This feature is not implemented: Physical plan does not support logical expression InSubquery\(InSubquery \{ expr: Literal\(Int64\(NULL\), None\), subquery: <subquery>, negated: false \}\)
+WITH empty AS (SELECT 10 WHERE false)
+SELECT
+    NULL IN (SELECT * FROM empty), -- should be false, as the right side is empty relation
+    NULL NOT IN (SELECT * FROM empty) -- should be true, as the right side is empty relation
+FROM (SELECT 1) t;
+
+query I
+WITH empty AS (SELECT 10 WHERE false)
+SELECT * FROM (SELECT 1) t
+WHERE NOT (NULL IN (SELECT * FROM empty)); -- all rows should be returned
+----
+1
+
+query I
+WITH empty AS (SELECT 10 WHERE false)
+SELECT * FROM (SELECT 1) t
+WHERE NULL NOT IN (SELECT * FROM empty); -- all rows should be returned
+----
+1
+
+# Config reset
+statement ok
+RESET datafusion.catalog.information_schema;
+
+statement ok
+drop table t;

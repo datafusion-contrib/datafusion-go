@@ -12,11 +12,10 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
-	"github.com/apache/arrow-go/v18/arrow/arrio"
 )
 
 type rows struct {
-	reader arrio.Reader
+	reader ArrowReader
 
 	current arrow.RecordBatch
 	row     int
@@ -42,22 +41,19 @@ type columnPrecisionScale struct {
 	ok        bool
 }
 
-func newRows(reader arrio.Reader) (*rows, error) {
+func newRows(reader ArrowReader) (*rows, error) {
+	schema := reader.Schema()
+	if schema == nil {
+		return nil, fmt.Errorf("DataFusion result schema is nil")
+	}
 	r := &rows{reader: reader}
-	if schemaReader, ok := reader.(interface{ Schema() *arrow.Schema }); ok {
-		if schema := schemaReader.Schema(); schema != nil {
-			if err := r.initMetadata(schema); err != nil {
-				return nil, err
-			}
-		}
+	if err := r.initMetadata(schema); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
 
 func (r *rows) Columns() []string {
-	if err := r.ensureMetadata(); err != nil {
-		return nil
-	}
 	out := make([]string, len(r.columns))
 	copy(out, r.columns)
 	return out
@@ -95,12 +91,6 @@ func (r *rows) Next(dst []driver.Value) error {
 			}
 			return driverError(ErrorScan, "could not read DataFusion record batch", err)
 		}
-		if r.columns == nil {
-			if err := r.initMetadata(rec.Schema()); err != nil {
-				rec.Release()
-				return driverError(ErrorScan, "could not read DataFusion schema", err)
-			}
-		}
 		if rec.NumRows() == 0 {
 			rec.Release()
 			continue
@@ -123,35 +113,35 @@ func (r *rows) Next(dst []driver.Value) error {
 }
 
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	if err := r.ensureMetadata(); err != nil || index < 0 || index >= len(r.scanTypes) {
+	if index < 0 || index >= len(r.scanTypes) {
 		return nil
 	}
 	return r.scanTypes[index]
 }
 
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	if err := r.ensureMetadata(); err != nil || index < 0 || index >= len(r.dbTypes) {
+	if index < 0 || index >= len(r.dbTypes) {
 		return ""
 	}
 	return r.dbTypes[index]
 }
 
 func (r *rows) ColumnTypeNullable(index int) (nullable, ok bool) {
-	if err := r.ensureMetadata(); err != nil || index < 0 || index >= len(r.nullable) {
+	if index < 0 || index >= len(r.nullable) {
 		return false, false
 	}
 	return r.nullable[index], true
 }
 
 func (r *rows) ColumnTypeLength(index int) (length int64, ok bool) {
-	if err := r.ensureMetadata(); err != nil || index < 0 || index >= len(r.lengths) {
+	if index < 0 || index >= len(r.lengths) {
 		return 0, false
 	}
 	return r.lengths[index].value, r.lengths[index].ok
 }
 
 func (r *rows) ColumnTypePrecisionScale(index int) (precision, scale int64, ok bool) {
-	if err := r.ensureMetadata(); err != nil || index < 0 || index >= len(r.scales) {
+	if index < 0 || index >= len(r.scales) {
 		return 0, 0, false
 	}
 	info := r.scales[index]
@@ -164,30 +154,6 @@ func (r *rows) HasNextResultSet() bool {
 
 func (r *rows) NextResultSet() error {
 	return io.EOF
-}
-
-func (r *rows) ensureMetadata() error {
-	if r.columns != nil {
-		return nil
-	}
-
-	rec, err := r.reader.Read()
-	if err != nil {
-		if err == io.EOF {
-			if err := r.initMetadata(arrow.NewSchema(nil, nil)); err != nil {
-				return err
-			}
-			return nil
-		}
-		return err
-	}
-	if err := r.initMetadata(rec.Schema()); err != nil {
-		rec.Release()
-		return err
-	}
-	r.current = rec
-	r.row = 0
-	return nil
 }
 
 func (r *rows) initMetadata(schema *arrow.Schema) error {

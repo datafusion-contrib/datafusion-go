@@ -1,0 +1,176 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+##########
+## Json Tests
+##########
+
+statement ok
+CREATE EXTERNAL TABLE json_test
+STORED AS JSON
+LOCATION '../core/tests/data/2.json';
+
+statement ok
+CREATE EXTERNAL TABLE single_nan
+STORED AS JSON
+LOCATION '../core/tests/data/3.json';
+
+query IR rowsort
+SELECT a, b FROM json_test
+----
+-10 -3.5
+1 -3.5
+1 0.6
+1 0.6
+1 2
+1 2
+1 2
+1 2
+100000000000000 0.6
+2 0.6
+5 -3.5
+7 -3.5
+
+# Ensure that local files can not be read by default (a potential security issue)
+# (url table is only supported when DynamicFileCatalog is enabled)
+statement error DataFusion error: Error during planning: table 'datafusion.public.../core/tests/data/2.json' not found
+SELECT a, b FROM '../core/tests/data/2.json'
+
+query TT
+EXPLAIN SELECT count(*) from json_test
+----
+logical_plan
+01)Projection: count(Int64(1)) AS count(*)
+02)--Aggregate: groupBy=[[]], aggr=[[count(Int64(1))]]
+03)----TableScan: json_test projection=[]
+physical_plan
+01)ProjectionExec: expr=[count(Int64(1))@0 as count(*)]
+02)--AggregateExec: mode=Final, gby=[], aggr=[count(Int64(1))]
+03)----CoalescePartitionsExec
+04)------AggregateExec: mode=Partial, gby=[], aggr=[count(Int64(1))]
+05)--------RepartitionExec: partitioning=RoundRobinBatch(4), input_partitions=1
+06)----------DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/2.json]]}, file_type=json
+
+query ?
+SELECT mycol FROM single_nan
+----
+NULL
+
+statement ok
+DROP TABLE json_test
+
+statement ok
+DROP TABLE single_nan
+
+# JSON partitioned table
+statement ok
+CREATE EXTERNAL TABLE json_partitioned_test (
+    part Int,
+    id Int,
+    value String,
+)
+STORED AS JSON
+LOCATION '../core/tests/data/partitioned_table_json'
+PARTITIONED BY (part);
+
+# select wildcard always returns partition columns as the last ones
+query ITI
+SELECT * FROM json_partitioned_test ORDER BY id
+----
+1 foo 1
+2 bar 1
+3 baz 2
+4 qux 2
+
+
+# select all fields
+query IIT
+SELECT part, id, value FROM json_partitioned_test ORDER BY id
+----
+1 1 foo
+1 2 bar
+2 3 baz
+2 4 qux
+
+# select without partition column
+query I
+SELECT id FROM json_partitioned_test ORDER BY id
+----
+1
+2
+3
+4
+
+# select only partition column
+query I
+SELECT part FROM json_partitioned_test ORDER BY part
+----
+1
+1
+2
+2
+
+# select without any table-related columns in projection
+query T
+SELECT 'x' FROM json_partitioned_test
+----
+x
+x
+x
+x
+
+# select with partition filter
+query I
+SELECT id FROM json_partitioned_test WHERE part = 1 ORDER BY id
+----
+1
+2
+
+# select with partition filter should scan only one directory
+query TT
+EXPLAIN SELECT id FROM json_partitioned_test WHERE part = 2
+----
+logical_plan TableScan: json_partitioned_test projection=[id], full_filters=[json_partitioned_test.part = Int32(2)]
+physical_plan DataSourceExec: file_groups={1 group: [[WORKSPACE_ROOT/datafusion/core/tests/data/partitioned_table_json/part=2/data.json]]}, projection=[id], file_type=json
+
+##########
+## JSON Array Format Tests
+##########
+
+# Test reading JSON array format file with newline_delimited=false
+statement ok
+CREATE EXTERNAL TABLE json_array_test
+STORED AS JSON
+OPTIONS ('format.newline_delimited' 'false')
+LOCATION '../core/tests/data/json_array.json';
+
+query IT rowsort
+SELECT a, b FROM json_array_test
+----
+1 hello
+2 world
+3 test
+
+statement ok
+DROP TABLE json_array_test;
+
+# Test that reading JSON array format WITHOUT newline_delimited option fails
+# (default is newline_delimited=true which can't parse array format correctly)
+statement error Not valid JSON
+CREATE EXTERNAL TABLE json_array_as_ndjson
+STORED AS JSON
+LOCATION '../core/tests/data/json_array.json';

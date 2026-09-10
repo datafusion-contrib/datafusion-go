@@ -1,0 +1,2520 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+
+#   http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+#############
+## Scalar Function Tests
+#############
+
+statement ok
+CREATE TABLE unsigned_integers(
+  a INT,
+  b INT,
+  c INT,
+  d INT,
+  e INT,
+  f INT
+) as VALUES
+  (1, 100, 567, 1024, 4, 10),
+  (2, 1000, 123, 256, 5, 11),
+  (3, 10000, 978, 2048, 6, 12),
+  (4, NULL, NULL, 512, NULL, NULL)
+;
+
+statement ok
+CREATE TABLE signed_integers(
+  a INT,
+  b INT,
+  c INT,
+  d INT,
+  e INT,
+  f INT
+) as VALUES
+  (-1, 100, -567, 1024, -4, 10),
+  (2, -1000, 123, -256, 5, -11),
+  (-3, 10000, -978, 2048, -6, 12),
+  (4, NULL, NULL, -512, NULL, NULL)
+;
+
+statement ok
+CREATE TABLE small_floats(
+  a FLOAT,
+  b FLOAT,
+  c FLOAT,
+  d FLOAT,
+  e FLOAT,
+  f FLOAT
+) as VALUES
+  (0.2, -0.1, 1.0, -0.9, 0.1, 0.5),
+  (0.5, -0.2, 0.0, 0.9, -0.2, 0.6),
+  (-0.7, 0.1, -1.0, 0.9, 0.3, -0.7),
+  (-1.0, NULL, NULL, -0.9, NULL, NULL)
+;
+
+## abs
+
+# abs scalar function
+query III
+select abs(64), abs(0), abs(-64);
+----
+64 0 64
+
+# abs scalar nulls
+query R
+select abs(null);
+----
+NULL
+
+# abs with columns
+query III rowsort
+select abs(a), abs(b), abs(c) from signed_integers;
+----
+1 100 567
+2 1000 123
+3 10000 978
+4 NULL NULL
+
+## acos
+
+# acos scalar function
+query RRR rowsort
+select acos(0), acos(0.5), acos(1);
+----
+1.570796326795 1.047197551197 0
+
+# acos scalar nulls
+query R rowsort
+select acos(null);
+----
+NULL
+
+# acos with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(acos(a), 5), round(acos(b), 5), round(acos(c), 5) from small_floats;
+----
+1.0472 1.77215 1.5708
+1.36944 1.67096 0
+2.34619 1.47063 3.14159
+3.14159 NULL NULL
+
+## acosh
+
+# acosh scalar function
+# cosh(x) = (exp(x) + exp(-x)) / 2
+query RRR rowsort
+select acosh((exp(1) + exp(-1)) / 2), acosh((exp(2) + exp(-2)) / 2), acosh((exp(3) + exp(-3)) / 2);
+----
+1 2 3
+
+# acosh scalar nulls
+query R rowsort
+select acosh(null);
+----
+NULL
+
+# acosh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(acosh(a), 5), round(acosh(b), 5), round(acosh(c), 5) from signed_integers;
+----
+1.31696 NaN 5.50532
+2.06344 NULL NULL
+NaN 5.29829 NaN
+NaN 9.90349 NaN
+
+## asin
+
+# asin scalar function
+query RRR rowsort
+select asin(0), asin(0.5), asin(1);
+----
+0 0.523598775598 1.570796326795
+
+# asin scalar nulls
+query R rowsort
+select asin(null);
+----
+NULL
+
+# asin with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(asin(a), 5), round(asin(b), 5), round(asin(c), 5) from small_floats;
+----
+-0.7754 0.10017 -1.5708
+-1.5708 NULL NULL
+0.20136 -0.10017 1.5708
+0.5236 -0.20136 0
+
+## asinh
+
+# asinh scalar function
+# sinh(x) = (exp(x) - exp(-x)) / 2
+query RRR rowsort
+select asinh((exp(1) - exp(-1)) / 2), asinh((exp(2) - exp(-2)) / 2), asinh((exp(3) - exp(-3)) / 2);
+----
+1 2 3
+
+# asinh scalar nulls
+query R rowsort
+select asinh(null);
+----
+NULL
+
+# asinh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(asinh(a), 5), round(asinh(b), 5), round(asinh(c), 5) from small_floats;
+----
+-0.65267 0.09983 -0.88137
+-0.88137 NULL NULL
+0.19869 -0.09983 0.88137
+0.48121 -0.19869 0
+
+## atan
+
+# atan scalar function
+query RRR rowsort
+select atan(0), atan(cbrt(3)), atan(1);
+----
+0 0.964539792856 0.785398163397
+
+# atan scalar nulls
+query R rowsort
+select atan(null);
+----
+NULL
+
+# atan with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(atan(a), 5), round(atan(b), 5), round(atan(c), 5) from small_floats;
+----
+-0.61073 0.09967 -0.7854
+-0.7854 NULL NULL
+0.1974 -0.09967 0.7854
+0.46365 -0.1974 0
+
+## atanh
+
+# atanh scalar function
+# tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+query RRR rowsort
+select atanh((exp(2) - 1) / (exp(2) + 1)), atanh((exp(4) - 1) / (exp(4) + 1)), atanh((exp(6) - 1) / (exp(6) + 1));
+----
+1 2 3
+
+# atanh scalar nulls
+query R rowsort
+select atanh(null);
+----
+NULL
+
+# atanh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(atanh(a), 5), round(atanh(b), 5), round(atanh(c), 5) from small_floats;
+----
+-0.8673 0.10034 -Infinity
+-Infinity NULL NULL
+0.20273 -0.10034 Infinity
+0.54931 -0.20273 0
+
+## atan2
+
+# atan2 scalar function
+query RRR rowsort
+select atan2(0, 1), atan2(1, 2), atan2(2, 2);
+----
+0 0.463647609001 0.785398163397
+
+# atan2 returns Float32 only when both arguments are Float32; every other
+# numeric combination (integers, Float64, mixed, NULL) is computed in Float64
+query TTTTTT
+select
+  arrow_typeof(atan2(arrow_cast(1.0, 'Float32'), arrow_cast(1.0, 'Float32'))),
+  arrow_typeof(atan2(1, 1)),
+  arrow_typeof(atan2(arrow_cast(1.0, 'Float32'), arrow_cast(1.0, 'Float64'))),
+  arrow_typeof(atan2(arrow_cast(1.0, 'Float64'), arrow_cast(1.0, 'Float32'))),
+  arrow_typeof(atan2(null, null)),
+  arrow_typeof(atan2(null, 64));
+----
+Float32 Float64 Float64 Float64 Float64 Float64
+
+# atan2 with integer inputs is computed in double precision
+query B
+select atan2(1, 1000000) = atan2(1.0, 1000000.0);
+----
+true
+
+# atan2 scalar nulls
+query R rowsort
+select atan2(null, 64);
+----
+NULL
+
+# atan2 scalar nulls #1
+query R rowsort
+select atan2(2, null);
+----
+NULL
+
+# atan2 scalar nulls #2
+query R rowsort
+select atan2(null, null);
+----
+NULL
+
+# atan2 with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(atan2(a, b), 5), round(atan2(c, d), 5), round(atan2(f, e), 5) from small_floats;
+----
+-1.4289 -0.83798 -1.1659
+1.9513 0 1.89255
+2.03444 2.30361 1.3734
+NULL NULL NULL
+
+## cbrt
+
+# cbrt scalar function
+query RRR rowsort
+select cbrt(0), cbrt(8), cbrt(27);
+----
+0 2 3
+
+# cbrt scalar nulls
+query R rowsort
+select cbrt(null);
+----
+NULL
+
+# cbrt with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(cbrt(a), 5), round(cbrt(b), 5), round(cbrt(c), 5) from signed_integers;
+----
+-1 4.64159 -8.27677
+-1.44225 21.54435 -9.92612
+1.25992 -10 4.97319
+1.5874 NULL NULL
+
+## ceil
+
+# ceil scalar function
+query RRR rowsort
+select ceil(1.6), ceil(1.5), ceil(1.4);
+----
+2 2 2
+
+# ceil scalar nulls
+query R rowsort
+select ceil(null);
+----
+NULL
+
+# ceil with columns
+query RRR rowsort
+select ceil(a), ceil(b), ceil(c) from small_floats;
+----
+-1 NULL NULL
+0 1 -1
+1 0 0
+1 0 1
+
+# ceil with scale parameter(Scale not supported)
+query error DataFusion error: This feature is not implemented: CEIL with scale is not supported
+select ceil(100.1234, 1)
+
+# ceil with datetime parameter (not supported)
+query error DataFusion error: This feature is not implemented: CEIL with datetime is not supported
+select ceil(100.1234 to year)
+
+# ceil with decimal argument
+query RRRR
+select
+  ceil(arrow_cast(1.23,'Decimal128(10,2)')),
+  ceil(arrow_cast(-1.23,'Decimal128(10,2)')),
+  ceil(arrow_cast(123.00,'Decimal128(10,2)')),
+  ceil(arrow_cast(-123.00,'Decimal128(10,2)'));
+----
+2 -1 123 -123
+
+# ceil overflow with limited precision
+query error Decimal overflow while applying ceil
+select ceil(arrow_cast(9.23,'Decimal128(3,2)'));
+
+# ceil with decimal32 argument (ensure decimal output)
+query TTTTTTTT
+select
+  arrow_typeof(ceil(arrow_cast(9.01,'Decimal32(7,2)'))),
+  arrow_cast(ceil(arrow_cast(9.01,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(ceil(arrow_cast(-9.01,'Decimal32(7,2)'))),
+  arrow_cast(ceil(arrow_cast(-9.01,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(ceil(arrow_cast(10.00,'Decimal32(7,2)'))),
+  arrow_cast(ceil(arrow_cast(10.00,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(ceil(arrow_cast(-0.99,'Decimal32(7,2)'))),
+  arrow_cast(ceil(arrow_cast(-0.99,'Decimal32(7,2)')), 'Utf8');
+----
+Decimal32(7, 2) 10.00 Decimal32(7, 2) -9.00 Decimal32(7, 2) 10.00 Decimal32(7, 2) 0.00
+
+# ceil with decimal64 zero scale
+query TTTT
+select
+  arrow_typeof(ceil(arrow_cast(123456789,'Decimal64(18,0)'))),
+  arrow_cast(ceil(arrow_cast(123456789,'Decimal64(18,0)')), 'Utf8'),
+  arrow_typeof(ceil(arrow_cast(-987654321,'Decimal64(18,0)'))),
+  arrow_cast(ceil(arrow_cast(-987654321,'Decimal64(18,0)')), 'Utf8');
+----
+Decimal64(18, 0) 123456789 Decimal64(18, 0) -987654321
+
+# ceil with decimal256 argument
+query TTTT
+select
+  arrow_typeof(ceil(arrow_cast('9999999999999999999999999999999999.01','Decimal256(38,2)'))),
+  arrow_cast(ceil(arrow_cast('9999999999999999999999999999999999.01','Decimal256(38,2)')), 'Utf8'),
+  arrow_typeof(ceil(arrow_cast('-9999999999999999999999999999999999.01','Decimal256(38,2)'))),
+  arrow_cast(ceil(arrow_cast('-9999999999999999999999999999999999.01','Decimal256(38,2)')), 'Utf8');
+----
+Decimal256(38, 2) 10000000000000000000000000000000000.00 Decimal256(38, 2) -9999999999999999999999999999999999.00
+
+## degrees
+
+# degrees scalar function
+query RRR rowsort
+select degrees(0), degrees(pi() / 2), degrees(pi());
+----
+0 90 180
+
+# degrees scalar nulls
+query R rowsort
+select degrees(null);
+----
+NULL
+
+# degrees with columns
+query RRR rowsort
+select round(degrees(a), 5), round(degrees(e), 5), round(degrees(f), 5) from signed_integers;
+----
+-171.88734 -343.77468 687.54935
+-57.29578 -229.18312 572.9578
+114.59156 286.4789 -630.25357
+229.18312 NULL NULL
+
+## cos
+
+# cos scalar function
+query RRR rowsort
+select cos(0), cos(pi() / 3), cos(pi() / 2);
+----
+1 0.5 0
+
+# cos scalar nulls
+query R rowsort
+select cos(null);
+----
+NULL
+
+# cos with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(cos(a), 5), round(cos(b), 5), round(cos(c), 5) from signed_integers;
+----
+-0.41615 0.56238 -0.88797
+-0.65364 NULL NULL
+-0.98999 -0.95216 -0.56968
+0.5403 0.86232 0.05744
+
+## cosh
+
+# cosh scalar function
+# cosh(x) = (exp(x) + exp(-x)) / 2
+query RRR rowsort
+select cosh(1), cosh(2), cosh(3);
+----
+1.543080634815 3.762195691084 10.067661995778
+
+# cosh scalar nulls
+query R rowsort
+select cosh(null);
+----
+NULL
+
+# cosh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(cosh(a), 5), round(cosh(b), 5), round(cosh(c), 5) from small_floats;
+----
+1.02007 1.005 1.54308
+1.12763 1.02007 1
+1.25517 1.005 1.54308
+1.54308 NULL NULL
+
+## exp
+
+# exp scalar function
+query RRR rowsort
+select exp(0), exp(1), exp(2);
+----
+1 2.718281828459 7.389056098931
+
+# exp scalar nulls
+query R rowsort
+select exp(null);
+----
+NULL
+
+# exp with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(exp(a), 5), round(exp(e), 5), round(exp(f), 5) from signed_integers;
+----
+0.04979 0.00248 162754.79142
+0.36788 0.01832 22026.46579
+54.59815 NULL NULL
+7.38906 148.41316 0.00002
+
+## factorial
+
+# factorial scalar function
+query III rowsort
+select factorial(0), factorial(10), factorial(15);
+----
+1 3628800 1307674368000
+
+# factorial scalar nulls
+query I rowsort
+select factorial(null);
+----
+NULL
+
+# factorial with columns
+query III rowsort
+select factorial(a), factorial(e), factorial(f) from unsigned_integers;
+----
+1 24 3628800
+2 120 39916800
+24 NULL NULL
+6 720 479001600
+
+## floor
+
+# floor scalar function
+query RRR rowsort
+select floor(1.4), floor(1.5), floor(1.6);
+----
+1 1 1
+
+# floor scalar nulls
+query R rowsort
+select floor(null);
+----
+NULL
+
+# floor with columns
+query RRR rowsort
+select floor(a), floor(b), floor(c) from signed_integers;
+----
+-1 100 -567
+-3 10000 -978
+2 -1000 123
+4 NULL NULL
+
+# floor with scale parameter(Scale not supported)
+query error DataFusion error: This feature is not implemented: FLOOR with scale is not supported
+select floor(a, 1)
+
+# floor with datetime parameter ( not supported)
+query error DataFusion error: This feature is not implemented: FLOOR with datetime is not supported
+select floor(a to year)
+
+# floor with decimal argument
+query RRRR
+select
+  floor(arrow_cast(1.23,'Decimal128(10,2)')),
+  floor(arrow_cast(-1.23,'Decimal128(10,2)')),
+  floor(arrow_cast(123.00,'Decimal128(10,2)')),
+  floor(arrow_cast(-123.00,'Decimal128(10,2)'));
+----
+1 -2 123 -123
+
+# floor overflow with limited precision
+query error Decimal overflow while applying floor
+select floor(arrow_cast(-9.23,'Decimal128(3,2)'));
+
+# floor with decimal32 argument (ensure decimal output)
+query TTTTTTTT
+select
+  arrow_typeof(floor(arrow_cast(9.99,'Decimal32(7,2)'))),
+  arrow_cast(floor(arrow_cast(9.99,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(floor(arrow_cast(-9.01,'Decimal32(7,2)'))),
+  arrow_cast(floor(arrow_cast(-9.01,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(floor(arrow_cast(10.00,'Decimal32(7,2)'))),
+  arrow_cast(floor(arrow_cast(10.00,'Decimal32(7,2)')), 'Utf8'),
+  arrow_typeof(floor(arrow_cast(-0.01,'Decimal32(7,2)'))),
+  arrow_cast(floor(arrow_cast(-0.01,'Decimal32(7,2)')), 'Utf8');
+----
+Decimal32(7, 2) 9.00 Decimal32(7, 2) -10.00 Decimal32(7, 2) 10.00 Decimal32(7, 2) -1.00
+
+# floor with decimal64 zero scale
+query TTTT
+select
+  arrow_typeof(floor(arrow_cast(123456789,'Decimal64(18,0)'))),
+  arrow_cast(floor(arrow_cast(123456789,'Decimal64(18,0)')), 'Utf8'),
+  arrow_typeof(floor(arrow_cast(-987654321,'Decimal64(18,0)'))),
+  arrow_cast(floor(arrow_cast(-987654321,'Decimal64(18,0)')), 'Utf8');
+----
+Decimal64(18, 0) 123456789 Decimal64(18, 0) -987654321
+
+# floor with decimal256 argument
+query TTTT
+select
+  arrow_typeof(floor(arrow_cast('9999999999999999999999999999999999.99','Decimal256(38,2)'))),
+  arrow_cast(floor(arrow_cast('9999999999999999999999999999999999.99','Decimal256(38,2)')), 'Utf8'),
+  arrow_typeof(floor(arrow_cast('-9999999999999999999999999999999999.99','Decimal256(38,2)'))),
+  arrow_cast(floor(arrow_cast('-9999999999999999999999999999999999.99','Decimal256(38,2)')), 'Utf8');
+----
+Decimal256(38, 2) 9999999999999999999999999999999999.00 Decimal256(38, 2) -10000000000000000000000000000000000.00
+
+## ln
+
+# ln scalar function
+query RRR rowsort
+select ln(1), ln(exp(1)), ln(3);
+----
+0 1 1.098612288668
+
+# ln scalar nulls
+query R rowsort
+select ln(null);
+----
+NULL
+
+# ln scalar ops with zero edgecases
+# please see https://github.com/apache/datafusion/pull/5245#issuecomment-1426828382
+query R rowsort
+select ln(0);
+----
+-Infinity
+
+# ln with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(ln(a), 5), round(ln(b), 5), round(ln(c), 5) from signed_integers;
+----
+0.69315 NaN 4.81218
+1.38629 NULL NULL
+NaN 4.60517 NaN
+NaN 9.21034 NaN
+
+## log
+
+# log scalar function
+query RR rowsort
+select log(2, 64) a, log(100) b union all select log(2, 8), log(10);
+----
+3 1
+6 2
+
+# log scalar nulls
+query RR rowsort
+select log(null, 64) a, log(null) b;
+----
+NULL NULL
+
+# log scalar nulls #1
+query RR rowsort
+select log(2, null) a, log(null) b;
+----
+NULL NULL
+
+# log scalar nulls #2
+query RR rowsort
+select log(null, null) a, log(null) b;
+----
+NULL NULL
+
+# log scalar fraction
+query RR rowsort
+select log(2, 2.0/3) a, log(10, 2.0/3) b;
+----
+-0.584962500721 -0.176091259056
+
+# log scalar ops with zero edgecases
+# please see https://github.com/apache/datafusion/pull/5245#issuecomment-1426828382
+query RR rowsort
+select log(0) a, log(1, 64) b;
+----
+-Infinity Infinity
+
+# log with columns #1
+query RRR rowsort
+select log(a, 64) a, log(b), log(10, b) from unsigned_integers;
+----
+3 NULL NULL
+3.785578521429 4 4
+6 3 3
+Infinity 2 2
+
+# log with columns #2
+query RRR rowsort
+select log(a, 64) a, log(b), log(10, b) from signed_integers;
+----
+3 NULL NULL
+6 NaN NaN
+NaN 2 2
+NaN 4 4
+
+# log overloaded base 10 float64 and float32 casting scalar
+query RR rowsort
+select log(arrow_cast(10, 'Float64')) a ,log(arrow_cast(100, 'Float32')) b;
+----
+1 2
+
+# log overloaded base 10 float64 and float32 casting with columns
+query RR rowsort
+select log(arrow_cast(a, 'Float64')), log(arrow_cast(b, 'Float32')) from signed_integers;
+----
+0.301029995664 NaN
+0.602059991328 NULL
+NaN 2
+NaN 4
+
+# log float64 and float32 casting scalar
+query RR rowsort
+select log(2,arrow_cast(8, 'Float64')) a, log(2,arrow_cast(16, 'Float32')) b;
+----
+3 4
+
+# log float64 and float32 casting with columns
+query RR rowsort
+select log(2,arrow_cast(a, 'Float64')), log(4,arrow_cast(b, 'Float32')) from signed_integers;
+----
+1 NaN
+2 NULL
+NaN 3.321928
+NaN 6.643856
+
+
+## log10
+
+# log10 scalar function
+query RRR rowsort
+select log10(1), log10(10), log10(100);
+----
+0 1 2
+
+# log10 scalar nulls
+query R rowsort
+select log10(null);
+----
+NULL
+
+# log10 scalar fraction
+query R rowsort
+select log10(2.0/3);
+----
+-0.176091259056
+
+# log10 scalar ops with zero edgecases
+# please see https://github.com/apache/datafusion/pull/5245#issuecomment-1426828382
+query R rowsort
+select log10(0);
+----
+-Infinity
+
+# log10 with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(log(a), 5), round(log(b), 5), round(log(c), 5) from signed_integers;
+----
+0.30103 NaN 2.08991
+0.60206 NULL NULL
+NaN 2 NaN
+NaN 4 NaN
+
+## log2
+
+# log2 scalar function
+query RRR rowsort
+select log2(1), log2(2), log2(4);
+----
+0 1 2
+
+# log2 scalar nulls
+query R rowsort
+select log2(null);
+----
+NULL
+
+# log2 scalar fraction
+query R rowsort
+select log2(2.0/3);
+----
+-0.584962500721
+
+# log2 scalar ops with zero edgecases
+# please see https://github.com/apache/datafusion/pull/5245#issuecomment-1426828382
+query R rowsort
+select log2(0);
+----
+-Infinity
+
+# log2 with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(log2(a), 5), round(log2(b), 5), round(log2(c), 5) from signed_integers;
+----
+1 NaN 6.94251
+2 NULL NULL
+NaN 13.28771 NaN
+NaN 6.64386 NaN
+
+## nanvl
+
+# nanvl scalar function
+query RRR rowsort
+select nanvl(0, 1), nanvl(asin(10), 2), nanvl(3, asin(10));
+----
+0 2 3
+
+# nanvl scalar nulls
+query R rowsort
+select nanvl(null, 64);
+----
+NULL
+
+# nanvl scalar nulls #1 - x is not NaN, so return x even if y is NULL
+query R rowsort
+select nanvl(2, null);
+----
+2
+
+# nanvl scalar nulls #2
+query R rowsort
+select nanvl(null, null);
+----
+NULL
+
+# nanvl evaluates in the common (widest) float type of its arguments. Mixing
+# narrower floats widens losslessly (Float16 + Float32 -> Float32), while
+# integers, decimals, and NULL are coerced to Float64.
+query TTTTTTTT
+select
+  arrow_typeof(nanvl(arrow_cast(1.0, 'Float16'), arrow_cast(2.0, 'Float16'))),
+  arrow_typeof(nanvl(arrow_cast(1.0, 'Float32'), arrow_cast(2.0, 'Float32'))),
+  arrow_typeof(nanvl(arrow_cast(1.0, 'Float16'), arrow_cast(2.0, 'Float32'))),
+  arrow_typeof(nanvl(arrow_cast(1.0, 'Float16'), arrow_cast(2.0, 'Float64'))),
+  arrow_typeof(nanvl(arrow_cast(1.0, 'Float32'), arrow_cast(2.0, 'Float64'))),
+  arrow_typeof(nanvl(1, 2)),
+  arrow_typeof(nanvl(1, arrow_cast(2.0, 'Float32'))),
+  arrow_typeof(nanvl(null, null));
+----
+Float16 Float32 Float32 Float64 Float64 Float64 Float64 Float64
+
+# nanvl with an integer argument is computed in double precision, even when the
+# other argument is Float32.
+query BB
+select
+  nanvl(16777217, 1) = nanvl(arrow_cast(16777217, 'Float64'), 1.0),
+  nanvl(16777217, arrow_cast(1.0, 'Float32')) = nanvl(arrow_cast(16777217, 'Float64'), 1.0);
+----
+true true
+
+# nanvl with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(nanvl(asin(f + a), 2), 5), round(nanvl(asin(b + c), 3), 5), round(nanvl(asin(d + e), 4), 5) from small_floats;
+----
+0.7754 1.11977 -0.9273
+2 -0.20136 0.7754
+2 -1.11977 4
+NULL NULL NULL
+
+## isnan
+
+# isnan scalar function
+query BBB
+select isnan(10.0), isnan('NaN'::DOUBLE), isnan(-'NaN'::DOUBLE)
+----
+false true true
+
+# isnan scalar nulls
+query B
+select isnan(NULL)
+----
+NULL
+
+# isnan with columns
+query BBBB
+select isnan(asin(a + b + c)), isnan(-asin(a + b + c)), isnan(asin(d + e + f)), isnan(-asin(d + e + f)) from small_floats;
+----
+true true false false
+false false true true
+true true false false
+NULL NULL NULL NULL
+
+## iszero
+
+# iszero scalar function
+query BBB
+select iszero(10.0), iszero(0.0), iszero(-0.0)
+----
+false true true
+
+# iszero scalar nulls
+query B
+select iszero(NULL)
+----
+NULL
+
+# iszero with columns
+query BBBB
+select iszero(floor(a + b + c)), iszero(-floor(a + b + c)), iszero(floor(d + e + f)), iszero(-floor(d + e + f)) from small_floats;
+----
+false false false false
+true true false false
+false false true true
+NULL NULL NULL NULL
+
+## pi
+
+# pi scalar function
+query RRR rowsort
+select pi(), pi() / 2, pi() / 3;
+----
+3.14159265359 1.570796326795 1.047197551197
+
+## power
+
+# power scalar function (always returns Float64, like PostgreSQL)
+query RRR rowsort
+select power(2, 0), power(2, 1), power(2, 2);
+----
+1 2 4
+
+# power scalar nulls
+query R rowsort
+select power(null, 64);
+----
+NULL
+
+# power scalar nulls #1
+query R rowsort
+select power(2, null);
+----
+NULL
+
+# power scalar nulls #2
+query R rowsort
+select power(null, null);
+----
+NULL
+
+# power with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(power(a, b), 5), round(power(c, d), 5), round(power(e, f), 5) from small_floats;
+----
+1.1487 0 NaN
+1.17462 1 0.31623
+NULL NULL NULL
+NaN NaN 2.32282
+
+## radians
+
+# radians scalar function
+query RRR rowsort
+select radians(0), radians(90), radians(180);
+----
+0 1.570796326795 3.14159265359
+
+# radians scalar nulls
+query R rowsort
+select radians(null);
+----
+NULL
+
+# radians with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(radians(a), 5), round(radians(b), 5), round(radians(c), 5) from signed_integers;
+----
+-0.01745 1.74533 -9.89602
+-0.05236 174.53293 -17.06932
+0.03491 -17.45329 2.14675
+0.06981 NULL NULL
+
+## round
+
+# round scalar function
+query RRR rowsort
+select round(1.4), round(1.5), round(1.6);
+----
+1 2 2
+
+# round scalar nulls
+query R rowsort
+select round(null);
+----
+NULL
+
+# round with columns
+query RRR rowsort
+select round(a), round(b), round(c) from small_floats;
+----
+-1 0 -1
+-1 NULL NULL
+0 0 1
+1 0 0
+
+# round int64 should preserve exact values above Float64 precision range
+query TI
+select arrow_typeof(round(arrow_cast(9007199254740993, 'Int64'))),
+       round(arrow_cast(9007199254740993, 'Int64'));
+----
+Int64 9007199254740993
+
+# round int64 with positive decimal_places should preserve exact values above Float64 precision range
+query TI
+select arrow_typeof(round(arrow_cast(9007199254740993, 'Int64'), 2)),
+       round(arrow_cast(9007199254740993, 'Int64'), 2);
+----
+Int64 9007199254740993
+
+# round int64 with negative decimal_places
+query TI
+select arrow_typeof(round(arrow_cast(125, 'Int64'), -1)),
+       round(arrow_cast(125, 'Int64'), -1);
+----
+Int64 130
+
+# round int64 with column decimal_places
+query I
+select round(v, dp)
+from (values (arrow_cast(125, 'Int64'), 1),
+             (arrow_cast(125, 'Int64'), -1)) as t(v, dp);
+----
+125
+130
+
+# round int64 overflow with negative decimal_places
+query error Overflow while rounding Int64
+select round(arrow_cast(9223372036854775807, 'Int64'), -1);
+
+# round uint64 should preserve exact values
+query TI
+select arrow_typeof(round(arrow_cast(18446744073709551615, 'UInt64'))),
+       round(arrow_cast(18446744073709551615, 'UInt64'));
+----
+UInt64 18446744073709551615
+
+# round uint64 with positive decimal_places should preserve exact values
+query TI
+select arrow_typeof(round(arrow_cast(18446744073709551615, 'UInt64'), 2)),
+       round(arrow_cast(18446744073709551615, 'UInt64'), 2);
+----
+UInt64 18446744073709551615
+
+# round int64 to place larger than the number itself
+query TI
+select arrow_typeof(round(arrow_cast(125, 'Int64'), -5)),
+       round(arrow_cast(125, 'Int64'), -5);
+----
+Int64 0
+
+# round with too large
+#  max Int32 is 2147483647
+query error round decimal_places 2147483648 is out of supported i32 range
+select round(3.14, 2147483648);
+
+# with array
+query error Arrow error: Cast error: Can't cast value 2147483649 to type Int32
+select round(column1, column2) from values (3.14, 2), (3.14, 3), (3.14, 2147483649);
+
+# round decimal should not cast to float
+# scale reduces to match decimal_places
+query TR
+select arrow_typeof(round('173975140545.855'::decimal(38,10), 2)),
+       round('173975140545.855'::decimal(38,10), 2);
+----
+Decimal128(38, 2) 173975140545.86
+
+# round decimal ties away from zero
+query RRRR
+select round('1.5'::decimal(2,1), 0),
+       round('-1.5'::decimal(2,1), 0),
+       round('2.5'::decimal(2,1), 0),
+       round('-2.5'::decimal(2,1), 0);
+----
+2 -2 3 -3
+
+# round decimal negative places (left of decimal)
+query TR
+select arrow_typeof(round('12345.55'::decimal(10,2), -1)),
+       round('12345.55'::decimal(10,2), -1);
+----
+Decimal128(10, 0) 12350
+
+# round decimal scale 0 negative places (carry can require extra precision)
+query TR
+select arrow_typeof(round('99'::decimal(2,0), -1)),
+       round('99'::decimal(2,0), -1);
+----
+Decimal128(3, 0) 100
+
+# round decimal256 keeps decimals
+query TR
+select arrow_typeof(round('1234.5678'::decimal(50,4), 2)),
+       round('1234.5678'::decimal(50,4), 2);
+----
+Decimal256(50, 2) 1234.57
+
+# round decimal with carry-over (reduce scale)
+# Scale reduces from 1 to 0, allowing extra digit for carry-over
+query TRRR
+select arrow_typeof(round('999.9'::decimal(4,1))),
+       round('999.9'::decimal(4,1)),
+       round('-999.9'::decimal(4,1)),
+       round('99.99'::decimal(4,2));
+----
+Decimal128(4, 0) 1000 -1000 100
+
+# round decimal with carry-over and non-literal decimal_places (increase precision)
+# Scale can't be reduced when decimal_places isn't a constant, so precision increases.
+query TR
+select arrow_typeof(round(val, dp)), round(val, dp)
+from (values (cast('999.9' as decimal(4,1)), 0)) as t(val, dp);
+----
+Decimal128(5, 1) 1000
+
+# round decimal at max precision now works (scale reduction handles overflow)
+query TR
+select arrow_typeof(round('9999999999999999999999999999999999999.9'::decimal(38,1))),
+       round('9999999999999999999999999999999999999.9'::decimal(38,1));
+----
+Decimal128(38, 0) 10000000000000000000000000000000000000
+
+# round decimal at max precision with non-literal decimal_places can overflow
+query error Decimal overflow: rounded value exceeds precision 38
+select round(val, dp)
+from (values (cast('9999999999999999999999999999999999999.9' as decimal(38,1)), 0)) as t(val, dp);
+
+# round decimal with negative scale
+query TRRR
+select arrow_typeof(round(cast(500 as decimal(10,-2)), -3)),
+       round(cast(500 as decimal(10,-2)), -3),
+       round(cast(400 as decimal(10,-2)), -3),
+       round(cast(-500 as decimal(10,-2)), -3);
+----
+Decimal128(10, -3) 1000 0 -1000
+
+# round decimal with negative scale and carry-over
+query TR
+select arrow_typeof(round(cast(999999999900 as decimal(10,-2)), -3)),
+       round(cast(999999999900 as decimal(10,-2)), -3);
+----
+Decimal128(10, -3) 1000000000000
+
+# round decimal with very small decimal_places (i32::MIN) should not error
+query TR
+select arrow_typeof(round('123.45'::decimal(5,2), -2147483648)),
+       round('123.45'::decimal(5,2), -2147483648);
+----
+Decimal128(5, 0) 0
+
+## signum
+
+# signum scalar function
+query RRR rowsort
+select signum(-2), signum(0), signum(2);
+----
+-1 0 1
+
+# signum scalar nulls
+query R rowsort
+select signum(null);
+----
+NULL
+
+# signum with columns
+query RRR rowsort
+select signum(a), signum(b), signum(c) from signed_integers;
+----
+-1 1 -1
+-1 1 -1
+1 -1 1
+1 NULL NULL
+
+## sin
+
+# sin scalar function
+query RRR rowsort
+select sin(0), sin(pi() / 3), sin(pi() / 2);
+----
+0 0.866025403784 1
+
+# sin scalar nulls
+query R rowsort
+select sin(null);
+----
+NULL
+
+# sin with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(sin(a), 5), round(sin(b), 5), round(sin(c), 5) from small_floats;
+----
+-0.64422 0.09983 -0.84147
+-0.84147 NULL NULL
+0.19867 -0.09983 0.84147
+0.47943 -0.19867 0
+
+## sinh
+
+# sinh scalar function
+# sinh(x) = (exp(x) - exp(-x)) / 2
+query RRR rowsort
+select sinh(1), sinh(2), sinh(3);
+----
+1.175201193644 3.626860407847 10.01787492741
+
+# sinh scalar nulls
+query R rowsort
+select sinh(null);
+----
+NULL
+
+# sinh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(sinh(a), 5), round(sinh(b), 5), round(sinh(c), 5) from small_floats;
+----
+-0.75858 0.10017 -1.1752
+-1.1752 NULL NULL
+0.20134 -0.10017 1.1752
+0.5211 -0.20134 0
+
+## sqrt
+
+# sqrt scalar function
+query RRR rowsort
+select sqrt(0), sqrt(4), sqrt(9);
+----
+0 2 3
+
+# sqrt scalar nulls
+query R rowsort
+select sqrt(null);
+----
+NULL
+
+# sqrt with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(sqrt(abs(a)), 5), round(sqrt(abs(b)), 5), round(sqrt(abs(c)), 5) from signed_integers;
+----
+1 10 23.81176
+1.41421 31.62278 11.09054
+1.73205 100 31.27299
+2 NULL NULL
+
+# sqrt with negative column values should error
+query error cannot take square root of a negative number
+select round(sqrt(a), 5), round(sqrt(b), 5), round(sqrt(c), 5) from signed_integers;
+
+# sqrt scalar fraction
+query RR rowsort
+select sqrt(1.4), sqrt(2.0/3);
+----
+1.18321595662 0.816496580928
+
+# sqrt scalar cast
+query R rowsort
+select sqrt(cast(10e8 as double));
+----
+31622.776601683792
+
+
+# sqrt scalar negative
+query error cannot take square root of a negative number
+select sqrt(-1);
+
+# sqrt scalar negative float8
+query error cannot take square root of a negative number
+select sqrt((-1.0)::float8);
+
+## tan
+
+# tan scalar function
+query RRR rowsort
+select tan(0), tan(pi() / 6), tan(pi() / 4);
+----
+0 0.57735026919 1
+
+# tan scalar nulls
+query R rowsort
+select tan(null);
+----
+NULL
+
+# tan with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(tan(a), 5), round(tan(b), 5), round(tan(c), 5) from small_floats;
+----
+-0.84229 0.10033 -1.55741
+-1.55741 NULL NULL
+0.20271 -0.10033 1.55741
+0.5463 -0.20271 0
+
+## tanh
+
+# tanh scalar function
+# tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+query RRR rowsort
+select tanh(1), tanh(2), tanh(3);
+----
+0.761594155956 0.964027580076 0.995054753687
+
+# tanh scalar nulls
+query R rowsort
+select tanh(null);
+----
+NULL
+
+# tanh with columns (round is needed to normalize the outputs of different operating systems)
+query RRR rowsort
+select round(tanh(a), 5), round(tanh(b), 5), round(tanh(c), 5) from small_floats;
+----
+-0.60437 0.09967 -0.76159
+-0.76159 NULL NULL
+0.19738 -0.09967 0.76159
+0.46212 -0.19738 0
+
+## trunc
+
+# trunc scalar function
+query RRR rowsort
+select trunc(1.5), trunc(2.71), trunc(3.1415);
+----
+1 2 3
+
+# trunc scalar nulls
+query R rowsort
+select trunc(null);
+----
+NULL
+
+# trunc with columns
+query RRR rowsort
+select trunc(a), trunc(b), trunc(c) from small_floats;
+----
+-1 NULL NULL
+0 0 -1
+0 0 0
+0 0 1
+
+# trunc with precision
+query RRRRR rowsort
+select trunc(4.267, 3), trunc(1.1234, 2), trunc(-1.1231, 6), trunc(1.2837284, 2), trunc(1.1, 0);
+----
+4.267 1.12 -1.1231 1.28 1
+
+# trunc with negative precision should truncate digits left of decimal
+query R
+select trunc(12345.678, -3);
+----
+12000
+
+# trunc with columns and precision
+query RRR rowsort
+select
+  trunc(sqrt(abs(a)), 3) as a3,
+  trunc(sqrt(abs(a)), 1) as a1,
+  trunc(arrow_cast(sqrt(abs(a)), 'Float64'), 3) as a3_f64
+from small_floats;
+----
+0.447 0.4 0.447
+0.707 0.7 0.707
+0.836 0.8 0.836
+1 1 1
+
+# trunc with decimals
+query RT
+select trunc(arrow_cast(3.1415, 'Decimal128(10,4)')), arrow_typeof(trunc(arrow_cast(3.1415, 'Decimal128(10,4)')));
+----
+3 Decimal128(10, 4)
+
+# trunc with precision - decimals
+query RRRRR rowsort
+select
+  trunc(arrow_cast(4.267, 'Decimal32(8,3)'), 3),
+  trunc(arrow_cast(1.1234, 'Decimal64(18,6)'), 2),
+  trunc(arrow_cast(-1.1231, 'Decimal128(15,4)'), 6),
+  trunc(arrow_cast(1.2837284, 'Decimal256(35,7)'), 2),
+  trunc(arrow_cast(1.1, 'Decimal128(10,1)'), 0);
+----
+4.267 1.12 -1.1231 1.28 1
+
+# trunc with negative precision should truncate digits left of decimal - decimal types
+query RT
+select trunc(arrow_cast(12345.678, 'Decimal128(10,3)'), -3),
+       arrow_typeof(trunc(arrow_cast(12345.678, 'Decimal128(10,3)'), -3));
+----
+12000 Decimal128(10, 3)
+
+# trunc: coercion with a decimal argument and a non-int64 precision argument
+query RT
+select trunc(arrow_cast(1.2345678, 'Decimal128(20,14)'), arrow_cast(2, 'Int32')),
+       arrow_typeof(trunc(arrow_cast(1.2345678, 'Decimal128(20,14)'), arrow_cast(2, 'Int32')));
+----
+1.23 Decimal128(20, 14)
+
+# trunc with columns and precision - decimal128
+query RRR rowsort
+select
+  trunc(arrow_cast(a, 'Decimal128(10,4)'), 0) as a0,
+  trunc(arrow_cast(b, 'Decimal128(10,4)'), 0) as b0,
+  trunc(arrow_cast(c, 'Decimal128(10,4)'), 0) as c0
+from small_floats;
+----
+-1 NULL NULL
+0 0 -1
+0 0 0
+0 0 1
+
+# trunc issue #22512
+query R
+select trunc(CAST(9007199254740993 AS DECIMAL(20,0)));
+----
+9007199254740993
+
+
+## bitwise and
+
+# bitwise and with column and scalar
+query I rowsort
+select c & 856 from signed_integers;
+----
+328
+8
+88
+NULL
+
+# bitwise and with columns
+query III rowsort
+select a & b, c & d, e & f from signed_integers;
+----
+0 0 5
+100 1024 8
+10000 2048 8
+NULL NULL NULL
+
+## bitwise or
+
+# bitwise or with column and scalar
+query I rowsort
+select c | 856 from signed_integers;
+----
+-130
+-39
+891
+NULL
+
+# bitwise or with columns
+query III rowsort
+select a | b, c | d, e | f from signed_integers;
+----
+-1 -567 -2
+-3 -978 -2
+-998 -133 -11
+NULL NULL NULL
+
+## bitwise xor
+
+# bitwise xor with column and scalar
+query I rowsort
+select c ^ 856 from signed_integers;
+----
+-138
+-367
+803
+NULL
+
+# bitwise xor with columns
+query III rowsort
+select a ^ b, c ^ d, e ^ f from signed_integers;
+----
+-10003 -3026 -10
+-101 -1591 -10
+-998 -133 -16
+NULL NULL NULL
+
+# bitwise xor with other operators
+query II rowsort
+select 2 * c - 1 ^ 856 + d + 3, d ^ 7 >> 4 from signed_integers;
+----
+-3328 128
+-822 64
+686 -16
+NULL -32
+
+statement ok
+set datafusion.sql_parser.dialect = postgresql;
+
+# postgresql exponentiation uses caret
+query R
+select 2 ^ 3;
+----
+8
+
+# postgresql bitwise xor with column and scalar
+query I rowsort
+select c # 856 from signed_integers;
+----
+-138
+-367
+803
+NULL
+
+# postgresql bitwise xor with columns
+query III rowsort
+select a # b, c # d, e # f from signed_integers;
+----
+-10003 -3026 -10
+-101 -1591 -10
+-998 -133 -16
+NULL NULL NULL
+
+# postgresql bitwise xor with other operators
+query II rowsort
+select 2 * c - 1 # 856 + d + 3, d # 7 >> 4 from signed_integers;
+----
+-3328 128
+-822 64
+686 -16
+NULL -32
+
+statement ok
+set datafusion.sql_parser.dialect = generic;
+
+
+## bitwise right shift
+
+# bitwise right shift with column and scalar
+query I rowsort
+select d >> 2 from signed_integers;
+----
+-128
+-64
+256
+512
+
+# bitwise right shift with columns
+query III rowsort
+select a >> b, c >> d, e >> f from signed_integers;
+----
+-1 -567 -1
+-1 -978 -1
+0 123 0
+NULL NULL NULL
+
+## bitwise left shift
+
+# bitwise left shift with column and scalar
+query I rowsort
+select d << 2 from signed_integers;
+----
+-1024
+-2048
+4096
+8192
+
+# bitwise left shift with columns
+query III rowsort
+select a << b, c << d, e << f from signed_integers;
+----
+-16 -567 -4096
+-196608 -978 -24576
+33554432 123 10485760
+NULL NULL NULL
+
+## bitwise operations should reject non-integer types
+
+query error DataFusion error: Error during planning: Cannot infer common type for bitwise operation Float32 & Float32
+select arrow_cast(1, 'Float32') & arrow_cast(2, 'Float32');
+
+query error DataFusion error: Error during planning: Cannot infer common type for bitwise operation Date32 & Date32
+select arrow_cast(1, 'Date32') & arrow_cast(2, 'Date32');
+
+statement ok
+drop table unsigned_integers;
+
+statement ok
+drop table signed_integers;
+
+statement ok
+drop table small_floats;
+
+
+statement ok
+create table t1(c1 varchar) as values ('a'), ('b'), ('c'), (null);
+
+# case_when()
+query I
+SELECT
+CASE WHEN c1 = 'a' THEN 1
+ WHEN c1 = 'b' THEN 2
+ END
+FROM t1
+----
+1
+2
+NULL
+NULL
+
+# case_when_else()
+query I
+SELECT
+CASE WHEN c1 = 'a' THEN 1
+ WHEN c1 = 'b' THEN 2
+ ELSE 999 END
+FROM t1
+----
+1
+2
+999
+999
+
+# case_when_with_base_expr()
+query I
+SELECT
+CASE c1 WHEN 'a' THEN 1
+ WHEN 'b' THEN 2
+ END
+FROM t1
+----
+1
+2
+NULL
+NULL
+
+# case_when_else_with_base_expr()
+query I
+SELECT
+CASE c1 WHEN 'a' THEN 1
+ WHEN 'b' THEN 2
+ ELSE 999 END
+FROM t1
+----
+1
+2
+999
+999
+
+# case_when_else_with_null_constant()
+query I
+ SELECT
+CASE WHEN c1 = 'a' THEN 1
+ WHEN NULL THEN 2
+ ELSE 999 END
+FROM t1
+----
+1
+999
+999
+999
+
+# issue: https://github.com/apache/datafusion/issues/7004
+query B
+select case c1
+    when 'foo' then TRUE
+    when 'bar' then FALSE
+end from t1
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+drop table t1
+
+
+query T
+SELECT CASE WHEN NULL THEN 'foo' ELSE 'bar' END
+----
+bar
+
+# case_expr_with_null()
+query I
+select case when b is null then null else b end from (select a,b from (values (1,null),(2,3)) as t (a,b)) a;
+----
+NULL
+3
+
+query I
+select case when b is null then null else b end from (select a,b from (values (1,1),(2,3)) as t (a,b)) a;
+----
+1
+3
+
+# case_expr_with_nulls()
+query I
+select case when b is null then null when b < 3 then null when b >=3 then b + 1 else b end from (select a,b from (values (1,null),(1,2),(2,3)) as t (a,b)) a
+----
+NULL
+NULL
+4
+
+query I
+select case b when 1 then null when 2 then null when 3 then b + 1 else b end from (select a,b from (values (1,null),(1,2),(2,3)) as t (a,b)) a;
+----
+NULL
+NULL
+4
+
+# issue: https://github.com/apache/datafusion/issues/6376
+query I
+select case when a = 0 then 123 end from (values(1), (0), (null)) as t(a);
+----
+NULL
+123
+NULL
+
+# csv_query_sum_cast() {
+
+statement ok
+CREATE EXTERNAL TABLE aggregate_test_100 (
+  c1  VARCHAR NOT NULL,
+  c2  TINYINT NOT NULL,
+  c3  SMALLINT NOT NULL,
+  c4  SMALLINT,
+  c5  INT,
+  c6  BIGINT NOT NULL,
+  c7  SMALLINT NOT NULL,
+  c8  INT NOT NULL,
+  c9  BIGINT UNSIGNED NOT NULL,
+  c10 VARCHAR NOT NULL,
+  c11 FLOAT NOT NULL,
+  c12 DOUBLE NOT NULL,
+  c13 VARCHAR NOT NULL
+)
+STORED AS CSV
+LOCATION '../../testing/data/csv/aggregate_test_100.csv'
+OPTIONS ('format.has_header' 'true');
+
+# c8 = i32; c6 = i64
+query TTT
+SELECT arrow_typeof(c8), arrow_typeof(c6), arrow_typeof(c8 + c6) FROM aggregate_test_100 limit 1;
+----
+Int32 Int64 Int64
+
+# in list array
+query BBBBBB rowsort
+SELECT c1 IN ('a', 'c') AS utf8_in_true
+      ,c1 IN ('x', 'y') AS utf8_in_false
+      ,c1 NOT IN ('x', 'y') AS utf8_not_in_true
+      ,c1 NOT IN ('a', 'c') AS utf8_not_in_false
+      ,NULL IN ('a', 'c') AS utf8_in_null
+      ,'a' IN (c1, NULL, 'c') uft8_in_column
+FROM aggregate_test_100 WHERE c12 < 0.05
+----
+false false true true NULL NULL
+false false true true NULL NULL
+false false true true NULL NULL
+false false true true NULL NULL
+true false true false NULL NULL
+true false true false NULL true
+true false true false NULL true
+
+# csv count star
+query III
+SELECT COUNT(*), COUNT(1) AS c, COUNT(c1) FROM aggregate_test_100
+----
+100 100 100
+
+# csv query sqrt sqrt
+query R
+SELECT sqrt(sqrt(c12)) FROM aggregate_test_100 LIMIT 1
+----
+0.98186505614
+
+# csv query cbrt cbrt
+query R
+SELECT cbrt(cbrt(c12)) FROM aggregate_test_100 LIMIT 1
+----
+0.991899036678
+
+# csv query cast
+query R rowsort
+SELECT CAST(c12 AS float) FROM aggregate_test_100 WHERE c12 > 0.376 AND c12 < 0.4
+----
+0.3887028
+0.39144436
+
+# csv query cast literal
+query RR rowsort
+SELECT c12, CAST(1 AS float) FROM aggregate_test_100 WHERE c12 > CAST(0 AS float) LIMIT 2
+----
+0.311471253986 1
+0.929409733247 1
+
+statement ok
+drop table aggregate_test_100
+
+statement ok
+create table test_boolean(c1 boolean) as values (false), (null), (true);
+
+statement ok
+create table test_int32(c1 int) as values (0), (1), (null), (3);
+
+statement ok
+create table test_float(c1 double) as values (1.0), (null), ('NaN'::double);
+
+# query_not()
+
+query B
+SELECT NOT c1 FROM test_boolean
+----
+true
+NULL
+false
+
+
+# query_is_null()
+
+# Note the last value is NaN (not NULL)
+query R
+SELECT c1 from test_float;
+----
+1
+NULL
+NaN
+
+
+query B
+SELECT c1 IS NULL FROM test_float
+----
+false
+true
+false
+
+# query_is_not_null()
+query B
+SELECT c1 IS NOT NULL FROM test_float
+----
+true
+false
+true
+
+
+# query_is_true()
+query B
+SELECT c1 IS TRUE as t FROM test_boolean
+----
+false
+false
+true
+
+# query_is_false()
+query B
+SELECT c1 IS FALSE as f FROM test_boolean
+----
+true
+false
+false
+
+# query_is_not_true()
+
+query B
+SELECT c1 IS NOT TRUE as nt FROM test_boolean
+----
+true
+true
+false
+
+# query_is_not_false()
+query B
+SELECT c1 IS NOT FALSE as nf FROM test_boolean
+----
+false
+true
+true
+
+
+# query_is_unknown()
+query B
+SELECT c1 IS UNKNOWN as t FROM test_boolean
+----
+false
+true
+false
+
+# query_is_not_unknown()
+query B
+SELECT c1 IS NOT UNKNOWN as t FROM test_boolean
+----
+true
+false
+true
+
+
+# query_without_from()
+
+query I
+SELECT 1
+----
+1
+
+query IIR
+SELECT 1+2, 3/4, cos(0)
+----
+3 0 1
+
+
+# query_scalar_minus_array()
+query I
+SELECT 4 - c1 FROM test_int32
+----
+4
+3
+NULL
+1
+
+# test_string_concat_operator()
+# concat 2 strings
+query T
+SELECT 'aa' || 'b'
+----
+aab
+
+# concat 4 strings as a string concat pipe.
+query T
+SELECT 'aa' || 'b' || 'cc' || 'd'
+----
+aabccd
+
+# concat 2 strings and NULL, output should be NULL
+query T
+SELECT 'aa' || NULL || 'd'
+----
+NULL
+
+# concat 1 strings and 2 numeric
+query T
+SELECT 'a' || 42 || 23.3
+----
+a4223.3
+
+# Concat operator of two binaries uses their binary representation without text at all
+query ?
+select arrow_cast('Café', 'Binary') || arrow_cast('Foobar', 'Binary');
+----
+436166c3a9466f6f626172
+
+
+# test_not_expressions()
+
+query BB
+SELECT not(true), not(false)
+----
+false true
+
+query error Error during planning: Unary operator 'NOT' requires a boolean expression, got Int64
+SELECT not(1), not(0)
+
+query ?B
+SELECT null, not(null)
+----
+NULL NULL
+
+query error Error during planning: Unary operator 'NOT' requires a boolean expression, got Utf8
+SELECT NOT('hi')
+
+# test_negative_expressions()
+
+query ??
+SELECT null, -null
+----
+NULL NULL
+
+query error Error during planning: Unary operator '-' only supports signed numeric, interval and timestamp types
+SELECT -'100'
+
+query error DataFusion error: Error during planning: Unary operator '\+' only supports numeric, interval and timestamp types
+SELECT +true
+
+statement ok
+drop table test_boolean
+
+statement ok
+drop table test_int32
+
+# scientific notation (0s)
+query RRRR
+SELECT 0e0 AS c1, 0.e-0 AS c2, -.0e+0 AS c3, 00.00e-00 AS c4
+----
+0 0 0 0
+
+# scientific notation (integer)
+query RRRR
+SELECT -1e-1, 0e100, 10E-2, 1E+0;
+----
+-0.1 0 0.1 1
+
+# scientific notation (decimal)
+query RRRR
+SELECT -1.5e-1, 00.0e1, 150.0E-3, 0.015E+2;
+----
+-0.15 0 0.15 1.5
+
+# scientific notation (integer or decimal part only)
+query RRRR
+SELECT -2.e-1, 0.e0, .0002E+3, .02E+2;
+----
+-0.2 0 0.2 2
+
+# scientific notation (overflows)
+# FLOAT64 range: -1.79E+308 to -2.22E-308, or from 2.22E-308 to 1.79E+308
+query RRRR
+SELECT -1.79e309, -2.22e-309, 2.22E-309, 1.79E+309;
+----
+-Infinity 0 0 Infinity
+
+# scientific notation (other edgecases)
+query IRRR
+SELECT 1ea, 1e-2a, 1E-2-2, 1E-1e2;
+----
+1 0.01 -1.99 0.1
+
+# case with bool type result
+query B
+SELECT CASE WHEN 'cpu' != 'cpu' THEN true ELSE false END
+----
+false
+
+statement ok
+CREATE TABLE t1(
+  a boolean,
+  b boolean
+) as VALUES
+  (true, true),
+  (true, null),
+  (true, false),
+  (null, true),
+  (null, null),
+  (null, false),
+  (false, true),
+  (false, null),
+  (false, null)
+;
+
+# csv query boolean eq neq
+query BBBBBB rowsort
+SELECT a, b, a = b as eq, b = true as eq_scalar, a != b as neq, a != true as neq_scalar FROM t1
+----
+NULL NULL NULL NULL NULL NULL
+NULL false NULL false NULL NULL
+NULL true NULL true NULL NULL
+false NULL NULL NULL NULL true
+false NULL NULL NULL NULL true
+false true false true true true
+true NULL NULL NULL NULL false
+true false false false true false
+true true true true false false
+
+# csv query boolean lt lt eq
+query BBBBBB rowsort
+SELECT a, b, a < b as lt, b = true as lt_scalar, a <= b as lt_eq, a <= true as lt_eq_scalar FROM t1
+----
+NULL NULL NULL NULL NULL NULL
+NULL false NULL false NULL NULL
+NULL true NULL true NULL NULL
+false NULL NULL NULL NULL true
+false NULL NULL NULL NULL true
+false true true true true true
+true NULL NULL NULL NULL true
+true false false false false true
+true true false true true true
+
+# csv query boolean gt gt eq
+query BBBBBB rowsort
+SELECT a, b, a > b as gt, b = true as gt_scalar, a >= b as gt_eq, a >= true as gt_eq_scalar FROM t1
+----
+NULL NULL NULL NULL NULL NULL
+NULL false NULL false NULL NULL
+NULL true NULL true NULL NULL
+false NULL NULL NULL NULL false
+false NULL NULL NULL NULL false
+false true false true false false
+true NULL NULL NULL NULL true
+true false true false true true
+true true false true true true
+
+# csv query boolean distinct from
+query BBBBBB rowsort
+SELECT a, b,
+      a is distinct from b as df,
+      b is distinct from true as df_scalar,
+      a is not distinct from b as ndf,
+      a is not distinct from true as ndf_scalar
+FROM t1
+----
+NULL NULL false true true false
+NULL false true true false false
+NULL true true false false false
+false NULL true true false false
+false NULL true true false false
+false true true false false false
+true NULL true true false true
+true false true true false true
+true true false false true true
+
+statement ok
+drop table t1
+
+# can't use like with non strings
+query error There isn't a common type to coerce Utf8 and Int64 in LIKE expression
+select column1 like 1 from (values('a'), ('b'), (NULL)) as t;
+
+
+# like nlike with null lt
+query BB rowsort
+SELECT column1 like NULL as col_null, NULL like column1 as null_col from (values('a'), ('b'), (NULL)) as t
+----
+NULL NULL
+NULL NULL
+NULL NULL
+
+query BB rowsort
+SELECT column1 not like NULL as col_null, NULL not like column1 as null_col from (values('a'), ('b'), (NULL)) as t
+----
+NULL NULL
+NULL NULL
+NULL NULL
+
+statement ok
+CREATE TABLE test(
+  c1 VARCHAR,
+  c2 INT
+) as VALUES
+('',0),
+('a',1),
+('aa',NULL),
+('aaa',3);
+
+# query concat
+query T rowsort
+SELECT concat(c1, '-hi-', cast(c2 as varchar)) FROM test
+----
+-hi-0
+a-hi-1
+aa-hi-
+aaa-hi-3
+
+# query array
+query ? rowsort
+SELECT make_array(c1, cast(c2 as varchar)) FROM test
+----
+[, 0]
+[a, 1]
+[aa, NULL]
+[aaa, 3]
+
+statement ok
+drop table test
+
+# query array scalar
+query ?
+SELECT make_array(1, 2, 3);
+----
+[1, 2, 3]
+
+statement ok
+CREATE TABLE test(
+  i32 INT,
+  i64 INT,
+  f32 FLOAT,
+  f64 FLOAT
+) as VALUES
+(2, 2, 1.0, 1.0),
+(5, 5, 2.5, 2.5),
+(0, 0, 0.0, 0.0),
+(-14, -14, -14.5, -14.5),
+(NULL, NULL, NULL, NULL);
+
+query RRRRRR rowsort
+SELECT power(i32, exp_i) as power_i32,
+       power(i64, exp_f) as power_i64,
+       pow(f32, exp_i) as power_f32,
+       power(f64, exp_f) as power_f64,
+       pow(2, 3) as power_int_scalar,
+       power(2.5, 3.0) as power_float_scalar
+FROM (select test.*, 3 as exp_i, 3.0 as exp_f from test) a
+----
+-2744 -2744 -3048.625 -3048.625 8 15.625
+0 0 0 0 8 15.625
+125 125 15.625 15.625 8 15.625
+8 8 1 1 8 15.625
+NULL NULL NULL NULL 8 15.625
+
+statement ok
+drop table test
+
+# error message for wrong function signature (Variadic: arbitrary number of args all from some common types)
+statement error
+SELECT concat();
+
+# error message for wrong function signature (Uniform: t args all from some common types)
+statement error
+SELECT nullif(1);
+
+# error message for wrong function signature (Exact: exact number of args of an exact type)
+statement error
+SELECT pi(3.14);
+
+# error message for wrong function signature (Any: fixed number of args of arbitrary types)
+statement error
+SELECT arrow_typeof(1, 1);
+
+# error message for wrong function signature (OneOf: fixed number of args of arbitrary types)
+statement error
+SELECT power(1, 2, 3);
+
+# The following functions need 1 argument
+statement error
+SELECT abs();
+
+statement error
+SELECT acos();
+
+statement error
+SELECT isnan();
+
+query I
+SELECT LENGTH('str');
+----
+3
+
+query T
+SELECT CONCAT('Hello', 'World')
+----
+HelloWorld
+
+statement ok
+CREATE TABLE simple_string(
+  letter STRING,
+  letter2 STRING
+) as VALUES
+  ('A', 'APACHE'),
+  ('B', 'APACHE'),
+  ('C', 'APACHE'),
+  ('D', 'APACHE')
+;
+
+query TT
+EXPLAIN SELECT letter, letter = LEFT('APACHE', 1) FROM simple_string;
+----
+logical_plan
+01)Projection: simple_string.letter, simple_string.letter = Utf8View("A") AS simple_string.letter = left(Utf8("APACHE"),Int64(1))
+02)--TableScan: simple_string projection=[letter]
+physical_plan
+01)ProjectionExec: expr=[letter@0 as letter, letter@0 = A as simple_string.letter = left(Utf8("APACHE"),Int64(1))]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TB
+SELECT letter, letter = LEFT('APACHE', 1) FROM simple_string;
+ ----
+----
+A true
+B false
+C false
+D false
+
+query TT
+EXPLAIN SELECT letter, letter = LEFT(letter2, 1) FROM simple_string;
+----
+logical_plan
+01)Projection: simple_string.letter, simple_string.letter = left(simple_string.letter2, Int64(1))
+02)--TableScan: simple_string projection=[letter, letter2]
+physical_plan
+01)ProjectionExec: expr=[letter@0 as letter, letter@0 = left(letter2@1, 1) as simple_string.letter = left(simple_string.letter2,Int64(1))]
+02)--DataSourceExec: partitions=1, partition_sizes=[1]
+
+query TB
+SELECT letter, letter = LEFT(letter2, 1) FROM simple_string;
+----
+A true
+B false
+C false
+D false
+
+# test string_temporal_coercion
+query BBBBBBBBBB
+select
+  arrow_cast(to_timestamp('2020-01-01 01:01:11.1234567890Z'), 'Timestamp(s)') == '2020-01-01T01:01:11',
+  arrow_cast(to_timestamp('2020-01-02 01:01:11.1234567890Z'), 'Timestamp(s)') == arrow_cast('2020-01-02T01:01:11', 'LargeUtf8'),
+  arrow_cast(to_timestamp('2020-01-03 01:01:11.1234567890Z'), 'Time32(Second)') == '01:01:11',
+  arrow_cast(to_timestamp('2020-01-04 01:01:11.1234567890Z'), 'Time32(Second)') == arrow_cast('01:01:11', 'LargeUtf8'),
+  arrow_cast(to_timestamp('2020-01-05 01:01:11.1234567890Z'), 'Time64(Microsecond)') == '01:01:11.123456',
+  arrow_cast(to_timestamp('2020-01-06 01:01:11.1234567890Z'), 'Time64(Microsecond)') == arrow_cast('01:01:11.123456', 'LargeUtf8'),
+  arrow_cast('2020-01-07', 'Date32') == '2020-01-07',
+  arrow_cast('2020-01-08', 'Date64') == '2020-01-08',
+  arrow_cast('2020-01-09', 'Date32') == arrow_cast('2020-01-09', 'LargeUtf8'),
+  arrow_cast('2020-01-10', 'Date64') == arrow_cast('2020-01-10', 'LargeUtf8')
+;
+----
+true true true true true true true true true true
+
+query I
+SELECT ALL - CASE WHEN NOT - AVG ( - 41 ) IS NULL THEN 47 WHEN NULL IS NULL THEN COUNT ( * ) END + 93 + - - 44 * 91 + CASE + 44 WHEN - - 21 * 69 - 12 THEN 58 ELSE - 3 END * + + 23 * + 84 * - - 59
+----
+-337914
+
+query T
+SELECT CASE 3 WHEN 1+2 THEN 'first' WHEN 1+1+1 THEN 'second' END
+----
+first
+
+# position test
+query I
+select position('world' in 'hello world');
+----
+7
+
+# test in expression
+query I
+select 1000 where position('world' in 'hello world') != 100;
+----
+1000
+
+# test in expression
+query I
+select 100000 where position('legend' in 'league of legend') != 11;
+----
+
+# test in expression
+query I
+select 100000 where position('legend' in 'league of legend') = 11;
+----
+100000
+
+# test null
+query I
+select position(null in null)
+----
+NULL
+
+
+query I
+select position('' in '')
+----
+1
+
+query error DataFusion error: Error during planning: Function 'strpos' requires String, but received Int64 \(DataType: Int64\).
+select position(1 in 1)
+
+query I
+select strpos('abc', 'c');
+----
+3
+
+query I
+select strpos('abc', 'd');
+----
+0
+
+
+query I
+select strpos('abc', '');
+----
+1
+
+query I
+select strpos('helloworld', 'world');
+----
+6
+
+query I
+select strpos('helloworld', arrow_cast(null, 'Utf8'));
+----
+NULL
+
+query I
+select strpos(arrow_cast(null, 'Utf8'), 'hello');
+----
+NULL
+
+query I
+select strpos(arrow_cast('Helloworld', 'LargeUtf8'), arrow_cast('world', 'LargeUtf8'));
+----
+6
+
+query I
+select strpos(arrow_cast(null, 'LargeUtf8'), arrow_cast('world', 'LargeUtf8'));
+----
+NULL
+
+query I
+select strpos(arrow_cast('Helloworld', 'LargeUtf8'), arrow_cast(null, 'LargeUtf8'));
+----
+NULL
+
+query I
+select strpos('josé', 'é');
+----
+4
+
+query I
+select strpos('joséésoj', 'so');
+----
+6
+
+
+query I
+select strpos('joséésoj', 'abc');
+----
+0
+
+query I
+select strpos(arrow_cast(null, 'Utf8'), 'abc');
+----
+NULL
+
+query I
+select strpos('joséésoj', arrow_cast(null, 'Utf8'));
+----
+NULL
+
+# strpos with array inputs
+statement ok
+CREATE TABLE strpos_table AS VALUES
+  ('alphabet', 'ph'),
+  ('hello world', 'world'),
+  ('hello world', 'xyz'),
+  ('hello world', ''),
+  ('josé', 'é'),
+  ('joséésoj', 'so'),
+  ('ДатаФусион', 'Фусион'),
+  ('数据融合📊🔥', '📊'),
+  ('数据融合📊🔥', '融合'),
+  (NULL, 'abc'),
+  ('hello', NULL),
+  ('ab', 'abcd');
+
+# Array haystack + array needle
+query I
+SELECT strpos(column1, column2) FROM strpos_table;
+----
+3
+7
+0
+1
+4
+6
+5
+5
+3
+NULL
+NULL
+0
+
+# Array haystack + scalar ASCII needle
+query I
+SELECT strpos(column1, 'o') FROM strpos_table;
+----
+0
+5
+5
+5
+2
+2
+0
+0
+0
+NULL
+5
+0
+
+# Array haystack + scalar Unicode needle
+query I
+SELECT strpos(column1, '📊') FROM strpos_table;
+----
+0
+0
+0
+0
+0
+0
+0
+5
+5
+NULL
+0
+0
+
+# Array haystack + scalar empty needle
+query I
+SELECT strpos(column1, '') FROM strpos_table;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+NULL
+1
+1
+
+# Array haystack + scalar null needle
+query I
+SELECT strpos(column1, arrow_cast(null, 'Utf8')) FROM strpos_table;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE strpos_table;
+
+statement ok
+CREATE TABLE t1 (v1 int) AS VALUES (1), (2), (3);
+
+query I
+SELECT * FROM t1 ORDER BY ACOS(SIN(v1));
+----
+2
+1
+3
+
+query I
+SELECT * FROM t1 ORDER BY ACOSH(SIN(v1));
+----
+1
+2
+3
+
+query I
+SELECT * FROM t1 ORDER BY ASIN(SIN(v1));
+----
+3
+1
+2
+
+query I
+SELECT * FROM t1 ORDER BY ATANH(SIN(v1));
+----
+3
+1
+2
+
+statement ok
+drop table t1;

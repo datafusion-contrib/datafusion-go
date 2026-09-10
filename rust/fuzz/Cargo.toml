@@ -1,0 +1,19 @@
+[package]
+name = "datafusion-go-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+datafusion-go = { path = ".." }
+libfuzzer-sys = "=0.4.13"
+
+[[bin]]
+name = "prepare"
+path = "fuzz_targets/prepare.rs"
+test = false
+doc = false
+bench = false
