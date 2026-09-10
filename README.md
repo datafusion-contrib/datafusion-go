@@ -15,7 +15,7 @@ datafusion-go provides a `database/sql` driver and Arrow APIs for [Apache DataFu
 
 ## Install
 
-The package requires Go 1.25 or newer, a C toolchain, and cgo enabled. On Windows, use a MinGW/GNU toolchain for the `x86_64-pc-windows-gnu` Rust ABI.
+The package requires Go 1.26 or newer, a C toolchain, and cgo enabled. On Windows, use a MinGW/GNU toolchain for the `x86_64-pc-windows-gnu` Rust ABI.
 
 Prebuilt native libraries support these platforms:
 
