@@ -108,6 +108,28 @@ It also derives the native loader declarations and ABI contract tests from
 Increment `abi.version` only when the C ABI in `rust/include/datafusion_go.h`
 changes incompatibly with the Go native wrapper.
 
+CI compares each pull request with its base commit, and each push to `main`
+with the previous commit. Changes to shipped Go or Rust code, native headers
+and libraries, dependency manifests, the Makefile, release workflow, or Git
+archive attributes require a version bump and a non-empty changelog entry.
+Documentation, examples, test fixtures, test-only modules, and development
+tooling can keep the existing version. Tests embedded in a production source
+file still count as a change to that file.
+
+For the same DataFusion version, increment `datafusion_go.patch` by one. For
+a newer DataFusion version, reset it to zero. The module major can stay the
+same or increment by one; DataFusion and ABI versions cannot decrease. New
+release tags must not already exist. Generated-file checks also run in CI.
+Two PRs proposing the same next version must update their branches after the
+first merges so their version check runs against the new base.
+
+To run the version check locally after fetching `main` and the release tags:
+
+```sh
+git fetch origin main --tags
+go run ./internal/tools/genversions -base-ref origin/main
+```
+
 ## Native Libraries
 
 The Rust crate under `rust/` builds a static archive and a shared library. The default Go build loads the platform-specific shared library at runtime from `DATAFUSION_GO_LIBRARY`, from `internal/native/lib/<goos>-<goarch>` in source checkouts, or from the checksum-verified release-asset cache. The explicit `datafusion_use_bundled` mode links the platform-specific static archive from `internal/native/lib/<goos>-<goarch>/libdatafusion_go.a`.
