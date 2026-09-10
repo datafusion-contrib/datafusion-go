@@ -25,7 +25,15 @@ type config struct {
 func main() {
 	check := flag.Bool("check", false, "check generated files without writing")
 	githubOutput := flag.String("github-output", "", "append computed release values to a GitHub Actions output file")
+	baseRef := flag.String("base-ref", "", "check release version changes against this Git commit or ref")
 	flag.Parse()
+
+	if *baseRef != "" {
+		if err := checkVersionBump(*baseRef); err != nil {
+			fatal(err)
+		}
+		return
+	}
 
 	if err := run(*check, *githubOutput); err != nil {
 		fatal(err)
@@ -88,7 +96,10 @@ func readConfig(path string) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+	return parseConfig(path, data)
+}
 
+func parseConfig(path string, data []byte) (config, error) {
 	values := map[string]string{}
 	sections := map[string]bool{}
 	section := ""
