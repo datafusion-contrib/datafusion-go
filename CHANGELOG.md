@@ -2,6 +2,12 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550000.3 - 2026-09-09
+
+- Updated `golang.org/x/sys` to v0.48.0, raising the minimum supported Go version to 1.26. The recommended toolchain remains Go 1.27.1.
+- Updated Tokio to 1.53.1 and the Futures crates to 0.3.34.
+- Updated all workflows to use SHA-pinned `actions/checkout` v7.0.1 and `actions/setup-go` v7.0.0.
+
 ## v0.550000.2 - 2026-09-09
 
 - Consolidated query and statement execution and simplified native ownership and cleanup across Go and Rust.

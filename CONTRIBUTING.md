@@ -4,7 +4,7 @@
 
 - A supported, patched Go toolchain with cgo enabled. `go.mod` recommends
   Go 1.27.1; Go automatically selects it for development in this module.
-  The module requires Go 1.25 or newer.
+  The module requires Go 1.26 or newer.
 - A C toolchain for the target platform.
 - Rust 1.94 or newer for rebuilding the DataFusion FFI shim.
 
