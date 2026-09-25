@@ -180,8 +180,10 @@ func sqlLogicError(err error) error {
 		if nativeError.Kind == "panic" {
 			return &native.SQLLogicHarnessError{Err: err}
 		}
-		// Match upstream's error wrapper; preserve the engine message.
-		return errors.New("DataFusion error: " + nativeError.Message)
+		// Structured streaming errors retain Arrow's transport prefix as well.
+		// Match upstream's wrapper while preserving the engine message.
+		message := sqlLogicStreamError.ReplaceAllString(nativeError.Message, "")
+		return errors.New("DataFusion error: " + message)
 	}
 	if sqlLogicStreamError.MatchString(err.Error()) {
 		message := sqlLogicStreamError.ReplaceAllString(err.Error(), "")

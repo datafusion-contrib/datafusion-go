@@ -2,8 +2,9 @@
 
 All notable changes to datafusion-go are documented here.
 
-## v0.550000.4
+## v0.550100.0
 
+- Updated Apache DataFusion and its FFI/SQL crates to 55.1.0. This includes upstream fixes for FFI construction and logical-extension codecs, nested-schema adaptation, projection/cast metadata, UNNEST batch sizing and RightMark joins. Existing Go API signatures and defaults remain unchanged. Native foreign-provider integrations must rebuild against `datafusion-ffi` 55.1.0: the exact-version handshake continues to reject providers built against other versions before dereferencing their pointers. The pinned SQLLogicTest corpus and fixture dependencies now match 55.1.0, retaining the four documented temporary exclusions.
 - Added an Arrow-oriented `Session` API over the existing execution path. Existing `database/sql`, Arrow registration, foreign-provider, parameter and connection APIs remain available with their prior defaults.
 - Added lazy Go table providers with exact projection, conservative typed filter pushdown, context cancellation, schema validation and optional streaming INSERT support. Catalog-resolved tables retain their write capabilities. Go-produced batches are copied through bounded, per-batch IPC transfers; ordinary Go allocators are supported.
 - Added typed, vectorized Go scalar functions with explicit volatile, stable or immutable semantics, zero-argument batch support, cancellation and return type/length validation. Blocking scans, reads, writes, lookups and UDF evaluation run outside DataFusion worker threads, with bounded callback concurrency.
@@ -12,7 +13,7 @@ All notable changes to datafusion-go are documented here.
 - Made question-mark placeholder offset calculation linear in SQL length instead of rescanning the SQL for each placeholder endpoint.
 - Reduced safe Arrow registration staging from a full-dataset IPC buffer to one batch at a time, retaining Rust-owned copies and atomic publication on success. Existing tables remain unchanged after failed or canceled imports.
 - Added opt-in parsed-statement caching (`WithPreparedStatementCache`), native worker counts (`WithRuntimeWorkers`) and reference-counted Tokio runtime sharing (`WithSharedRuntime`). Plan caching is not enabled: each execution resolves current tables and binds fresh parameters, and parser changes bypass cached syntax. Defaults remain uncached statements and a separate native runtime per connector.
-- Scoped statement serialization to individual isolated sessions while preserving serialization across shared connections. Removed the cancellation-watcher goroutine for contexts that cannot be canceled, and preserved native error categories for streamed batch failures.
+- Scoped statement serialization to individual isolated sessions while preserving serialization across shared connections. Removed the cancellation-watcher goroutine for contexts that cannot be canceled, and preserved native error categories for streamed batch failures. Updated the SQLLogicTest adapter to normalize those structured stream errors without allowing native panics to satisfy expected SQL errors.
 - Expanded tests for extension lifetimes, blocked-scan cancellation, CTAS, UDFs, catalog snapshots, writes, panic cleanup, large placeholder lists, incremental import failures and opt-in runtime/statement behavior. Coverage runs clear stale workspace instrumentation before collecting current-source results.
 
 ## v0.550000.3 - 2026-09-09

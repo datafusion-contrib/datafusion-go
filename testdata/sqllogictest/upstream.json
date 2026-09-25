@@ -1,10 +1,10 @@
 {
   "generated": "Pinned upstream corpus; update with scripts/sqllogictest.py sync. Version is derived from versions.toml.",
-  "datafusion_version": "55.0.0",
+  "datafusion_version": "55.1.0",
   "source": {
     "repository": "apache/datafusion",
-    "commit": "d5552342012888b7d1a3ab88d92e3d292fc0cde0",
-    "sha256": "8f9b42eeafba3a070899153c9c35f6cd8a5ebac7a3c43947c81d15ba9573975a"
+    "commit": "7d3835c71f30cbd3c3ae4041732267f1f453097a",
+    "sha256": "834617ffbc71fe94e6e8a19df377ec11afffc5f8457b31b6918ea554b34d2c3a"
   },
   "datasets": [
     {
@@ -97,7 +97,7 @@
     "binary_view.slt": "bfef12578fd3cee107dff071f66910aa75f55f3750765b41b7caedf090eb723c",
     "case.slt": "fca6bedfebe1eda3deb1957969b2ef7fd109c879fddca84bb02b7b01c782c7d5",
     "cast.slt": "a28dd61b79cfd8edc05c938e130c8c847285cf23a7a6b9ed9ca0ccc881f1c586",
-    "cast_extension_type_metadata.slt": "f2b063a24b4b47e7c9d1eea3390c646368aad08b9d136cbf5b984a45ecc9cdc7",
+    "cast_extension_type_metadata.slt": "82c1f3c1a1dd39499c58f459fd48b9442d2f559851c4555660e85151c5c2669f",
     "cast_to_type.slt": "d5d9a8116d748fd64fa373c91a2b763a4f6fca87e23976cfd34248ccb0a4d039",
     "clickbench.slt": "0462c558d868cb1f7de14c2a322fe89405fe3d32f50229cb91355d7f035d3a4f",
     "clickbench_extended.slt": "59a241852a961fdfb9161060803524d919d567f408890e6e6713c0252c0669e7",
@@ -218,10 +218,10 @@
     "parquet.slt": "1003bc7a1bd05af7b4535f7f3a09db19b8c8ecf72b3e4602d5fb05eeadf7f4e7",
     "parquet_cdc.slt": "37532436df1dc62cd313c708ae48b149f5a343ba316853984dbecc5023b71234",
     "parquet_cdc_config.slt": "b4cb4ed87b4f1c7e096c548c3e9b88216b8874f7abdaec0240f507dc0bfba66d",
-    "parquet_filter_pushdown.slt": "78519571bd4f835296c13aa1c39e3e5fd6d850758e2197d5d04d2e209dd12fa9",
+    "parquet_filter_pushdown.slt": "0db3b2c635b60aaa84ca9583bdd8eca6ea9cdb59fab47bafeffc64a8100bc6ae",
     "parquet_max_row_group_bytes.slt": "0002596b4c0c959f8941f17a98df87fa7245f65cc9bb95264af35a14ce8a5786",
     "parquet_metadata_functions.slt": "3851d9688f4e9590f6c0745081cd49f271568fb4dfef8a3e1d7b34bc544c2e81",
-    "parquet_nested_schema_pruning.slt": "774d736e8d6829b510fd57a69ae3ace9ee140125888c466608d0a05b20d10b1f",
+    "parquet_nested_schema_pruning.slt": "b12e4a660571e07ba1c1a0e0ac720d1068fd7588c4b1d1f22bc406207005262a",
     "parquet_sorted_statistics.slt": "47900d4e01e72c1f3b7368ded5b601c11318a11cd5f12a9710ba2f41d655ba51",
     "parquet_statistics.slt": "5e5ddcb87d34d25d3868cfb505051831786f01eba422a0caca137ce475183ee1",
     "pg_compat/pg_compat_null.slt": "2ccb11b13f11229b13ceb133bff87b4a7cbd76b3b692286b3360655e259c7dbc",
@@ -584,7 +584,7 @@
     "union.slt": "f16df8c52ccb0d9e6ad7580e289f152f45a80fff6a8a941b581c0d47573f83c4",
     "union_by_name.slt": "8407fc2077148957887af0e4a0efac65da63678cc9cc0a69059e13e8020b3542",
     "union_function.slt": "f03bc24f6737a7a70d6e62c010c3f0de9316a69ee26916b9fe3d6140939126f0",
-    "unnest.slt": "9a7ce4c00f3c4f6915b3f5de3f0b571253cf9045c0a0d9135afa8ba2cb8cd206",
+    "unnest.slt": "3031b61c51dedd724b919c25db1ea7602e9af7e3c3cc7ecd29fa4fe68c75e91e",
     "update.slt": "1f9a2e0703c813bb6796c1e6a208b1c2d584b9f2e2fdcb12c635908a22aedaf0",
     "wildcard.slt": "c31986a9cb7ea772d6548a06e6aac072d1d5a07b6889e68d38a0e56e403c16c8",
     "window.slt": "707f3ccc9203326097c697067f683d7391c58a60044f2e7bb721d0738cc7c0f6",

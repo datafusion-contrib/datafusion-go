@@ -64,10 +64,10 @@ upstream expected values to accommodate a driver failure. Put additional
 assertions in `driver/`, then run `make sqllogic.driver.sync` to update their
 reviewed checksums. These are reported separately from the upstream file count.
 
-DataFusion 55.0.0 supplies 504 `.slt` files. Of these, 146 are comment-only Spark
+DataFusion 55.1.0 supplies 504 `.slt` files. Of these, 146 are comment-only Spark
 stubs and 358 contain executable assertions. With four temporary exclusions and
-two added portable trigonometric queries, includes expand to 24,867 records;
-eight are explicitly postgres-only. The driver must execute all 24,859 eligible
+two added portable trigonometric queries, includes expand to 24,896 records;
+eight are explicitly postgres-only. The driver must execute all 24,888 eligible
 records. Comment-only files are inventoried but
 never counted as passing SQL.
 

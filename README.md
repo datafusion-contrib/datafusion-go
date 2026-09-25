@@ -380,6 +380,10 @@ rows, err := db.QueryContext(ctx, `SELECT ... FROM t WHERE ...`)
 1. Get `providerVersion` from the library that supplies the provider.
 2. Make sure that `providerVersion` equals this package's `DataFusionVersion`.
 
+This release uses DataFusion 55.1.0. Rebuild foreign providers against
+`datafusion-ffi` 55.1.0 when upgrading from the 55.0.0-based driver.
+The Go-facing registration API is unchanged.
+
 Do not substitute this package's `DataFusionVersion` for the version from the foreign library. The driver compares versions before it dereferences the provider pointer. A mismatch returns an error.
 
 Exact version equality is stricter than the major-version ABI contract of datafusion-ffi.
