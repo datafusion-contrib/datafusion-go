@@ -1,6 +1,6 @@
 // Adapted from cedricziel/datafusion-golang (Apache-2.0), commit 54272e7.
 //! Recognizer and serializer for the bounded filter-pushdown predicate AST
-//! (design D2/D3/D7). One recognizer, [`classify`], decides which
+//! used by Go providers. One recognizer, [`classify`], decides which
 //! DataFusion expressions are representable; it backs both planning-time
 //! classification (`supports_filters_pushdown`) and scan-time
 //! serialization, so serialization is total by construction.
@@ -88,7 +88,7 @@ pub(crate) enum Literal {
 }
 
 /// One node of the wire-format predicate AST, tagged by `kind`. The Go
-/// decoder in `datafusion/expr.go` is the other half of this contract;
+/// decoder in `internal/native/expr.go` is the other half of this contract;
 /// golden fixtures under `datafusion/testdata/pushdown/` pin both sides.
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -127,7 +127,7 @@ pub(crate) enum PushExpr {
 }
 
 /// Decides whether `expr` is representable in the bounded AST, returning
-/// the wire node if so. Conservative by design (design D7): anything not
+/// the wire node if so. Conservative by design: anything not
 /// recognized is `None`, which the caller maps to `Unsupported` — always
 /// correct, since DataFusion then filters after the scan.
 pub(crate) fn classify(expr: &Expr, schema: &Schema) -> Option<PushExpr> {
@@ -200,9 +200,9 @@ pub(crate) fn classify(expr: &Expr, schema: &Schema) -> Option<PushExpr> {
 }
 
 /// Serializes the representable subset of `filters` into the one-JSON-
-/// document-per-scan wire format (design D3). Returns `None` when nothing
+/// document-per-scan wire format. Returns `None` when nothing
 /// is representable (the scan then passes NULL). Filters reaching a scan
-/// were already classified representable at planning time (design D7);
+/// were already classified representable at planning time;
 /// filtering again here is defensive and always correct, since pushed
 /// filters are advisory.
 pub(crate) fn filters_to_json(filters: &[Expr], schema: &Schema) -> Option<CString> {
@@ -284,7 +284,7 @@ fn scalar_to_literal(scalar: &ScalarValue) -> Option<Literal> {
         ScalarValue::TimestampMicrosecond(value, tz) => timestamp(value, "us", tz),
         ScalarValue::TimestampNanosecond(value, tz) => timestamp(value, "ns", tz),
         // Null literals, decimals, and nested types are deliberately not
-        // admitted in this change (design D2).
+        // admitted in this protocol.
         _ => None,
     }
 }

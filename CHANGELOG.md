@@ -13,7 +13,7 @@ All notable changes to datafusion-go are documented here.
 - Reduced safe Arrow registration staging from a full-dataset IPC buffer to one batch at a time, retaining Rust-owned copies and atomic publication on success. Existing tables remain unchanged after failed or canceled imports.
 - Added opt-in parsed-statement caching (`WithPreparedStatementCache`), native worker counts (`WithRuntimeWorkers`) and reference-counted Tokio runtime sharing (`WithSharedRuntime`). Plan caching is not enabled: each execution resolves current tables and binds fresh parameters, and parser changes bypass cached syntax. Defaults remain uncached statements and a separate native runtime per connector.
 - Scoped statement serialization to individual isolated sessions while preserving serialization across shared connections. Removed the cancellation-watcher goroutine for contexts that cannot be canceled, and preserved native error categories for streamed batch failures.
-- Expanded tests for extension lifetimes, blocked-scan cancellation, CTAS, UDFs, catalog snapshots, writes, panic cleanup, large placeholder lists, incremental import failures and opt-in runtime/statement behavior.
+- Expanded tests for extension lifetimes, blocked-scan cancellation, CTAS, UDFs, catalog snapshots, writes, panic cleanup, large placeholder lists, incremental import failures and opt-in runtime/statement behavior. Coverage runs clear stale workspace instrumentation before collecting current-source results.
 
 ## v0.550000.3 - 2026-09-09
 
