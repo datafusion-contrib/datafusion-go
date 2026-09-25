@@ -91,3 +91,51 @@ the project does not maintain another ABI schema or expose a public plugin
 interface for testing.
 
 See [testing.md](testing.md) for regression oracles and verification commands.
+
+## Additive Go extensions
+
+`Session` uses the same `Conn` and `queryOperation` implementation as the SQL
+adapter. Provider, function and catalog registration share the session mutation
+lock, making duplicate rejection atomic across pooled shared connections.
+Isolated sessions use their own mutation lock.
+
+The native callback table is versioned separately from the unchanged C ABI v1.
+C trampolines in the Go executable supply function pointers, including the byte
+allocator's matching free function; the dynamic Rust library does not resolve
+Go symbols. Rust `Arc<Owner>` objects retain opaque `cgo.Handle` values across
+plans, scans, blocking tasks and cancellation. Go panic recovery contains reader,
+function and resolver failures before returning across the callback seam.
+
+First registration waits for plans started without callback context, then enables
+context creation before publishing any extension. Ordinary connectors do not
+allocate callback handles; subsequent extension queries use an atomic fast path.
+Each extension query owns a Go context attached to its cancellation token. A
+private configuration extension propagates it through a cloned planning state
+and result DataFrame. CTAS needs it during immediate execution as well. Existing
+session mutations still reach the original shared catalog/configuration. Scans
+and individual UDF evaluations use child contexts so dropping one branch cannot
+cancel sibling work. Blocking callbacks keep their owners alive after their
+awaiting future is canceled. Callback concurrency and INSERT channels are bounded.
+
+Go outputs are copied into C-owned IPC payloads before a callback returns, then
+decoded into Rust-owned buffers and freed through the originating allocator.
+No ordinary Go Arrow buffer is retained by native code. INSERT input flows in
+the other direction through an owned Arrow C stream and a two-batch channel.
+Its producer task is aborted when the writer exits early or execution is dropped.
+Only an explicit successful terminal message becomes EOF: unexpected producer
+closure becomes an input error before a well-behaved provider can commit.
+
+Catalog resolution creates a private catalog list containing per-query snapshots
+of referenced remote tables; it does not publish those snapshots to the shared
+session. It preserves optional provider capabilities and propagates lookup errors.
+Enumeration and transactional remote snapshots are outside this resolver contract.
+
+Incremental Arrow import retains unpublished Rust batches and commits against
+the connection's current session only after input consumption succeeds. Close
+aborts uncommitted imports. Existing one-shot IPC and zero-copy C entry points
+remain available to native consumers.
+
+Parsed syntax caching and runtime sharing are opt-in. Cached statements record
+parser settings; every execution still resolves catalogs and parameters. Shared
+runtime lookup uses weak references, so the lookup table cannot retain an unused
+runtime. DataFusion session state and memory pools are never shared by this option.

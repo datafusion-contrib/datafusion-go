@@ -15,8 +15,11 @@ func TestHeaderContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(abi.functions) != 25 || len(abi.fields) != 14 {
+	if len(abi.functions) != 32 || len(abi.fields) != 14 {
 		t.Fatalf("unexpected ABI dimensions: %d functions, %d fields", len(abi.functions), len(abi.fields))
+	}
+	if got := strings.Join(abi.callbackFields, ","); got != "version,invoke,free_bytes" {
+		t.Fatalf("unexpected callback fields: %s", got)
 	}
 	for _, fixture := range []struct{ from, to string }{
 		{"int32_t dfgo_abi_version(void);", "int32_t dfgo_abi_version(void);\nint32_t dfgo_abi_version(void);"},

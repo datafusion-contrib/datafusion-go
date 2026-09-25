@@ -57,6 +57,7 @@ mod ffi_types {
         pub(crate) query: String,
         pub(crate) params: ParameterMetadata,
         pub(crate) serializes: bool,
+        pub(crate) cached: Option<crate::query::CachedStatement>,
     }
 
     // A result can be exported exactly once as an Arrow C stream. The Option is
@@ -102,6 +103,113 @@ mod ffi_types {
 }
 
 pub use ffi_types::*;
+
+#[allow(non_camel_case_types)]
+pub struct dfgo_import {
+    name: String,
+    schema: Option<datafusion::arrow::datatypes::SchemaRef>,
+    batches: Vec<datafusion::arrow::record_batch::RecordBatch>,
+    finished: bool,
+}
+
+/// # Safety
+/// Inputs and outputs follow the connection/string/error rules in the C header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_import_open(
+    conn: *mut dfgo_connection,
+    name: *const c_char,
+    out: *mut *mut dfgo_import,
+    err: *mut *mut dfgo_error,
+) -> i32 {
+    run_ffi(err, || {
+        if conn.is_null() || out.is_null() {
+            return Err(FfiError::invalid_argument("null import argument"));
+        }
+        let name = cstr_to_string(name, "table name")?;
+        if name.trim().is_empty() {
+            return Err(FfiError::invalid_argument("table name is empty"));
+        }
+        // SAFETY: checked output pointer; publication borrows the current connection at commit.
+        unsafe {
+            *out = Box::into_raw(Box::new(dfgo_import {
+                name,
+                schema: None,
+                batches: Vec::new(),
+                finished: false,
+            }));
+        }
+        Ok(())
+    })
+}
+
+/// # Safety
+/// importer is live; data has len readable bytes; err follows the C header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_import_append(
+    importer: *mut dfgo_import,
+    data: *const u8,
+    len: i64,
+    err: *mut *mut dfgo_error,
+) -> i32 {
+    run_ffi(err, || {
+        // SAFETY: callers exclusively borrow a live importer for this call.
+        let importer = unsafe { importer.as_mut() }
+            .ok_or_else(|| FfiError::invalid_argument("null importer"))?;
+        if importer.finished {
+            return Err(FfiError::invalid_argument("import already finished"));
+        }
+        let (schema, batches) = ipc_batches(bytes_from_ptr(data, len, "arrow IPC batch")?)?;
+        if importer.schema.as_ref().is_some_and(|s| s != &schema) {
+            return Err(FfiError::invalid_argument("import schema changed"));
+        }
+        importer.schema = Some(schema);
+        importer.batches.extend(batches);
+        Ok(())
+    })
+}
+
+/// # Safety
+/// importer is live and exclusively borrowed; err follows the C header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_import_commit(
+    conn: *mut dfgo_connection,
+    importer: *mut dfgo_import,
+    err: *mut *mut dfgo_error,
+) -> i32 {
+    run_ffi(err, || {
+        // SAFETY: callers exclusively borrow a live importer for this call.
+        let importer = unsafe { importer.as_mut() }
+            .ok_or_else(|| FfiError::invalid_argument("null importer"))?;
+        if importer.finished {
+            return Err(FfiError::invalid_argument("import already finished"));
+        }
+        let schema = importer
+            .schema
+            .clone()
+            .ok_or_else(|| FfiError::invalid_argument("import has no schema"))?;
+        importer.finished = true;
+        let conn = unsafe { conn.as_ref() }
+            .ok_or_else(|| FfiError::invalid_argument("null connection"))?;
+        register_record_batches(
+            &conn.inner,
+            &importer.name,
+            schema,
+            std::mem::take(&mut importer.batches),
+        )
+    })
+}
+
+/// # Safety
+/// importer is null or a live, uniquely owned handle, never previously closed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_import_close(importer: *mut dfgo_import) {
+    if !importer.is_null() {
+        // SAFETY: consumes the unique handle allocated by import_open.
+        unsafe {
+            drop(Box::from_raw(importer));
+        }
+    }
+}
 
 pub(crate) fn cstr_to_string(ptr: *const c_char, name: &str) -> Result<String, FfiError> {
     if ptr.is_null() {
@@ -241,11 +349,11 @@ pub unsafe extern "C" fn dfgo_database_open(
         // One runtime per database keeps async execution isolated between
         // database handles while allowing all connections from one database to
         // share worker threads.
-        let runtime = Runtime::new().map_err(|e| FfiError::native(e.to_string()))?;
+        let runtime = crate::session::runtime_from_dsn(&dsn)?;
         let config = session_config_from_dsn(&dsn)?;
         let shared_ctx = SessionContext::new_with_config(config.clone());
         let db = dfgo_database {
-            runtime: Arc::new(runtime),
+            runtime,
             config,
             shared_ctx,
         };
@@ -601,7 +709,21 @@ pub unsafe extern "C" fn dfgo_prepare(
         };
         // SAFETY: `conn` is non-null and live; the prepared statement clones the
         // Arc it needs, so it can outlive the borrowed connection reference.
+        let cached = if state
+            .config_options()
+            .extensions
+            .get::<crate::session::DriverOptions>()
+            .is_some_and(|o| o.cache_statements)
+        {
+            Some(crate::query::CachedStatement {
+                statement: state.sql_to_statement(&prepared.query, &options.dialect)?,
+                parser_settings: format!("{:?}", options),
+            })
+        } else {
+            None
+        };
         let stmt = dfgo_statement {
+            cached,
             inner: conn.inner.clone(),
             query: prepared.query,
             params: prepared.params,
@@ -722,6 +844,7 @@ pub(crate) fn execute_with_bindings(
     let stream = execute_to_stream(
         stmt.inner.clone(),
         &stmt.query,
+        stmt.cached.as_ref(),
         &stmt.params,
         bindings,
         cancel.clone(),
@@ -902,3 +1025,106 @@ mod tests;
 
 #[cfg(test)]
 mod contract_generated;
+
+/// # Safety
+/// callbacks points to a live v1 table; handle transfers to Rust on entry with
+/// valid callbacks, even on registration failure. Other pointers follow header rules.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_connection_register_go(
+    conn: *mut dfgo_connection,
+    name: *const c_char,
+    kind: i32,
+    handle: u64,
+    callbacks: *const c_void,
+    err: *mut *mut dfgo_error,
+) -> i32 {
+    run_ffi(err, || {
+        let owner = unsafe { crate::callbacks::Owner::new(handle, callbacks) }?;
+        let conn = unsafe { conn.as_ref() }
+            .ok_or_else(|| FfiError::invalid_argument("null connection"))?;
+        let name = cstr_to_string(name, "extension name")?;
+        if name.trim().is_empty() {
+            return Err(FfiError::invalid_argument("extension name is empty"));
+        }
+        match kind {
+            0..=3 => {
+                if conn.inner.ctx.table_exist(name.as_str())? {
+                    return Err(FfiError::invalid_argument("table already exists"));
+                }
+                let provider = crate::go_provider::GoTable::new(owner, kind)?;
+                conn.inner
+                    .ctx
+                    .register_table(name.as_str(), Arc::new(provider))?;
+            }
+            20 => {
+                if conn.inner.ctx.catalog(&name).is_some() {
+                    return Err(FfiError::invalid_argument("catalog already exists"));
+                }
+                conn.inner
+                    .ctx
+                    .register_catalog(name, Arc::new(crate::go_catalog::GoCatalog { owner }));
+            }
+            10..=12 => {
+                if conn
+                    .inner
+                    .ctx
+                    .state()
+                    .scalar_functions()
+                    .contains_key(&name)
+                {
+                    return Err(FfiError::invalid_argument("function already exists"));
+                }
+                use datafusion::logical_expr::Volatility;
+                let volatility = match kind {
+                    11 => Volatility::Stable,
+                    12 => Volatility::Immutable,
+                    _ => Volatility::Volatile,
+                };
+                conn.inner
+                    .ctx
+                    .register_udf(crate::go_udf::create(owner, name, volatility)?);
+            }
+            _ => return Err(FfiError::invalid_argument("unknown Go extension kind")),
+        }
+        Ok(())
+    })
+}
+/// # Safety
+/// token is live, callbacks is a v1 table, handle is consumed on entry with valid callbacks.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_cancel_token_set_go(
+    token: *mut dfgo_cancel_token,
+    handle: u64,
+    callbacks: *const c_void,
+    err: *mut *mut dfgo_error,
+) -> i32 {
+    run_ffi(err, || {
+        let owner = unsafe { crate::callbacks::Owner::new(handle, callbacks) }?;
+        let token = unsafe { token.as_ref() }
+            .ok_or_else(|| FfiError::invalid_argument("null cancellation token"))?;
+        *token.cancel.operation.lock().expect("operation mutex") = Some(owner);
+        Ok(())
+    })
+}
+
+/// # Safety
+/// result is null or a live result handle; the returned string is static.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dfgo_result_error_kind(
+    result: *const dfgo_result_stream,
+) -> *const c_char {
+    let Some(result) = (unsafe { result.as_ref() }) else {
+        return c"".as_ptr();
+    };
+    match result
+        .cancel
+        .error_kind
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        1 => c"cancelled",
+        2 => c"panic",
+        3 => c"native",
+        _ => c"",
+    }
+    .as_ptr()
+}

@@ -351,7 +351,7 @@ if err := datafusion.RegisterArrowReader(ctx, conn, "events", rdr); err != nil {
 }
 ```
 
-`RegisterArrowReader` consumes the remaining batches from the reader. It serializes the batches as an Arrow IPC stream, then registers decoded Rust-owned batches. The copy lets the table outlive the cgo call. Ordinary Go Arrow arrays can contain Go-owned buffers that native code must not keep after that call.
+`RegisterArrowReader` consumes the remaining batches from the reader. It transfers each batch as an Arrow IPC stream, then atomically registers the decoded Rust-owned batches. Only one encoded batch is staged at a time; the final in-memory table still retains all decoded batches. The copy lets the table outlive the cgo call. Ordinary Go Arrow arrays can contain Go-owned buffers that native code must not keep after that call.
 
 `RegisterArrowReaderZeroCopy` exports the reader through the Arrow C Stream Interface without an IPC copy. Each exported buffer must stay valid for native use until table removal or closure of its session or connector.
 
@@ -408,6 +408,83 @@ Before you unload the library, complete these steps:
 
 In shared and isolated modes, connection closure normally returns the physical connection to the pool. It does not guarantee table release. Queries can retain foreign objects even after the connector closes. The driver does not deregister a table when you discard its registration handle.
 
+### Direct Sessions and Go Extensions
+
+Applications that work directly with Arrow can use `NewSession` without a SQL
+connection pool. It uses the same query execution and cancellation implementation:
+
+```go
+session, err := datafusion.NewSession("")
+if err != nil {
+    return err
+}
+defer session.Close()
+reader, err := session.QueryArrowContext(ctx, "SELECT $1", int64(42))
+// Check err, close reader, and release every returned batch as usual.
+```
+
+`Session` also exposes `ExecContext`, `RegisterArrowReader`, `DeregisterTable`,
+`RegisterTableProvider`, `RegisterScalarFunction`, and `RegisterCatalog`.
+The last three registration functions also accept `*sql.Conn` as package-level
+helpers, so existing `database/sql` applications can use the extensions directly.
+
+- A `TableProvider` supplies its schema and a fresh Arrow reader per scan.
+  Implement `PushdownTableProvider` to receive `ScanOptions`: projection must be
+  exact, while filters are advisory and DataFusion rechecks them. A nil projection
+  means all columns; an empty projection means zero columns with preserved row
+  counts. A limit of -1 means no safe hint. Implement `WritableTableProvider` to
+  consume INSERT input and explicitly accept or reject each `InsertOp`.
+- A `ScalarFunction` declares argument types, return type, volatility and a
+  context-aware batch evaluator. Its zero-value volatility is `Volatile`.
+  Arguments are borrowed; the returned array transfers ownership to the engine.
+  Row count is passed separately for zero-argument functions. Signatures match
+  nested field metadata exactly. Use immutable/stable only when your function
+  satisfies those optimizer assumptions.
+- A `CatalogProvider` resolves `(schema, table)` names on demand. Each query
+  resolves each referenced table once and retains that snapshot for planning.
+  Later queries resolve afresh. This API does not enumerate remote tables for
+  `information_schema`; it does not provide transactional snapshots across a
+  changing remote catalog. A resolver must provide any stronger consistency.
+
+Providers and functions must support concurrent calls and honor their supplied
+contexts. Reader close and query cancellation cancel outstanding callback I/O;
+callbacks that ignore cancellation cannot be forcibly stopped. Reader release
+must complete promptly. A provider must not synchronously execute a mutating
+statement on its own session from a callback, because that statement may already
+hold the session's mutation lock.
+
+Go-produced batches use per-batch IPC copies, so ordinary Go Arrow buffers are
+safe. Providers remain lazy and result streams remain incremental. Native input
+to writable providers uses the Arrow C stream interface; that input reader is
+borrowed for the callback and released by the bridge. Retain batches explicitly
+when keeping them after a write returns. Check the reader's error and finish
+commit or rollback before returning: the driver does not retry failed writes or
+provide transactions for a provider.
+
+Registration rejects existing names. Closing a session or deregistering a table
+does not invalidate active results. The callback implementation retains its
+owners until outstanding work finishes. File scans already supported by native
+DataFusion remain native; no cloud SDK or Iceberg dependency is added to the Go
+module. See [the Go extensions example](examples/extensions).
+
+### Opt-in Execution Tuning
+
+`NewSession` and `NewConnectorWithInitContext` accept:
+
+- `WithPreparedStatementCache(true)`: retain parsed SQL syntax for prepared
+  statements. Every execution still resolves current catalogs and creates fresh
+  logical/physical plans. Changed parser settings bypass the retained syntax.
+- `WithRuntimeWorkers(n)`: use n Tokio worker threads. Zero preserves the default.
+- `WithSharedRuntime(true)`: share Tokio workers with other opting-in connectors
+  configured with the same worker count. Catalogs, configuration and DataFusion
+  memory pools remain separate. The runtime is released after its last user.
+
+The corresponding DSN keys are `datafusion.go.cache_statements`,
+`datafusion.go.runtime_workers` (positive integer), and
+`datafusion.go.shared_runtime`. Explicit tuning options override their DSN keys,
+including `false` and zero. Caching and sharing default to false. Batch size,
+query memory limits and target partitions remain ordinary DataFusion settings.
+
 ### Type Conversion
 
 The `database/sql` row conversion supports these types:
@@ -449,7 +526,7 @@ When schema information is available, row conversion rejects lists, structs, map
 - `errors.Is` matches the native sentinels `ErrNativeCancelled`, `ErrNativeInvalidArgument`, `ErrNativeFailure`, and `ErrNativePanic`.
 - `RowsAffected` returns `0` by default. If DataFusion emits a single integer output column named `count`, `rows_affected`, or `rowsaffected`, the driver reports its sum.
 - `LastInsertId` returns `0, nil`. DataFusion does not expose insert IDs through this driver.
-- The driver reuses statement handles for `db.Prepare` and `conn.PrepareContext`. DataFusion plans and executes each run. The driver does not cache physical plans.
+- The driver reuses statement handles for `db.Prepare` and `conn.PrepareContext`. DataFusion plans and executes each run. The driver does not cache physical plans. Parsed SQL syntax can be cached with the opt-in setting described above.
 - `Close` is idempotent for connectors, connections, statements, rows, and Arrow readers.
 - Transactions return explicit unsupported errors. For an already-canceled context, `BeginTx` returns the context error.
 

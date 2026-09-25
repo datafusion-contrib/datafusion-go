@@ -1,0 +1,49 @@
+[
+  {
+    "kind": "and",
+    "left": {
+      "kind": "compare",
+      "column": { "name": "id", "index": 0 },
+      "op": "gteq",
+      "literal": { "type": "int64", "value": 1 }
+    },
+    "right": {
+      "kind": "or",
+      "left": {
+        "kind": "is_null",
+        "column": { "name": "name", "index": 1 },
+        "negated": false
+      },
+      "right": {
+        "kind": "not",
+        "expr": {
+          "kind": "compare",
+          "column": { "name": "name", "index": 1 },
+          "op": "eq",
+          "literal": { "type": "utf8", "value": "x" }
+        }
+      }
+    }
+  },
+  {
+    "kind": "between",
+    "column": { "name": "id", "index": 0 },
+    "negated": true,
+    "low": { "type": "int64", "value": 10 },
+    "high": { "type": "int64", "value": 20 }
+  },
+  {
+    "kind": "in_list",
+    "column": { "name": "name", "index": 1 },
+    "negated": false,
+    "list": [
+      { "type": "utf8", "value": "a" },
+      { "type": "utf8", "value": "b" }
+    ]
+  },
+  {
+    "kind": "is_null",
+    "column": { "name": "name", "index": 1 },
+    "negated": true
+  }
+]

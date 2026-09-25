@@ -24,6 +24,13 @@ static const char *dfgo_native_load_error(void) {
 #include "dynamic_loader.h"
 #endif
 #include <stdlib.h>
+extern int dfgoGoInvoke(uint64_t, uint64_t, int32_t, uint8_t *, int64_t, uint8_t **, int64_t *, uint64_t *);
+static int dfgo_invoke_go(uint64_t h, uint64_t op, int32_t code, const uint8_t *in, int64_t len, uint8_t **out, int64_t *out_len, uint64_t *child) {
+ return dfgoGoInvoke(h, op, code, (uint8_t *)in, len, out, out_len, child);
+}
+static void dfgo_free_go_bytes(uint8_t *data) { free(data); }
+static const dfgo_callbacks dfgo_go_callbacks = {1, dfgo_invoke_go, dfgo_free_go_bytes};
+static const void *dfgo_get_go_callbacks(void) { return &dfgo_go_callbacks; }
 
 static struct ArrowArrayStream *dfgo_arrow_stream_alloc(void) {
 	return (struct ArrowArrayStream *)calloc(1, sizeof(struct ArrowArrayStream));
@@ -85,8 +92,10 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"runtime/cgo"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -117,7 +126,21 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Is(target error) bool {
-	return e != nil && e.Kind == "cancelled" && target == context.Canceled
+	if e == nil {
+		return false
+	}
+	switch target {
+	case context.Canceled, ErrCancelled:
+		return e.Kind == "cancelled"
+	case ErrInvalidArgument:
+		return e.Kind == "invalid_argument"
+	case ErrFailure:
+		return e.Kind == "native"
+	case ErrPanic:
+		return e.Kind == "panic"
+	default:
+		return false
+	}
 }
 
 func (e *Error) NativeErrorKind() string {
@@ -127,16 +150,36 @@ func (e *Error) NativeErrorKind() string {
 	return e.Kind
 }
 
+// Before the first registration, planning holds a read lock without allocating
+// callback contexts. Activation waits for those plans, then enables contexts
+// before publishing a provider. Later queries only need the atomic fast path.
+type extensionState struct {
+	active   atomic.Bool
+	planning sync.RWMutex
+}
+
+func (s *extensionState) activate() {
+	if s.active.Load() {
+		return
+	}
+	s.planning.Lock()
+	s.active.Store(true)
+	s.planning.Unlock()
+}
+
 type Database struct {
-	ptr *C.dfgo_database
+	ptr        *C.dfgo_database
+	extensions *extensionState
 }
 
 type Connection struct {
-	ptr *C.dfgo_connection
+	ptr        *C.dfgo_connection
+	extensions *extensionState
 }
 
 type Statement struct {
-	ptr *C.dfgo_statement
+	ptr        *C.dfgo_statement
+	extensions *extensionState
 }
 
 type cancelToken struct {
@@ -179,7 +222,7 @@ func OpenDatabase(dsn string) (*Database, error) {
 		return nil, errors.New("datafusion-go native open returned nil database")
 	}
 
-	return &Database{ptr: db}, nil
+	return &Database{ptr: db, extensions: new(extensionState)}, nil
 }
 
 var nativeLoad struct {
@@ -248,7 +291,7 @@ func (db *Database) Connect(shared bool) (*Connection, error) {
 		return nil, errors.New("datafusion-go native connect returned nil connection")
 	}
 
-	return &Connection{ptr: conn}, nil
+	return &Connection{ptr: conn, extensions: db.extensions}, nil
 }
 
 func (conn *Connection) Close() {
@@ -391,7 +434,7 @@ func (conn *Connection) Prepare(query string) (*Statement, error) {
 		return nil, errors.New("datafusion-go native prepare returned nil statement")
 	}
 
-	return &Statement{ptr: stmt}, nil
+	return &Statement{ptr: stmt, extensions: conn.extensions}, nil
 }
 
 func (stmt *Statement) Close() {
@@ -433,19 +476,29 @@ func (stmt *Statement) ExecuteArrow(ctx context.Context, args []driver.NamedValu
 	}
 	defer cleanup()
 
-	token, err := newCancelToken()
+	callbacks := false
+	if state := stmt.extensions; state != nil {
+		if !state.active.Load() {
+			state.planning.RLock()
+			defer state.planning.RUnlock()
+		}
+		callbacks = state.active.Load()
+	}
+	token, err := newCancelToken(ctx, callbacks)
 	if err != nil {
 		return nil, err
 	}
 
 	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			token.Cancel()
-		case <-done:
-		}
-	}()
+	if ctx.Done() != nil {
+		go func() {
+			select {
+			case <-ctx.Done():
+				token.Cancel()
+			case <-done:
+			}
+		}()
+	}
 
 	var result *C.dfgo_result_stream
 	var cerr *C.dfgo_error
@@ -616,7 +669,7 @@ func cParamString(allocs *[]unsafe.Pointer, value string) *C.char {
 	return (*C.char)(unsafe.Pointer(cParamData(allocs, []byte(value))))
 }
 
-func newCancelToken() (*cancelToken, error) {
+func newCancelToken(ctx context.Context, callbacks bool) (*cancelToken, error) {
 	var token *C.dfgo_cancel_token
 	var cerr *C.dfgo_error
 	if C.dfgo_cancel_token_create(&token, &cerr) != stateOK {
@@ -624,6 +677,15 @@ func newCancelToken() (*cancelToken, error) {
 	}
 	if token == nil {
 		return nil, errors.New("datafusion-go native cancel token returned nil")
+	}
+
+	if callbacks {
+		operationCtx, cancel := context.WithCancel(ctx)
+		handle := cgo.NewHandle(&callbackContext{operationCtx, cancel})
+		if C.dfgo_cancel_token_set_go(token, C.uint64_t(handle), C.dfgo_get_go_callbacks(), &cerr) != stateOK {
+			C.dfgo_cancel_token_close(token)
+			return nil, takeError(cerr)
+		}
 	}
 
 	return &cancelToken{ptr: token}, nil
@@ -703,7 +765,12 @@ func (r *resultReader) Read() (arrow.RecordBatch, error) {
 	}
 
 	if errno := C.dfgo_arrow_stream_get_next(r.stream, r.array); errno != 0 {
-		err := contextError(r.ctx, streamError(r.stream, errno))
+		streamErr := streamError(r.stream, errno)
+		kind := C.GoString(C.dfgo_result_error_kind(r.result))
+		if kind != "" {
+			streamErr = &Error{Kind: kind, Message: streamErr.Error()}
+		}
+		err := contextError(r.ctx, streamErr)
 		r.closeLocked()
 		return nil, err
 	}
@@ -820,4 +887,72 @@ func takeError(cerr *C.dfgo_error) error {
 		Kind:    kind,
 		Message: C.GoString(msg),
 	}
+}
+
+// Import owns unpublished native batches. Close also aborts an unfinished import.
+type Import struct{ ptr *C.dfgo_import }
+
+func (conn *Connection) NewImport(name string) (*Import, error) {
+	if conn == nil || conn.ptr == nil {
+		return nil, errors.New("datafusion-go connection is closed")
+	}
+	if err := checkNoNULByte(name, "table name"); err != nil {
+		return nil, err
+	}
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	var ptr *C.dfgo_import
+	var cerr *C.dfgo_error
+	if C.dfgo_import_open(conn.ptr, cname, &ptr, &cerr) != stateOK {
+		return nil, takeError(cerr)
+	}
+	return &Import{ptr: ptr}, nil
+}
+func (i *Import) Append(data []byte) error {
+	if i.ptr == nil {
+		return errors.New("datafusion-go import is closed")
+	}
+	var ptr *C.uint8_t
+	if len(data) != 0 {
+		ptr = (*C.uint8_t)(unsafe.Pointer(&data[0]))
+	}
+	var cerr *C.dfgo_error
+	if C.dfgo_import_append(i.ptr, ptr, C.int64_t(len(data)), &cerr) != stateOK {
+		return takeError(cerr)
+	}
+	return nil
+}
+func (i *Import) Commit(conn *Connection) error {
+	if i.ptr == nil {
+		return errors.New("datafusion-go import is closed")
+	}
+	var cerr *C.dfgo_error
+	if C.dfgo_import_commit(conn.ptr, i.ptr, &cerr) != stateOK {
+		return takeError(cerr)
+	}
+	return nil
+}
+func (i *Import) Close() {
+	if i.ptr != nil {
+		C.dfgo_import_close(i.ptr)
+		i.ptr = nil
+	}
+}
+
+func (conn *Connection) RegisterGo(name string, object any, kind int) error {
+	if conn == nil || conn.ptr == nil {
+		return errors.New("datafusion-go connection is closed")
+	}
+	if err := checkNoNULByte(name, "extension name"); err != nil {
+		return err
+	}
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	conn.extensions.activate()
+	handle := cgo.NewHandle(object)
+	var cerr *C.dfgo_error
+	if C.dfgo_connection_register_go(conn.ptr, cname, C.int32_t(kind), C.uint64_t(handle), C.dfgo_get_go_callbacks(), &cerr) != stateOK {
+		return takeError(cerr)
+	}
+	return nil
 }

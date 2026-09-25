@@ -14,6 +14,7 @@ import (
 // while waiting for the connector's serialization lock.
 type queryOperation struct {
 	connector  *Connector
+	connection *Conn
 	serializes bool
 	execute    func(context.Context, []driver.NamedValue) (native.RecordReader, error)
 	close      func()
@@ -34,7 +35,15 @@ func runArrowQuery(ctx context.Context, args []driver.NamedValue, prepare func()
 	if op.close != nil {
 		defer op.close()
 	}
-	unlock, err := op.connector.lockSerializedStatement(ctx, op.serializes)
+	var unlock func()
+	if op.serializes && op.connector != nil && !op.connector.sharedSession {
+		err = op.connection.ddlMu.Lock(ctx)
+		if err == nil {
+			unlock = op.connection.ddlMu.Unlock
+		}
+	} else {
+		unlock, err = op.connector.lockSerializedStatement(ctx, op.serializes)
+	}
 	if err != nil {
 		return nil, err
 	}

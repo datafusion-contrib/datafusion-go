@@ -2,6 +2,19 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550000.4
+
+- Added an Arrow-oriented `Session` API over the existing execution path. Existing `database/sql`, Arrow registration, foreign-provider, parameter and connection APIs remain available with their prior defaults.
+- Added lazy Go table providers with exact projection, conservative typed filter pushdown, context cancellation, schema validation and optional streaming INSERT support. Catalog-resolved tables retain their write capabilities. Go-produced batches are copied through bounded, per-batch IPC transfers; ordinary Go allocators are supported.
+- Added typed, vectorized Go scalar functions with explicit volatile, stable or immutable semantics, zero-argument batch support, cancellation and return type/length validation. Blocking scans, reads, writes, lookups and UDF evaluation run outside DataFusion worker threads, with bounded callback concurrency.
+- Added lazy Go catalog resolution into per-query table snapshots. Errors and cancellation propagate during resolution. Remote enumeration, cross-query schema caches, cloud SDKs and Iceberg adapters are not bundled.
+- Added a versioned callback table compatible with both runtime-loaded and statically linked libraries. Reference-counted callback ownership protects in-flight operations; Go callback panics become errors. Added C/Rust callback layout checks. Existing C ABI signatures/layouts remain compatible; the native ABI version stays 1.
+- Made question-mark placeholder offset calculation linear in SQL length instead of rescanning the SQL for each placeholder endpoint.
+- Reduced safe Arrow registration staging from a full-dataset IPC buffer to one batch at a time, retaining Rust-owned copies and atomic publication on success. Existing tables remain unchanged after failed or canceled imports.
+- Added opt-in parsed-statement caching (`WithPreparedStatementCache`), native worker counts (`WithRuntimeWorkers`) and reference-counted Tokio runtime sharing (`WithSharedRuntime`). Plan caching is not enabled: each execution resolves current tables and binds fresh parameters, and parser changes bypass cached syntax. Defaults remain uncached statements and a separate native runtime per connector.
+- Scoped statement serialization to individual isolated sessions while preserving serialization across shared connections. Removed the cancellation-watcher goroutine for contexts that cannot be canceled, and preserved native error categories for streamed batch failures.
+- Expanded tests for extension lifetimes, blocked-scan cancellation, CTAS, UDFs, catalog snapshots, writes, panic cleanup, large placeholder lists, incremental import failures and opt-in runtime/statement behavior.
+
 ## v0.550000.3 - 2026-09-09
 
 - Updated `golang.org/x/sys` to v0.48.0, raising the minimum supported Go version to 1.26. The recommended toolchain remains Go 1.27.1.

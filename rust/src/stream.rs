@@ -2,8 +2,8 @@
 
 use std::fmt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 
 use arrow::array::RecordBatchReader;
 use arrow::datatypes::SchemaRef;
@@ -23,21 +23,28 @@ use crate::session::Inner;
 pub(crate) struct CancelToken {
     // Atomic state gives a cheap fast path for synchronous callbacks.
     pub(crate) cancelled: AtomicBool,
+    pub(crate) error_kind: AtomicU8,
     // Notify wakes async DataFusion work that is waiting inside tokio::select!.
     pub(crate) notify: Notify,
+    pub(crate) operation: Mutex<Option<Arc<crate::callbacks::Owner>>>,
 }
 
 impl CancelToken {
     pub(crate) fn new() -> Self {
         Self {
             cancelled: AtomicBool::new(false),
+            error_kind: AtomicU8::new(0),
             notify: Notify::new(),
+            operation: Mutex::new(None),
         }
     }
 
     pub(crate) fn cancel(&self) {
         if !self.cancelled.swap(true, Ordering::SeqCst) {
             self.notify.notify_waiters();
+            if let Some(op) = self.operation.lock().expect("operation mutex").as_ref() {
+                op.cancel();
+            }
         }
     }
 
@@ -105,6 +112,7 @@ impl Iterator for StreamingReader {
         }
 
         if self.cancel.is_cancelled() {
+            self.cancel.error_kind.store(1, Ordering::SeqCst);
             self.done = true;
             return Some(Err(cancelled_arrow_error()));
         }
@@ -133,6 +141,7 @@ impl Iterator for StreamingReader {
         let next = match polled {
             Ok(next) => next,
             Err(_) => {
+                self.cancel.error_kind.store(2, Ordering::SeqCst);
                 self.done = true;
                 return Some(Err(ArrowError::ExternalError(Box::new(ReaderPanicError))));
             }
@@ -141,6 +150,10 @@ impl Iterator for StreamingReader {
         match next {
             Some(Ok(batch)) => Some(Ok(batch)),
             Some(Err(err)) => {
+                self.cancel.error_kind.store(
+                    if self.cancel.is_cancelled() { 1 } else { 3 },
+                    Ordering::SeqCst,
+                );
                 self.done = true;
                 Some(Err(ArrowError::ExternalError(Box::new(
                     // Arrow's C callback puts this text in a CString and
@@ -175,6 +188,7 @@ pub(crate) fn cancelled_arrow_error() -> ArrowError {
 pub(crate) fn execute_to_stream(
     inner: Arc<Inner>,
     query: &str,
+    cached: Option<&crate::query::CachedStatement>,
     params: &ParameterMetadata,
     bindings: Vec<Binding>,
     cancel: Arc<CancelToken>,
@@ -185,11 +199,29 @@ pub(crate) fn execute_to_stream(
         // Check cancellation around both planning and execution. DataFusion may
         // still do CPU work between await points, but these gates keep canceled
         // contexts from starting avoidable work and make streaming reads stop.
-        let state = inner.ctx.state();
+        let mut state = inner.ctx.state();
+        let operation = cancel.operation.lock().expect("operation mutex").clone();
+        if let Some(op) = &operation {
+            state
+                .config_mut()
+                .options_mut()
+                .extensions
+                .insert(crate::callbacks::QueryOperation(op.clone()));
+        }
         let plan = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Err(FfiError::cancelled()),
-            plan = state.create_logical_plan(query) => plan.map_err(FfiError::from)?,
+            plan = async {
+                let cached = cached.filter(|c| c.parser_settings == format!("{:?}", state.config_options().sql_parser));
+                if cached.is_some() || (operation.is_some() && crate::go_catalog::has_remote(&state)) {
+                    let statement = match cached {
+                        Some(c) => c.statement.clone(),
+                        None => state.sql_to_statement(query, &state.config_options().sql_parser.dialect)?,
+                    };
+                    if let Some(op) = &operation && crate::go_catalog::has_remote(&state) { crate::go_catalog::resolve(&mut state, &statement, op.clone()).await?; }
+                    state.statement_to_plan(statement).await
+                } else { state.create_logical_plan(query).await }
+            } => plan.map_err(FfiError::from)?,
         };
 
         let plan = if let Some(values) = values {
@@ -203,9 +235,28 @@ pub(crate) fn execute_to_stream(
         let df = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Err(FfiError::cancelled()),
-            df = inner.ctx.execute_logical_plan(plan) => df.map_err(FfiError::from)?,
+            df = async {
+                // CTAS executes its input inside execute_logical_plan, before a
+                // DataFrame is returned. Give that execution its query context
+                // while retaining the shared catalog. SET/CREATE FUNCTION keep
+                // using the original session so mutations retain prior semantics.
+                if let Some(op) = &operation && matches!(&plan, datafusion::logical_expr::LogicalPlan::Ddl(datafusion::logical_expr::DdlStatement::CreateMemoryTable(_))) {
+                    let mut execution_state = inner.ctx.state();
+                    execution_state.config_mut().options_mut().extensions.insert(crate::callbacks::QueryOperation(op.clone()));
+                    datafusion::prelude::SessionContext::new_with_state(execution_state).execute_logical_plan(plan).await
+                } else { inner.ctx.execute_logical_plan(plan).await }
+            } => df.map_err(FfiError::from)?,
         };
 
+        let df = if let Some(op) = operation {
+            let (mut state, plan) = df.into_parts();
+            state
+                .config_mut()
+                .options_mut()
+                .extensions
+                .insert(crate::callbacks::QueryOperation(op));
+            datafusion::dataframe::DataFrame::new(state, plan)
+        } else { df };
         tokio::select! {
             biased;
             _ = cancel.cancelled() => Err(FfiError::cancelled()),

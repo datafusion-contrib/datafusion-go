@@ -1,0 +1,8 @@
+[
+  {
+    "kind": "compare",
+    "column": { "name": "id", "index": 0 },
+    "op": "gt",
+    "literal": { "type": "int64", "value": 2 }
+  }
+]

@@ -112,6 +112,7 @@ func (s *Stmt) prepareOperation() (queryOperation, error) {
 	s.mu.Unlock()
 	return queryOperation{
 		connector:  s.conn.connector,
+		connection: s.conn,
 		serializes: serializes,
 		execute:    s.executeArrow,
 	}, nil

@@ -1,0 +1,6 @@
+datafusion-go
+
+The bounded filter predicate implementation in rust/src/pushdown.rs and
+internal/native/expr.go, associated Go tests and predicate fixtures are adapted
+from github.com/cedricziel/datafusion-golang, commit 54272e7, licensed under the
+Apache License, Version 2.0. See LICENSE for the license text.

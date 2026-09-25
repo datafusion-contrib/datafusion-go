@@ -3,6 +3,8 @@ package datafusion
 import (
 	"errors"
 	"fmt"
+
+	"github.com/datafusion-contrib/datafusion-go/internal/native"
 )
 
 // ErrorType identifies the operation that failed.
@@ -43,13 +45,13 @@ const (
 
 var (
 	// ErrNativeCancelled matches errors caused by native query cancellation.
-	ErrNativeCancelled = errors.New("datafusion native query canceled")
+	ErrNativeCancelled = native.ErrCancelled
 	// ErrNativeInvalidArgument matches native invalid-argument errors.
-	ErrNativeInvalidArgument = errors.New("datafusion native invalid argument")
+	ErrNativeInvalidArgument = native.ErrInvalidArgument
 	// ErrNativeFailure matches uncategorized native DataFusion failures.
-	ErrNativeFailure = errors.New("datafusion native failure")
+	ErrNativeFailure = native.ErrFailure
 	// ErrNativePanic matches panics caught on the Rust side of the FFI boundary.
-	ErrNativePanic = errors.New("datafusion native panic")
+	ErrNativePanic = native.ErrPanic
 )
 
 // Error is the structured error type returned by this driver.

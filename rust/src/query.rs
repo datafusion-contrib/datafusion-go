@@ -36,6 +36,13 @@ pub(crate) struct PreparedQuery {
     pub(crate) params: ParameterMetadata,
 }
 
+// Cache only syntax. Each execution resolves current catalogs and binds fresh
+// parameters. A changed parser configuration falls back to parsing current SQL.
+pub(crate) struct CachedStatement {
+    pub(crate) statement: DFStatement,
+    pub(crate) parser_settings: String,
+}
+
 impl ParameterMetadata {
     pub(crate) fn count(&self) -> i64 {
         match self {
@@ -171,6 +178,7 @@ pub(crate) fn prepare_query(
     let mut named = BTreeSet::new();
     let mut question_count = 0_i64;
     let mut replacements = Vec::new();
+    let mut source = SourceCursor::new(&query);
 
     for token in tokens {
         let Token::Placeholder(placeholder) = token.token else {
@@ -184,8 +192,8 @@ pub(crate) fn prepare_query(
             // offsets before slicing the original UTF-8 SQL string.
             question_count += 1;
             replacements.push((
-                location_offset(&query, token.span.start)?,
-                location_offset(&query, token.span.end)?,
+                source.offset(token.span.start)?,
+                source.offset(token.span.end)?,
                 format!("${question_count}"),
             ));
             continue;
@@ -323,37 +331,54 @@ pub(crate) fn rewrite_query(query: &str, replacements: Vec<(usize, usize, String
     rewritten
 }
 
-pub(crate) fn location_offset(query: &str, target: Location) -> Result<usize, FfiError> {
-    // sqlparser reports line/column positions, while Rust string slicing needs
-    // byte offsets. Count Unicode scalar values to find the exact char boundary
-    // rather than assuming byte-oriented columns.
-    if target.line == 0 && target.column == 0 {
-        return Err(FfiError::invalid_argument(
-            "placeholder span has empty source location",
-        ));
-    }
+// Token locations arrive in source order. Advance once through UTF-8 rather
+// than rescanning the entire prefix for each placeholder endpoint.
+struct SourceCursor<'a> {
+    query: &'a str,
+    offset: usize,
+    line: u64,
+    column: u64,
+}
 
-    let mut line = 1_u64;
-    let mut column = 1_u64;
-    for (idx, ch) in query.char_indices() {
-        if line == target.line && column == target.column {
-            return Ok(idx);
-        }
-        if ch == '\n' {
-            line += 1;
-            column = 1;
-        } else {
-            column += 1;
+impl<'a> SourceCursor<'a> {
+    fn new(query: &'a str) -> Self {
+        Self {
+            query,
+            offset: 0,
+            line: 1,
+            column: 1,
         }
     }
 
-    if line == target.line && column == target.column {
-        return Ok(query.len());
+    fn offset(&mut self, target: Location) -> Result<usize, FfiError> {
+        while self.offset < self.query.len() {
+            if self.line == target.line && self.column == target.column {
+                return Ok(self.offset);
+            }
+            let ch = self.query[self.offset..]
+                .chars()
+                .next()
+                .expect("valid UTF-8 offset");
+            self.offset += ch.len_utf8();
+            if ch == '\n' {
+                self.line += 1;
+                self.column = 1;
+            } else {
+                self.column += 1;
+            }
+        }
+        if self.line == target.line && self.column == target.column {
+            return Ok(self.offset);
+        }
+        Err(FfiError::invalid_argument(format!(
+            "placeholder span location {target} is outside query text"
+        )))
     }
+}
 
-    Err(FfiError::invalid_argument(format!(
-        "placeholder span location {target} is outside query text"
-    )))
+#[cfg(test)]
+fn location_offset(query: &str, target: Location) -> Result<usize, FfiError> {
+    SourceCursor::new(query).offset(target)
 }
 
 #[cfg(test)]

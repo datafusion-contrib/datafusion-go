@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -43,7 +44,13 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 type ConnectorOption func(*connectorOptions)
 
 type connectorOptions struct {
-	sharedSession bool
+	sharedSession      bool
+	runtimeWorkers     int
+	sharedRuntime      bool
+	cacheStatements    bool
+	runtimeWorkersSet  bool
+	sharedRuntimeSet   bool
+	cacheStatementsSet bool
 }
 
 func defaultConnectorOptions() connectorOptions {
@@ -55,6 +62,27 @@ func WithSharedSession(shared bool) ConnectorOption {
 	return func(opts *connectorOptions) {
 		opts.sharedSession = shared
 	}
+}
+
+// WithRuntimeWorkers limits native Tokio worker threads for this connector.
+// Zero preserves the runtime default; negative values are rejected at creation.
+// An explicit option overrides the corresponding DSN parameter.
+func WithRuntimeWorkers(workers int) ConnectorOption {
+	return func(o *connectorOptions) { o.runtimeWorkers = workers; o.runtimeWorkersSet = true }
+}
+
+// WithSharedRuntime opts into sharing Tokio workers with connectors that request
+// the same worker count. Catalogs and DataFusion memory pools remain independent.
+// An explicit option overrides the corresponding DSN parameter.
+func WithSharedRuntime(shared bool) ConnectorOption {
+	return func(o *connectorOptions) { o.sharedRuntime = shared; o.sharedRuntimeSet = true }
+}
+
+// WithPreparedStatementCache opts into caching parsed SQL syntax. Tables, plans,
+// parameter values and parser-setting changes are resolved on every execution.
+// An explicit option overrides the corresponding DSN parameter.
+func WithPreparedStatementCache(enabled bool) ConnectorOption {
+	return func(o *connectorOptions) { o.cacheStatements = enabled; o.cacheStatementsSet = true }
 }
 
 // Connector owns the native DataFusion database handle used to open pooled connections.
@@ -95,6 +123,25 @@ func NewConnectorWithInitContext(dsn string, initFn func(context.Context, driver
 		return nil, driverError(ErrorConnect, "could not parse datafusion DSN", err)
 	}
 
+	if opts.runtimeWorkers < 0 {
+		return nil, driverError(ErrorConnect, "runtime worker count must be non-negative", nil)
+	}
+	if opts.runtimeWorkersSet || opts.sharedRuntimeSet || opts.cacheStatementsSet {
+		values, _ := url.ParseQuery(strings.TrimPrefix(normalized, "?"))
+		if opts.runtimeWorkersSet {
+			values.Del("datafusion.go.runtime_workers")
+			if opts.runtimeWorkers != 0 {
+				values.Set("datafusion.go.runtime_workers", strconv.Itoa(opts.runtimeWorkers))
+			}
+		}
+		if opts.sharedRuntimeSet {
+			values.Set("datafusion.go.shared_runtime", strconv.FormatBool(opts.sharedRuntime))
+		}
+		if opts.cacheStatementsSet {
+			values.Set("datafusion.go.cache_statements", strconv.FormatBool(opts.cacheStatements))
+		}
+		normalized = "?" + values.Encode()
+	}
 	db, err := native.OpenDatabase(normalized)
 	if err != nil {
 		return nil, driverError(ErrorConnect, "could not open DataFusion database", err)

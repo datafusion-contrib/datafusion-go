@@ -23,6 +23,10 @@ int main(void) {
   printf("%zu ", offsetof(dfgo_parameter, timezone_len));
   printf("%zu ", offsetof(dfgo_parameter, precision));
   printf("%zu ", offsetof(dfgo_parameter, scale));
+  printf("%zu %zu ", sizeof(dfgo_callbacks), _Alignof(dfgo_callbacks));
+  printf("%zu ", offsetof(dfgo_callbacks, version));
+  printf("%zu ", offsetof(dfgo_callbacks, invoke));
+  printf("%zu ", offsetof(dfgo_callbacks, free_bytes));
   putchar('\n');
   return 0;
 }
