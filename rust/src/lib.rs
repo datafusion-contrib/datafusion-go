@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod abi;
+mod callback_arrow;
 mod callbacks;
 mod error;
 mod generated;

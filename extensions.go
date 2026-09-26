@@ -128,8 +128,8 @@ func registerProvider(ctx context.Context, conn *Conn, name string, p TableProvi
 
 // RegisterTableProvider registers a lazy Go source on a SQL connection's session.
 // Registration retains the provider; each scan receives query cancellation.
-// Ordinary Go Arrow allocations are supported: batches are copied through IPC
-// before native code retains them. Duplicate names return an error.
+// Ordinary Go Arrow allocations are supported: batches are copied into native-safe
+// buffers before native code retains them. Duplicate names return an error.
 func RegisterTableProvider(ctx context.Context, conn *sql.Conn, name string, p TableProvider) (*RegisteredTable, error) {
 	if conn == nil {
 		return nil, errors.New("datafusion sql connection is nil")

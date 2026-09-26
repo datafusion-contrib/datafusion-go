@@ -29,7 +29,7 @@ static int dfgo_invoke_go(uint64_t h, uint64_t op, int32_t code, const uint8_t *
  return dfgoGoInvoke(h, op, code, (uint8_t *)in, len, out, out_len, child);
 }
 static void dfgo_free_go_bytes(uint8_t *data) { free(data); }
-static const dfgo_callbacks dfgo_go_callbacks = {1, dfgo_invoke_go, dfgo_free_go_bytes};
+static const dfgo_callbacks dfgo_go_callbacks = {2, dfgo_invoke_go, dfgo_free_go_bytes};
 static const void *dfgo_get_go_callbacks(void) { return &dfgo_go_callbacks; }
 
 static struct ArrowArrayStream *dfgo_arrow_stream_alloc(void) {

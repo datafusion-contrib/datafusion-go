@@ -103,19 +103,25 @@ impl AsyncScalarUDFImpl for GoUdf {
             arrays,
             &RecordBatchOptions::new().with_row_count(Some(rows)),
         )?;
-        let mut data = Vec::new();
-        {
-            let mut writer = StreamWriter::try_new(&mut data, &self.arguments)?;
-            writer.write(&batch)?;
-            writer.finish()?;
-        }
-        let (bytes, _) = blocking_call(self.owner.clone(), op, 7, data).await?;
-        let (_, mut batches) =
-            ipc_batches(&bytes).map_err(|e| DataFusionError::Execution(e.message))?;
-        if batches.len() != 1 {
-            return Err(DataFusionError::Execution("invalid Go UDF output".into()));
-        }
-        let batch = batches.pop().expect("one batch");
+        let batch = if self.owner.callbacks.version >= 2 {
+            crate::callback_arrow::batch_call(self.owner.clone(), op, Some(batch))
+                .await?
+                .ok_or_else(|| DataFusionError::Execution("missing Go UDF output".into()))?
+        } else {
+            let mut data = Vec::new();
+            {
+                let mut writer = StreamWriter::try_new(&mut data, &self.arguments)?;
+                writer.write(&batch)?;
+                writer.finish()?;
+            }
+            let (bytes, _) = blocking_call(self.owner.clone(), op, 7, data).await?;
+            let (_, mut batches) =
+                ipc_batches(&bytes).map_err(|e| DataFusionError::Execution(e.message))?;
+            if batches.len() != 1 {
+                return Err(DataFusionError::Execution("invalid Go UDF output".into()));
+            }
+            batches.pop().expect("one batch")
+        };
         if batch.num_columns() != 1
             || batch.num_rows() != rows
             || batch.column(0).data_type() != &self.result

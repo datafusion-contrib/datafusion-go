@@ -48,7 +48,7 @@ typedef struct dfgo_cancel_token dfgo_cancel_token;
 typedef struct dfgo_error dfgo_error;
 typedef struct dfgo_import dfgo_import;
 
-/* Callback ABI v1. Rust copies this table. invoke returns 0 on success,
+/* Callback ABI v1/v2 (identical table layout). Rust copies this table. invoke returns 0 on success,
  * 1 on error (UTF-8 output); successful outputs are IPC/JSON per operation.
  * Every output byte allocation is released using free_bytes, in its allocating
  * module. Handles transfer only on success; registration consumes its input
@@ -58,10 +58,17 @@ typedef struct dfgo_import dfgo_import;
  * handle), 5=reader next (one-batch IPC, empty output means EOF), 6=UDF signature
  * IPC, 7=UDF evaluation (one-batch IPC), 8=catalog resolution (JSON reference ->
  * capability digit + provider handle), 9/10/11=append/overwrite/replace INSERT.
- * INSERT alone receives a mutable ArrowArrayStream as input, with input_len
+ * INSERT receives a mutable ArrowArrayStream as input, with input_len
  * equal to sizeof(struct ArrowArrayStream). The callback moves its ownership,
  * releases its reader before return, and returns the row count as decimal UTF-8.
- * All other inputs are borrowed read-only. New child handles transfer only on
+ * v2 additionally supports 12=reader next and 13=UDF evaluation through a
+ * mutable dfgo_arrow_exchange, input_len=sizeof(dfgo_arrow_exchange). The caller
+ * initializes every member (empty output, native-owned input for UDFs). The
+ * callback consumes input and exports C-owned output; EOF leaves output.release
+ * NULL. Layouts needing the compatibility path instead return one-batch IPC
+ * bytes and leave output empty. The caller releases every member even on failure or
+ * query cancellation. No Go buffer may be retained by the exported output.
+ * Other inputs are borrowed read-only. New child handles transfer only on
  * success, and callers release them even if cancellation abandons the result.
  */
 typedef struct dfgo_callbacks {
@@ -69,6 +76,13 @@ typedef struct dfgo_callbacks {
   int (*invoke)(uint64_t handle, uint64_t operation, int32_t opcode, const uint8_t *input, int64_t input_len, uint8_t **output, int64_t *output_len, uint64_t *output_handle);
   void (*free_bytes)(uint8_t *data);
 } dfgo_callbacks;
+
+typedef struct dfgo_arrow_exchange {
+  struct ArrowArray input;
+  struct ArrowSchema input_schema;
+  struct ArrowArray output;
+  struct ArrowSchema output_schema;
+} dfgo_arrow_exchange;
 
 typedef struct dfgo_parameter {
   int64_t index;

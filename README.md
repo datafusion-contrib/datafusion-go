@@ -457,8 +457,13 @@ must complete promptly. A provider must not synchronously execute a mutating
 statement on its own session from a callback, because that statement may already
 hold the session's mutation lock.
 
-Go-produced batches use per-batch IPC copies, so ordinary Go Arrow buffers are
-safe. Providers remain lazy and result streams remain incremental. Native input
+Go-produced batches use the Arrow C Data interface with a single copy into
+C-owned buffers for supported layouts, so ordinary Go Arrow allocations remain
+safe. Sliced arrays are compacted before export. Dictionary, extension, view and
+other unsupported fast-path layouts retain the per-batch IPC compatibility path.
+Small multi-column batches also keep IPC to avoid per-array allocation overhead.
+Native UDF arguments cross through C Data without serialization. Providers remain
+lazy and result streams remain incremental. Native input
 to writable providers uses the Arrow C stream interface; that input reader is
 borrowed for the callback and released by the bridge. Retain batches explicitly
 when keeping them after a write returns. Check the reader's error and finish

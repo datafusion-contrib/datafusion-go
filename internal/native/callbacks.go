@@ -47,7 +47,7 @@ func encodeIPC(schema *arrow.Schema, batch arrow.RecordBatch) ([]byte, error) {
 
 //export dfgoGoInvoke
 func dfgoGoInvoke(handle C.uint64_t, operation C.uint64_t, opcode C.int32_t, input *C.uint8_t, inputLen C.int64_t, output **C.uint8_t, outputLen *C.int64_t, outputHandle *C.uint64_t) (status C.int) {
-	// Only C-owned byte allocations cross a callback return. All panics (including
+	// Only C-owned bytes or Arrow buffers cross a callback return. All panics (including
 	// reader methods and user cleanup) stop here, before unwinding across Rust.
 	defer func() {
 		if p := recover(); p != nil {
@@ -248,6 +248,9 @@ func dispatchCallback(obj any, ctx context.Context, opcode int, data []byte) ([]
 		batch := array.NewRecordBatch(schema, []arrow.Array{result}, rec.NumRows())
 		defer batch.Release()
 		b, err := encodeIPC(schema, batch)
+		return b, nil, err
+	case 12, 13:
+		b, err := dispatchArrowCallback(obj, ctx, opcode, data)
 		return b, nil, err
 	}
 	return nil, nil, fmt.Errorf("unsupported Go callback operation %d", opcode)

@@ -117,8 +117,20 @@ and individual UDF evaluations use child contexts so dropping one branch cannot
 cancel sibling work. Blocking callbacks keep their owners alive after their
 awaiting future is canceled. Callback concurrency and INSERT channels are bounded.
 
-Go outputs are copied into C-owned IPC payloads before a callback returns, then
-decoded into Rust-owned buffers and freed through the originating allocator.
+Callback table v2 adds a mutable Arrow exchange while preserving the v1 table
+layout and IPC operations. Primitive, binary and supported nested Go outputs
+are compacted with Arrow Go concatenation into C-owned buffers, then exported
+through C Data. This removes IPC encoding, staging copies and decoding from the
+common batch path. Dictionary, extension, view and other layouts that can retain
+source buffers or lack concatenation support retain the IPC compatibility path.
+Multi-column outputs with at most 2 KiB of backing buffers per column also use IPC:
+benchmarks showed per-array C allocation overhead outweighed serialization savings
+for small wide batches. This is an internal transport choice, not a user option.
+Native UDF arguments use C Data without serialization. The exchange lives inside
+the blocking task, so its input and output owners are released even if cancellation
+abandons the awaiting future. Retained output batches own their buffers after
+query/session close. Schema registration still uses IPC.
+
 No ordinary Go Arrow buffer is retained by native code. INSERT input flows in
 the other direction through an owned Arrow C stream and a two-batch channel.
 Its producer task is aborted when the writer exits early or execution is dropped.

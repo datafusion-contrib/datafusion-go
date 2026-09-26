@@ -27,6 +27,11 @@ int main(void) {
   printf("%zu ", offsetof(dfgo_callbacks, version));
   printf("%zu ", offsetof(dfgo_callbacks, invoke));
   printf("%zu ", offsetof(dfgo_callbacks, free_bytes));
+  printf("%zu %zu ", sizeof(dfgo_arrow_exchange), _Alignof(dfgo_arrow_exchange));
+  printf("%zu ", offsetof(dfgo_arrow_exchange, input));
+  printf("%zu ", offsetof(dfgo_arrow_exchange, input_schema));
+  printf("%zu ", offsetof(dfgo_arrow_exchange, output));
+  printf("%zu ", offsetof(dfgo_arrow_exchange, output_schema));
   putchar('\n');
   return 0;
 }

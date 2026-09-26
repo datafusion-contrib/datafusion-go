@@ -1027,7 +1027,7 @@ mod tests;
 mod contract_generated;
 
 /// # Safety
-/// callbacks points to a live v1 table; handle transfers to Rust on entry with
+/// callbacks points to a live v1/v2 table; handle transfers to Rust on entry with
 /// valid callbacks, even on registration failure. Other pointers follow header rules.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dfgo_connection_register_go(
@@ -1090,7 +1090,7 @@ pub unsafe extern "C" fn dfgo_connection_register_go(
     })
 }
 /// # Safety
-/// token is live, callbacks is a v1 table, handle is consumed on entry with valid callbacks.
+/// token is live, callbacks is a v1/v2 table, handle is consumed on entry with valid callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dfgo_cancel_token_set_go(
     token: *mut dfgo_cancel_token,

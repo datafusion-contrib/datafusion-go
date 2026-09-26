@@ -111,5 +111,10 @@ pub(super) fn rust_layout() -> Vec<usize> {
         offset_of!(crate::callbacks::Callbacks, version),
         offset_of!(crate::callbacks::Callbacks, invoke),
         offset_of!(crate::callbacks::Callbacks, free_bytes),
+        size_of::<crate::callback_arrow::ArrowExchange>(), align_of::<crate::callback_arrow::ArrowExchange>(),
+        offset_of!(crate::callback_arrow::ArrowExchange, input),
+        offset_of!(crate::callback_arrow::ArrowExchange, input_schema),
+        offset_of!(crate::callback_arrow::ArrowExchange, output),
+        offset_of!(crate::callback_arrow::ArrowExchange, output_schema),
     ]
 }

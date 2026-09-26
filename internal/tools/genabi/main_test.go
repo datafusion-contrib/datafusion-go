@@ -21,12 +21,21 @@ func TestHeaderContract(t *testing.T) {
 	if got := strings.Join(abi.callbackFields, ","); got != "version,invoke,free_bytes" {
 		t.Fatalf("unexpected callback fields: %s", got)
 	}
+	var exchangeNames []string
+	for _, field := range abi.exchangeFields {
+		exchangeNames = append(exchangeNames, field.name)
+	}
+	if got := strings.Join(exchangeNames, ","); got != "input,input_schema,output,output_schema" {
+		t.Fatalf("unexpected Arrow exchange fields: %s", got)
+	}
 	for _, fixture := range []struct{ from, to string }{
 		{"int32_t dfgo_abi_version(void);", "int32_t dfgo_abi_version(void);\nint32_t dfgo_abi_version(void);"},
 		{"int32_t dfgo_abi_version(void);", "long dfgo_abi_version(void);"},
 		{"int64_t index;", "int64_t index[2];"},
 		{"int64_t index;", "int64_t index;\nint64_t index;"},
 		{"#ifndef DFGO_NO_FUNCTION_PROTOTYPES", "#ifndef MISSING_BLOCK"},
+		{"} dfgo_arrow_exchange;", "} missing_exchange;"},
+		{"struct ArrowArray output;", "long output;"},
 	} {
 		if _, err := parse(strings.Replace(string(header), fixture.from, fixture.to, 1)); err == nil {
 			t.Errorf("accepted invalid contract: %s", fixture.to)

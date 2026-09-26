@@ -214,24 +214,35 @@ impl ExecutionPlan for GoExec {
                 }
                 state.reader = Some(reader);
             }
-            let (bytes, _) = blocking_call(
-                state.reader.as_ref().expect("opened reader").clone(),
-                state.operation.clone(),
-                5,
-                Vec::new(),
-            )
-            .await?;
-            if bytes.is_empty() {
-                return Ok(None);
-            }
-            let (_, mut batches) =
-                ipc_batches(&bytes).map_err(|e| DataFusionError::Execution(e.message))?;
-            if batches.len() != 1 {
-                return Err(DataFusionError::Execution(
-                    "Go reader must return one batch".into(),
-                ));
-            }
-            let batch = batches.pop().expect("one batch");
+            let reader = state.reader.as_ref().expect("opened reader").clone();
+            let batch = if reader.callbacks.version >= 2 {
+                let Some(batch) =
+                    crate::callback_arrow::batch_call(reader, state.operation.clone(), None)
+                        .await?
+                else {
+                    return Ok(None);
+                };
+                batch
+            } else {
+                let (bytes, _) = blocking_call(
+                    state.reader.as_ref().expect("opened reader").clone(),
+                    state.operation.clone(),
+                    5,
+                    Vec::new(),
+                )
+                .await?;
+                if bytes.is_empty() {
+                    return Ok(None);
+                }
+                let (_, mut batches) =
+                    ipc_batches(&bytes).map_err(|e| DataFusionError::Execution(e.message))?;
+                if batches.len() != 1 {
+                    return Err(DataFusionError::Execution(
+                        "Go reader must return one batch".into(),
+                    ));
+                }
+                batches.pop().expect("one batch")
+            };
             let batch = match &state.projection {
                 Some(p) => batch.project(p)?,
                 None => batch,

@@ -101,7 +101,15 @@ projections, result lifetime after deregistration/session close, blocked callbac
 cancellation, late-return cleanup, panic containment, and schema failures.
 It also covers vectorized/zero-argument UDFs, CTAS, per-query catalog resolution,
 INSERT capabilities and rejection of partial input, concurrent first activation,
-and duplicate registration across shared connections.
+and duplicate registration across shared connections. `callback_arrow_test.go`
+adds sliced/null/nested/dictionary round trips and retained native UDF arguments.
+The native package checks that callback buffer allocations follow retained batches
+and return to their starting value after release.
+
+`BenchmarkCallbackTransfer` compares provider scans and identity UDFs over narrow,
+wide and string batches. UDF inputs are registered in native memory before timing;
+every result is drained. See [callback performance](callback-performance.md) for
+the IPC/C Data comparison and reproduction commands.
 
 Prepared-cache tests change both catalog contents and parser settings between
 executions. Runtime tests assert opt-in sharing and last-owner destruction.

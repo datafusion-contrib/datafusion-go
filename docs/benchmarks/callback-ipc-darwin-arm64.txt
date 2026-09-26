@@ -1,0 +1,85 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/datafusion-contrib/datafusion-go
+cpu: Apple M1 Pro
+BenchmarkCallbackTransfer/provider/int64/128-10         	     618	    568694 ns/op	  258632 B/op	    2182 allocs/op
+BenchmarkCallbackTransfer/udf/int64/128-10              	    1620	    205644 ns/op	   94134 B/op	     153 allocs/op
+BenchmarkCallbackTransfer/provider/int64/8192-10        	     336	   1065632 ns/op	 2574199 B/op	    2186 allocs/op
+BenchmarkCallbackTransfer/udf/int64/8192-10             	     176	  11878424 ns/op	 5036394 B/op	    3791 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/128-10        	     184	   1906930 ns/op	 2951061 B/op	    6701 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/128-10             	     661	    540957 ns/op	  605665 B/op	     292 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/8192-10       	      30	  12487817 ns/op	74123277 B/op	    6734 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/8192-10            	      68	   4457851 ns/op	37388249 B/op	    8260 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/128-10          	     524	    678779 ns/op	  534282 B/op	    2212 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/128-10               	    1114	    323457 ns/op	  604256 B/op	     156 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/8192-10         	      70	   4792799 ns/op	19602908 B/op	    2218 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/8192-10              	      75	  27646828 ns/op	37810200 B/op	    3890 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/datafusion-contrib/datafusion-go
+cpu: Apple M1 Pro
+BenchmarkCallbackTransfer/provider/int64/128-10         	     614	    554621 ns/op	  258641 B/op	    2182 allocs/op
+BenchmarkCallbackTransfer/udf/int64/128-10              	    1795	    190374 ns/op	   94138 B/op	     153 allocs/op
+BenchmarkCallbackTransfer/provider/int64/8192-10        	     348	   1036967 ns/op	 2574134 B/op	    2186 allocs/op
+BenchmarkCallbackTransfer/udf/int64/8192-10             	     162	   2337490 ns/op	 5036575 B/op	    3791 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/128-10        	     190	   1863719 ns/op	 2951069 B/op	    6701 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/128-10             	     674	    507820 ns/op	  605652 B/op	     292 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/8192-10       	      28	  13282674 ns/op	74123247 B/op	    6734 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/8192-10            	      80	   4748761 ns/op	37388468 B/op	    8262 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/128-10          	     529	    658921 ns/op	  534311 B/op	    2213 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/128-10               	    1110	    301316 ns/op	  604258 B/op	     156 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/8192-10         	      75	   4935540 ns/op	19602978 B/op	    2219 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/8192-10              	      66	   4931862 ns/op	37810127 B/op	    3889 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/datafusion-contrib/datafusion-go
+cpu: Apple M1 Pro
+BenchmarkCallbackTransfer/provider/int64/128-10         	     618	    540738 ns/op	  258654 B/op	    2182 allocs/op
+BenchmarkCallbackTransfer/udf/int64/128-10              	    1792	    187604 ns/op	   94134 B/op	     153 allocs/op
+BenchmarkCallbackTransfer/provider/int64/8192-10        	     331	   1045741 ns/op	 2574144 B/op	    2186 allocs/op
+BenchmarkCallbackTransfer/udf/int64/8192-10             	     100	  19172161 ns/op	 5036626 B/op	    3792 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/128-10        	     190	   1861589 ns/op	 2951085 B/op	    6701 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/128-10             	     679	    505885 ns/op	  605657 B/op	     292 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/8192-10       	      27	  13482770 ns/op	74123306 B/op	    6734 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/8192-10            	      68	   4556099 ns/op	37388309 B/op	    8259 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/128-10          	     528	    653494 ns/op	  534320 B/op	    2212 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/128-10               	    1123	    301407 ns/op	  604257 B/op	     156 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/8192-10         	      75	   4847968 ns/op	19603128 B/op	    2220 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/8192-10              	      64	   4822527 ns/op	37809997 B/op	    3888 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/datafusion-contrib/datafusion-go
+cpu: Apple M1 Pro
+BenchmarkCallbackTransfer/provider/int64/128-10         	     632	    562286 ns/op	  258645 B/op	    2182 allocs/op
+BenchmarkCallbackTransfer/udf/int64/128-10              	    1738	    199733 ns/op	   94137 B/op	     153 allocs/op
+BenchmarkCallbackTransfer/provider/int64/8192-10        	     318	   1130440 ns/op	 2574152 B/op	    2186 allocs/op
+BenchmarkCallbackTransfer/udf/int64/8192-10             	     160	   2205330 ns/op	 5036395 B/op	    3791 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/128-10        	     175	   1899565 ns/op	 2951036 B/op	    6701 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/128-10             	     691	    514844 ns/op	  605663 B/op	     292 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/8192-10       	      33	  12464571 ns/op	74123369 B/op	    6735 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/8192-10            	      80	   4801179 ns/op	37388632 B/op	    8266 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/128-10          	     517	    676882 ns/op	  534294 B/op	    2213 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/128-10               	    1160	    310713 ns/op	  604255 B/op	     156 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/8192-10         	      70	   4764699 ns/op	19603082 B/op	    2220 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/8192-10              	      66	   4742929 ns/op	37810151 B/op	    3889 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/datafusion-contrib/datafusion-go
+cpu: Apple M1 Pro
+BenchmarkCallbackTransfer/provider/int64/128-10         	     637	    545019 ns/op	  258627 B/op	    2182 allocs/op
+BenchmarkCallbackTransfer/udf/int64/128-10              	    1688	    190053 ns/op	   94133 B/op	     153 allocs/op
+BenchmarkCallbackTransfer/provider/int64/8192-10        	     351	   1061032 ns/op	 2574110 B/op	    2186 allocs/op
+BenchmarkCallbackTransfer/udf/int64/8192-10             	     182	   2380704 ns/op	 5036500 B/op	    3791 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/128-10        	     189	   1870867 ns/op	 2951083 B/op	    6701 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/128-10             	     654	    523528 ns/op	  605646 B/op	     292 allocs/op
+BenchmarkCallbackTransfer/provider/wide16/8192-10       	      31	  13399632 ns/op	74123303 B/op	    6735 allocs/op
+BenchmarkCallbackTransfer/udf/wide16/8192-10            	      68	   4591817 ns/op	37388366 B/op	    8262 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/128-10          	     531	    653472 ns/op	  534326 B/op	    2213 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/128-10               	    1137	    303744 ns/op	  604259 B/op	     156 allocs/op
+BenchmarkCallbackTransfer/provider/utf8/8192-10         	      73	   4869499 ns/op	19603083 B/op	    2220 allocs/op
+BenchmarkCallbackTransfer/udf/utf8/8192-10              	      61	   5353870 ns/op	37809906 B/op	    3887 allocs/op
+PASS
