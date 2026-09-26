@@ -20,8 +20,10 @@ type function struct {
 	args   []declaration
 }
 type contract struct {
-	functions []function
-	fields    []declaration
+	functions      []function
+	fields         []declaration
+	callbackFields []string
+	exchangeFields []declaration
 }
 
 var declarator = regexp.MustCompile(`^(.+?[ *])([a-zA-Z_][a-zA-Z_0-9]*)$`)
@@ -129,6 +131,37 @@ func parse(header string) (contract, error) {
 	if len(abi.functions) == 0 || len(abi.fields) == 0 {
 		return abi, fmt.Errorf("empty ABI contract")
 	}
+	if _, callbackBody, ok := strings.Cut(header, "typedef struct dfgo_callbacks {\n"); ok {
+		callbackBody, _, ok = strings.Cut(callbackBody, "} dfgo_callbacks;")
+		if !ok {
+			return abi, fmt.Errorf("unterminated callback table")
+		}
+		pointerName := regexp.MustCompile(`\(\*(\w+)\)`)
+		for _, line := range strings.Split(strings.TrimSpace(callbackBody), "\n") {
+			if m := pointerName.FindStringSubmatch(line); m != nil {
+				abi.callbackFields = append(abi.callbackFields, m[1])
+			} else {
+				d, err := parseDeclaration(strings.TrimSuffix(strings.TrimSpace(line), ";"))
+				if err != nil {
+					return abi, err
+				}
+				abi.callbackFields = append(abi.callbackFields, d.name)
+			}
+		}
+	}
+	if _, exchangeBody, ok := strings.Cut(header, "typedef struct dfgo_arrow_exchange {\n"); ok {
+		exchangeBody, _, ok = strings.Cut(exchangeBody, "} dfgo_arrow_exchange;")
+		if !ok {
+			return abi, fmt.Errorf("unterminated Arrow exchange")
+		}
+		for _, line := range strings.Split(strings.TrimSpace(exchangeBody), "\n") {
+			d, err := parseDeclaration(strings.TrimSuffix(strings.TrimSpace(line), ";"))
+			if err != nil {
+				return abi, err
+			}
+			abi.exchangeFields = append(abi.exchangeFields, d)
+		}
+	}
 	return abi, nil
 }
 
@@ -152,11 +185,13 @@ func rustType(s string) (string, error) {
 		"int8_t": "i8", "uint8_t": "u8", "int32_t": "i32",
 		"int64_t": "i64", "uint64_t": "u64", "double": "f64",
 		"struct ArrowArrayStream": "datafusion::arrow::ffi_stream::FFI_ArrowArrayStream",
+		"struct ArrowArray":       "datafusion::arrow::ffi::FFI_ArrowArray",
+		"struct ArrowSchema":      "datafusion::arrow::ffi::FFI_ArrowSchema",
 	}
 	r, ok := types[s]
 	if strings.HasPrefix(s, "dfgo_") {
 		switch s {
-		case "dfgo_database", "dfgo_connection", "dfgo_statement", "dfgo_result_stream", "dfgo_cancel_token", "dfgo_error", "dfgo_parameter":
+		case "dfgo_import", "dfgo_database", "dfgo_connection", "dfgo_statement", "dfgo_result_stream", "dfgo_cancel_token", "dfgo_error", "dfgo_parameter":
 			r, ok = "super::"+s, true
 		}
 	}
@@ -228,6 +263,18 @@ func (abi contract) rust() string {
 	for _, field := range abi.fields {
 		fmt.Fprintf(&b, "        offset_of!(dfgo_parameter, %s),\n", field.name)
 	}
+	if len(abi.callbackFields) > 0 {
+		b.WriteString("        size_of::<crate::callbacks::Callbacks>(), align_of::<crate::callbacks::Callbacks>(),\n")
+		for _, field := range abi.callbackFields {
+			fmt.Fprintf(&b, "        offset_of!(crate::callbacks::Callbacks, %s),\n", field)
+		}
+	}
+	if len(abi.exchangeFields) > 0 {
+		b.WriteString("        size_of::<crate::callback_arrow::ArrowExchange>(), align_of::<crate::callback_arrow::ArrowExchange>(),\n")
+		for _, field := range abi.exchangeFields {
+			fmt.Fprintf(&b, "        offset_of!(crate::callback_arrow::ArrowExchange, %s),\n", field.name)
+		}
+	}
 	b.WriteString("    ]\n}\n")
 	return b.String()
 }
@@ -240,6 +287,18 @@ func (abi contract) layout() string {
 	}
 	for _, field := range abi.fields {
 		fmt.Fprintf(&b, "  printf(\"%%zu \", offsetof(dfgo_parameter, %s));\n", field.name)
+	}
+	if len(abi.callbackFields) > 0 {
+		b.WriteString("  printf(\"%zu %zu \", sizeof(dfgo_callbacks), _Alignof(dfgo_callbacks));\n")
+		for _, field := range abi.callbackFields {
+			fmt.Fprintf(&b, "  printf(\"%%zu \", offsetof(dfgo_callbacks, %s));\n", field)
+		}
+	}
+	if len(abi.exchangeFields) > 0 {
+		b.WriteString("  printf(\"%zu %zu \", sizeof(dfgo_arrow_exchange), _Alignof(dfgo_arrow_exchange));\n")
+		for _, field := range abi.exchangeFields {
+			fmt.Fprintf(&b, "  printf(\"%%zu \", offsetof(dfgo_arrow_exchange, %s));\n", field.name)
+		}
 	}
 	b.WriteString("  putchar('\\n');\n  return 0;\n}\n")
 	return b.String()

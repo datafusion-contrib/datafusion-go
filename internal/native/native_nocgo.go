@@ -62,3 +62,12 @@ func (stmt *Statement) Serializes() bool {
 func (stmt *Statement) ExecuteArrow(context.Context, []driver.NamedValue) (RecordReader, error) {
 	return nil, errCgoDisabled
 }
+
+type Import struct{}
+
+func (conn *Connection) NewImport(string) (*Import, error) { return nil, errCgoDisabled }
+func (*Import) Append([]byte) error                        { return errCgoDisabled }
+func (*Import) Commit(*Connection) error                   { return errCgoDisabled }
+func (*Import) Close()                                     {}
+
+func (*Connection) RegisterGo(string, any, int) error { return errCgoDisabled }

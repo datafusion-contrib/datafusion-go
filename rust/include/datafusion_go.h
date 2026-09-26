@@ -46,6 +46,43 @@ typedef struct dfgo_statement dfgo_statement;
 typedef struct dfgo_result_stream dfgo_result_stream;
 typedef struct dfgo_cancel_token dfgo_cancel_token;
 typedef struct dfgo_error dfgo_error;
+typedef struct dfgo_import dfgo_import;
+
+/* Callback ABI v1/v2 (identical table layout). Rust copies this table. invoke returns 0 on success,
+ * 1 on error (UTF-8 output); successful outputs are IPC/JSON per operation.
+ * Every output byte allocation is released using free_bytes, in its allocating
+ * module. Handles transfer only on success; registration consumes its input
+ * handle on entry. Release (0) must be nonblocking and cannot fail.
+ * Operation contexts (1=create, 2=cancel) are retained until all callbacks finish.
+ * Opcodes: 3=table schema IPC, 4=open scan (JSON options -> schema IPC + reader
+ * handle), 5=reader next (one-batch IPC, empty output means EOF), 6=UDF signature
+ * IPC, 7=UDF evaluation (one-batch IPC), 8=catalog resolution (JSON reference ->
+ * capability digit + provider handle), 9/10/11=append/overwrite/replace INSERT.
+ * INSERT receives a mutable ArrowArrayStream as input, with input_len
+ * equal to sizeof(struct ArrowArrayStream). The callback moves its ownership,
+ * releases its reader before return, and returns the row count as decimal UTF-8.
+ * v2 additionally supports 12=reader next and 13=UDF evaluation through a
+ * mutable dfgo_arrow_exchange, input_len=sizeof(dfgo_arrow_exchange). The caller
+ * initializes every member (empty output, native-owned input for UDFs). The
+ * callback consumes input and exports C-owned output; EOF leaves output.release
+ * NULL. Layouts needing the compatibility path instead return one-batch IPC
+ * bytes and leave output empty. The caller releases every member even on failure or
+ * query cancellation. No Go buffer may be retained by the exported output.
+ * Other inputs are borrowed read-only. New child handles transfer only on
+ * success, and callers release them even if cancellation abandons the result.
+ */
+typedef struct dfgo_callbacks {
+  uint64_t version;
+  int (*invoke)(uint64_t handle, uint64_t operation, int32_t opcode, const uint8_t *input, int64_t input_len, uint8_t **output, int64_t *output_len, uint64_t *output_handle);
+  void (*free_bytes)(uint8_t *data);
+} dfgo_callbacks;
+
+typedef struct dfgo_arrow_exchange {
+  struct ArrowArray input;
+  struct ArrowSchema input_schema;
+  struct ArrowArray output;
+  struct ArrowSchema output_schema;
+} dfgo_arrow_exchange;
 
 typedef struct dfgo_parameter {
   int64_t index;
@@ -65,6 +102,11 @@ typedef struct dfgo_parameter {
 } dfgo_parameter;
 
 /*
+ * Incremental imports retain owned decoded batches but publish no table until
+ * commit succeeds. Append accepts a complete IPC stream (including schema-only
+ * streams for empty tables). Commit does not consume the handle. Close releases
+ * the handle after success or failure; callers must not append after commit.
+ *
  * ABI ownership rules:
  * - Handles returned through out parameters are Rust-owned and must be returned
  *   exactly once through the matching dfgo_*_close function.
@@ -104,6 +146,14 @@ int dfgo_connection_register_arrow_stream(dfgo_connection *conn, const char *nam
 int dfgo_connection_register_ffi_table_provider(dfgo_connection *conn, const char *name, const void *provider, const char *provider_datafusion_version, dfgo_error **err);
 int dfgo_connection_deregister_table(dfgo_connection *conn, const char *name, dfgo_error **err);
 
+int dfgo_import_open(dfgo_connection *conn, const char *name, dfgo_import **out, dfgo_error **err);
+int dfgo_import_append(dfgo_import *importer, const uint8_t *data, int64_t len, dfgo_error **err);
+int dfgo_import_commit(dfgo_connection *conn, dfgo_import *importer, dfgo_error **err);
+void dfgo_import_close(dfgo_import *importer);
+
+int dfgo_connection_register_go(dfgo_connection *conn, const char *name, int32_t kind, uint64_t handle, const void *callbacks, dfgo_error **err);
+int dfgo_cancel_token_set_go(dfgo_cancel_token *token, uint64_t handle, const void *callbacks, dfgo_error **err);
+
 int dfgo_prepare(dfgo_connection *conn, const char *query, dfgo_statement **out, dfgo_error **err);
 void dfgo_statement_close(dfgo_statement *stmt);
 int64_t dfgo_statement_num_params(dfgo_statement *stmt);
@@ -115,6 +165,7 @@ void dfgo_cancel_token_close(dfgo_cancel_token *token);
 
 int dfgo_statement_execute_with_params(dfgo_statement *stmt, const dfgo_parameter *params, int64_t params_len, dfgo_cancel_token *token, dfgo_result_stream **out, dfgo_error **err);
 int dfgo_result_export_arrow_stream(dfgo_result_stream *result, struct ArrowArrayStream *out, dfgo_error **err);
+const char *dfgo_result_error_kind(const dfgo_result_stream *result);
 void dfgo_result_cancel(dfgo_result_stream *result);
 void dfgo_result_close(dfgo_result_stream *result);
 

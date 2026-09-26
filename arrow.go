@@ -68,34 +68,65 @@ func RegisterArrowReader(ctx context.Context, sqlConn *sql.Conn, tableName strin
 		return err
 	}
 
+	var importer *native.Import
+	if err := withDataFusionConn(sqlConn, func(conn *Conn) error {
+		return conn.withNative(func(nc *native.Connection) (err error) {
+			importer, err = nc.NewImport(tableName)
+			return err
+		})
+	}); err != nil {
+		return err
+	}
+	defer importer.Close()
+	return importArrowReader(ctx, importer, reader, func() error {
+		return withDataFusionConn(sqlConn, func(conn *Conn) error {
+			return conn.withNative(func(nc *native.Connection) error {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return importer.Commit(nc)
+			})
+		})
+	})
+}
+
+// Encode one complete IPC stream per batch so dictionaries, nested arrays and
+// extension metadata retain the same IPC semantics without a dataset-sized buffer.
+func importArrowReader(ctx context.Context, importer *native.Import, reader array.RecordReader, commit func() error) error {
 	var data bytes.Buffer
-	writer := ipc.NewWriter(&data, ipc.WithSchema(reader.Schema()))
-	for reader.Next() {
-		if err := ctx.Err(); err != nil {
-			_ = writer.Close()
+	schema := reader.Schema()
+	appendBatch := func(batch arrow.RecordBatch) error {
+		data.Reset()
+		writer := ipc.NewWriter(&data, ipc.WithSchema(schema))
+		if batch != nil {
+			if err := writer.Write(batch); err != nil {
+				_ = writer.Close()
+				return err
+			}
+		}
+		if err := writer.Close(); err != nil {
 			return err
 		}
-		if err := writer.Write(reader.RecordBatch()); err != nil {
-			_ = writer.Close()
+		return importer.Append(data.Bytes())
+	}
+	if err := appendBatch(nil); err != nil {
+		return err
+	}
+	for reader.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := appendBatch(reader.RecordBatch()); err != nil {
 			return err
 		}
 	}
 	if err := reader.Err(); err != nil {
-		_ = writer.Close()
 		return err
 	}
-	if err := writer.Close(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-
-	return withDataFusionConn(sqlConn, func(conn *Conn) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		return conn.withNative(func(nc *native.Connection) error {
-			return nc.RegisterArrowIPC(tableName, data.Bytes())
-		})
-	})
+	return commit()
 }
 
 // RegisterArrowReaderZeroCopy registers the remaining batches in reader as a

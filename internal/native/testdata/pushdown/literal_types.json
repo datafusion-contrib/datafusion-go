@@ -1,0 +1,121 @@
+[
+  {
+    "kind": "compare",
+    "column": { "name": "c_bool", "index": 0 },
+    "op": "eq",
+    "literal": { "type": "bool", "value": true }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_i8", "index": 1 },
+    "op": "neq",
+    "literal": { "type": "int8", "value": -8 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_i16", "index": 2 },
+    "op": "lt",
+    "literal": { "type": "int16", "value": -1600 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_i32", "index": 3 },
+    "op": "lteq",
+    "literal": { "type": "int32", "value": -320000 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_i64", "index": 4 },
+    "op": "gt",
+    "literal": { "type": "int64", "value": 9223372036854775807 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_u8", "index": 5 },
+    "op": "gteq",
+    "literal": { "type": "uint8", "value": 255 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_u16", "index": 6 },
+    "op": "eq",
+    "literal": { "type": "uint16", "value": 65535 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_u32", "index": 7 },
+    "op": "eq",
+    "literal": { "type": "uint32", "value": 4294967295 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_u64", "index": 8 },
+    "op": "eq",
+    "literal": { "type": "uint64", "value": 18446744073709551615 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_f32", "index": 9 },
+    "op": "gt",
+    "literal": { "type": "float32", "value": 3.5 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_f64", "index": 10 },
+    "op": "lt",
+    "literal": { "type": "float64", "value": 2.25 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_str", "index": 11 },
+    "op": "eq",
+    "literal": { "type": "utf8", "value": "hello \"world\"" }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_bin", "index": 12 },
+    "op": "eq",
+    "literal": { "type": "binary", "value": "3q2+7w==" }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_d32", "index": 13 },
+    "op": "gteq",
+    "literal": { "type": "date32", "value": 19000 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_d64", "index": 14 },
+    "op": "lteq",
+    "literal": { "type": "date64", "value": 1700000000000 }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_ts_s", "index": 15 },
+    "op": "gt",
+    "literal": { "type": "timestamp", "value": 1700000000, "unit": "s" }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_ts_ms", "index": 16 },
+    "op": "lt",
+    "literal": { "type": "timestamp", "value": 1700000000123, "unit": "ms" }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_ts_us", "index": 17 },
+    "op": "neq",
+    "literal": { "type": "timestamp", "value": 1700000000123456, "unit": "us" }
+  },
+  {
+    "kind": "compare",
+    "column": { "name": "c_ts_ns", "index": 18 },
+    "op": "eq",
+    "literal": {
+      "type": "timestamp",
+      "value": 1700000000123456789,
+      "unit": "ns",
+      "tz": "UTC"
+    }
+  }
+]

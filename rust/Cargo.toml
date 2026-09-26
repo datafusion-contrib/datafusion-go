@@ -1,6 +1,6 @@
 [package]
 name = "datafusion-go"
-version = "0.550000.3"
+version = "0.550100.0"
 edition = "2024"
 rust-version = "1.94"
 
@@ -11,23 +11,26 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 [dependencies]
 # Use DataFusion's Arrow re-export; datafusion-ffi enables its FFI feature.
 # This keeps the bridge on exactly the Arrow version used by DataFusion.
-datafusion = "=55.0.0"
-datafusion-ffi = "=55.0.0"
-datafusion-sql = "=55.0.0"
+datafusion = "=55.1.0"
+datafusion-ffi = "=55.1.0"
+datafusion-sql = "=55.1.0"
 futures = "0.3"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "sync"] }
 url = "2.5"
 sqllogictest = { version = "=0.29.1", optional = true }
-serde_json = { version = "1", optional = true }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+async-trait = "0.1"
+base64 = "0.23"
 
 [dependencies.datafusion-sqllogictest]
-version = "=55.0.0"
+version = "=55.1.0"
 optional = true
 features = ["avro", "parquet_encryption"]
 
 [features]
 # Fixtures and callbacks for the Go SQLLogicTest runner. Never enabled in releases.
-test-sqllogictest = ["dep:datafusion-sqllogictest", "dep:sqllogictest", "dep:serde_json"]
+test-sqllogictest = ["dep:datafusion-sqllogictest", "dep:sqllogictest"]
 
 [dev-dependencies]
 indicatif = "0.18"

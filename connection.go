@@ -16,6 +16,7 @@ type Conn struct {
 	// Driver.Open owns its private connector; pooled connections do not.
 	ownsConnector bool
 
+	ddlMu      contextMutex
 	mu         sync.Mutex
 	closed     bool
 	statements map[*Stmt]struct{}
@@ -223,6 +224,7 @@ func (conn *Conn) prepareOperation(query string) (queryOperation, error) {
 	}
 	return queryOperation{
 		connector:  conn.connector,
+		connection: conn,
 		serializes: stmt.Serializes(),
 		execute: func(ctx context.Context, args []driver.NamedValue) (native.RecordReader, error) {
 			return executeNativeStatement(ctx, stmt, args)

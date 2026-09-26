@@ -24,6 +24,18 @@ const _: unsafe extern "C" fn(*mut super::dfgo_connection, *const std::ffi::c_ch
 #[rustfmt::skip]
 const _: unsafe extern "C" fn(*mut super::dfgo_connection, *const std::ffi::c_char, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_connection_deregister_table;
 #[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_connection, *const std::ffi::c_char, *mut *mut super::dfgo_import, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_import_open;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_import, *const u8, i64, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_import_append;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_connection, *mut super::dfgo_import, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_import_commit;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_import) -> () = super::dfgo_import_close;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_connection, *const std::ffi::c_char, i32, u64, *const std::ffi::c_void, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_connection_register_go;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*mut super::dfgo_cancel_token, u64, *const std::ffi::c_void, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_cancel_token_set_go;
+#[rustfmt::skip]
 const _: unsafe extern "C" fn(*mut super::dfgo_connection, *const std::ffi::c_char, *mut *mut super::dfgo_statement, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_prepare;
 #[rustfmt::skip]
 const _: unsafe extern "C" fn(*mut super::dfgo_statement) -> () = super::dfgo_statement_close;
@@ -41,6 +53,8 @@ const _: unsafe extern "C" fn(*mut super::dfgo_cancel_token) -> () = super::dfgo
 const _: unsafe extern "C" fn(*mut super::dfgo_statement, *const super::dfgo_parameter, i64, *mut super::dfgo_cancel_token, *mut *mut super::dfgo_result_stream, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_statement_execute_with_params;
 #[rustfmt::skip]
 const _: unsafe extern "C" fn(*mut super::dfgo_result_stream, *mut datafusion::arrow::ffi_stream::FFI_ArrowArrayStream, *mut *mut super::dfgo_error) -> std::ffi::c_int = super::dfgo_result_export_arrow_stream;
+#[rustfmt::skip]
+const _: unsafe extern "C" fn(*const super::dfgo_result_stream) -> *const std::ffi::c_char = super::dfgo_result_error_kind;
 #[rustfmt::skip]
 const _: unsafe extern "C" fn(*mut super::dfgo_result_stream) -> () = super::dfgo_result_cancel;
 #[rustfmt::skip]
@@ -93,5 +107,14 @@ pub(super) fn rust_layout() -> Vec<usize> {
         offset_of!(dfgo_parameter, timezone_len),
         offset_of!(dfgo_parameter, precision),
         offset_of!(dfgo_parameter, scale),
+        size_of::<crate::callbacks::Callbacks>(), align_of::<crate::callbacks::Callbacks>(),
+        offset_of!(crate::callbacks::Callbacks, version),
+        offset_of!(crate::callbacks::Callbacks, invoke),
+        offset_of!(crate::callbacks::Callbacks, free_bytes),
+        size_of::<crate::callback_arrow::ArrowExchange>(), align_of::<crate::callback_arrow::ArrowExchange>(),
+        offset_of!(crate::callback_arrow::ArrowExchange, input),
+        offset_of!(crate::callback_arrow::ArrowExchange, input_schema),
+        offset_of!(crate::callback_arrow::ArrowExchange, output),
+        offset_of!(crate::callback_arrow::ArrowExchange, output_schema),
     ]
 }

@@ -56,3 +56,12 @@ fn location_offset_handles_multibyte_characters_and_line_endings() {
         .is_err()
     );
 }
+
+#[test]
+fn rewrites_large_placeholder_lists_without_touching_literals() {
+    let sql = format!("select '雪?\\n', {} -- ?", vec!["?"; 8192].join(","));
+    let prepared = prepare_query(sql, &GenericDialect {}).unwrap();
+    assert_eq!(prepared.params.count(), 8192);
+    assert!(prepared.query.starts_with("select '雪?\\n', $1,$2,"));
+    assert!(prepared.query.ends_with("$8192 -- ?"));
+}

@@ -15,6 +15,12 @@
   X(int, dfgo_connection_register_arrow_stream, (dfgo_connection * conn, const char * name, struct ArrowArrayStream * stream, dfgo_error ** err), (conn, name, stream, err), return) \
   X(int, dfgo_connection_register_ffi_table_provider, (dfgo_connection * conn, const char * name, const void * provider, const char * provider_datafusion_version, dfgo_error ** err), (conn, name, provider, provider_datafusion_version, err), return) \
   X(int, dfgo_connection_deregister_table, (dfgo_connection * conn, const char * name, dfgo_error ** err), (conn, name, err), return) \
+  X(int, dfgo_import_open, (dfgo_connection * conn, const char * name, dfgo_import ** out, dfgo_error ** err), (conn, name, out, err), return) \
+  X(int, dfgo_import_append, (dfgo_import * importer, const uint8_t * data, int64_t len, dfgo_error ** err), (importer, data, len, err), return) \
+  X(int, dfgo_import_commit, (dfgo_connection * conn, dfgo_import * importer, dfgo_error ** err), (conn, importer, err), return) \
+  X(void, dfgo_import_close, (dfgo_import * importer), (importer), ) \
+  X(int, dfgo_connection_register_go, (dfgo_connection * conn, const char * name, int32_t kind, uint64_t handle, const void * callbacks, dfgo_error ** err), (conn, name, kind, handle, callbacks, err), return) \
+  X(int, dfgo_cancel_token_set_go, (dfgo_cancel_token * token, uint64_t handle, const void * callbacks, dfgo_error ** err), (token, handle, callbacks, err), return) \
   X(int, dfgo_prepare, (dfgo_connection * conn, const char * query, dfgo_statement ** out, dfgo_error ** err), (conn, query, out, err), return) \
   X(void, dfgo_statement_close, (dfgo_statement * stmt), (stmt), ) \
   X(int64_t, dfgo_statement_num_params, (dfgo_statement * stmt), (stmt), return) \
@@ -24,6 +30,7 @@
   X(void, dfgo_cancel_token_close, (dfgo_cancel_token * token), (token), ) \
   X(int, dfgo_statement_execute_with_params, (dfgo_statement * stmt, const dfgo_parameter * params, int64_t params_len, dfgo_cancel_token * token, dfgo_result_stream ** out, dfgo_error ** err), (stmt, params, params_len, token, out, err), return) \
   X(int, dfgo_result_export_arrow_stream, (dfgo_result_stream * result, struct ArrowArrayStream * out, dfgo_error ** err), (result, out, err), return) \
+  X(const char *, dfgo_result_error_kind, (const dfgo_result_stream * result), (result), return) \
   X(void, dfgo_result_cancel, (dfgo_result_stream * result), (result), ) \
   X(void, dfgo_result_close, (dfgo_result_stream * result), (result), ) \
   X(const char *, dfgo_error_message, (const dfgo_error * err), (err), return) \

@@ -94,6 +94,34 @@ Failures log the seed, operation list, and failing step. Preserve a minimized
 sequence as an ordinary regression test rather than relying on a future random
 run to rediscover it.
 
+## Go extension boundaries
+
+`extensions_test.go` exercises lazy scans, advisory filter rechecking, empty
+projections, result lifetime after deregistration/session close, blocked callback
+cancellation, late-return cleanup, panic containment, and schema failures.
+It also covers vectorized/zero-argument UDFs, CTAS, per-query catalog resolution,
+INSERT capabilities and rejection of partial input, concurrent first activation,
+and duplicate registration across shared connections. `callback_arrow_test.go`
+adds sliced/null/nested/dictionary round trips and retained native UDF arguments.
+The native package checks that callback buffer allocations follow retained batches
+and return to their starting value after release.
+
+`BenchmarkCallbackTransfer` compares provider scans and identity UDFs over narrow,
+wide and string batches. UDF inputs are registered in native memory before timing;
+every result is drained. See [callback performance](callback-performance.md) for
+the IPC/C Data comparison and reproduction commands.
+
+Prepared-cache tests change both catalog contents and parser settings between
+executions. Runtime tests assert opt-in sharing and last-owner destruction.
+`BenchmarkPreparePlaceholders` tracks normalization scaling, and
+`BenchmarkPreparedSyntaxCache` compares opt-in syntax reuse with the default.
+
+For compatibility-sensitive changes, compare the exported API against the base
+revision and run the base revision's unchanged Go suite against the new shared
+library using `DATAFUSION_GO_LIBRARY`. This supplements the generated C/Rust ABI
+layout checks and current-source link-mode tests; it does not replace the full
+cross-platform CI matrix.
+
 ## Installation in fresh processes
 
 `make test.install` builds a `-trimpath` test consumer and launches a fresh

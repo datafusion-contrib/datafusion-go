@@ -68,6 +68,15 @@ func TestSQLLogicHarness(t *testing.T) {
 		{name: "native stream SQL error keeps engine message", script: "statement error DataFusion error: expected\nSELECT 1\n", callback: func(string) (array.RecordReader, error) {
 			return nil, sqlLogicError(errors.New("arrow stream failed with errno 5: External error: expected"))
 		}},
+		{name: "structured stream SQL error keeps engine message", script: "statement error DataFusion error: expected\nSELECT 1\n", callback: func(string) (array.RecordReader, error) {
+			return nil, sqlLogicError(&native.Error{Kind: "native", Message: "arrow stream failed with errno 22: External error: expected"})
+		}},
+		{name: "structured planning error keeps engine message", script: "statement error DataFusion error: expected\nSELECT 1\n", callback: func(string) (array.RecordReader, error) {
+			return nil, sqlLogicError(&native.Error{Kind: "native", Message: "expected"})
+		}},
+		{name: "structured stream panic cannot satisfy SQL error", script: "statement error .*\nSELECT 1\n", wantFailure: true, callback: func(string) (array.RecordReader, error) {
+			return nil, sqlLogicError(&native.Error{Kind: "panic", Message: "arrow stream failed with errno 22: External error: expected"})
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

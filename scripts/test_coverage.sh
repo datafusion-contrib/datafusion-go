@@ -14,7 +14,10 @@ case "$(uname -s)" in
     export CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET:-13.0}"
     ;;
 esac
-cargo llvm-cov clean --manifest-path rust/Cargo.toml --profraw-only
+# Stale workspace executables can retain coverage maps from previous source
+# revisions, attributing missed lines to comments or unrelated current code.
+# Clear workspace artifacts while retaining instrumented dependency builds.
+cargo llvm-cov clean --manifest-path rust/Cargo.toml --workspace
 cargo llvm-cov --manifest-path rust/Cargo.toml --locked --lib --tests --no-report
 
 # Cargo builds cdylibs under deps for tests. Run the Go suite against that

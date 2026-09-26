@@ -8,9 +8,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod abi;
+mod callback_arrow;
+mod callbacks;
 mod error;
 mod generated;
+mod go_catalog;
+mod go_provider;
+mod go_udf;
 mod parameters;
+mod pushdown;
 mod query;
 mod registration;
 mod session;

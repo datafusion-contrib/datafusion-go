@@ -326,3 +326,162 @@ fn rejects_null_ffi_table_provider() {
     assert!(!err.is_null());
     unsafe { dfgo_error_free(err) };
 }
+
+#[test]
+fn ipc_registration_preserves_legacy_and_incremental_contracts() {
+    use arrow::array::Int64Array;
+    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::ipc::writer::StreamWriter;
+
+    fn ipc(name: &str, value: i64) -> Vec<u8> {
+        let schema = Arc::new(Schema::new(vec![Field::new(name, DataType::Int64, false)]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![Arc::new(Int64Array::from(vec![value]))],
+        )
+        .unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = StreamWriter::try_new(&mut bytes, &schema).unwrap();
+        writer.write(&batch).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        bytes
+    }
+    fn value(conn: &dfgo_connection) -> i64 {
+        let batches = conn.inner.runtime.block_on(async {
+            conn.inner
+                .ctx
+                .sql("select value from legacy")
+                .await
+                .unwrap()
+                .collect()
+                .await
+                .unwrap()
+        });
+        batches[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap()
+            .value(0)
+    }
+    fn expect_error(rc: i32, err: &mut *mut dfgo_error, message: &str) {
+        assert_eq!(rc, DFG_ERR);
+        unsafe {
+            assert_eq!(CStr::from_ptr(dfgo_error_kind(*err)), c"invalid_argument");
+            assert!(
+                CStr::from_ptr(dfgo_error_message(*err))
+                    .to_string_lossy()
+                    .contains(message)
+            );
+            dfgo_error_free(*err);
+        }
+        *err = ptr::null_mut();
+    }
+
+    let mut conn = dfgo_connection {
+        inner: Arc::new(Inner {
+            runtime: Arc::new(Runtime::new().unwrap()),
+            ctx: SessionContext::new(),
+        }),
+    };
+    let original = ipc("value", 5);
+    let replacement = ipc("value", 7);
+    let wrong_schema = ipc("other", 9);
+    let mut err = ptr::null_mut();
+    let mut importer = ptr::null_mut();
+    unsafe {
+        // Existing native consumers can continue using the one-shot entry point.
+        assert_eq!(
+            dfgo_connection_register_arrow_ipc(
+                &mut conn,
+                c"legacy".as_ptr(),
+                original.as_ptr(),
+                original.len() as i64,
+                &mut err
+            ),
+            DFG_OK
+        );
+        assert_eq!(value(&conn), 5);
+        expect_error(
+            dfgo_import_open(ptr::null_mut(), c"legacy".as_ptr(), &mut importer, &mut err),
+            &mut err,
+            "null import",
+        );
+        expect_error(
+            dfgo_import_open(&mut conn, c"".as_ptr(), &mut importer, &mut err),
+            &mut err,
+            "empty",
+        );
+        assert_eq!(
+            dfgo_import_open(&mut conn, c"legacy".as_ptr(), &mut importer, &mut err),
+            DFG_OK
+        );
+        expect_error(
+            dfgo_import_commit(&mut conn, importer, &mut err),
+            &mut err,
+            "no schema",
+        );
+        assert_eq!(
+            dfgo_import_append(
+                importer,
+                replacement.as_ptr(),
+                replacement.len() as i64,
+                &mut err
+            ),
+            DFG_OK
+        );
+        expect_error(
+            dfgo_import_append(
+                importer,
+                wrong_schema.as_ptr(),
+                wrong_schema.len() as i64,
+                &mut err,
+            ),
+            &mut err,
+            "schema changed",
+        );
+        assert_eq!(value(&conn), 5, "staging must not publish partial input");
+        dfgo_import_close(importer);
+        assert_eq!(value(&conn), 5, "aborting must preserve the existing table");
+        // Registration does not replace names implicitly. Remove the old table
+        // explicitly before publishing a fresh completed import.
+        assert_eq!(
+            dfgo_connection_deregister_table(&mut conn, c"legacy".as_ptr(), &mut err),
+            DFG_OK
+        );
+
+        assert_eq!(
+            dfgo_import_open(&mut conn, c"legacy".as_ptr(), &mut importer, &mut err),
+            DFG_OK
+        );
+        assert_eq!(
+            dfgo_import_append(
+                importer,
+                replacement.as_ptr(),
+                replacement.len() as i64,
+                &mut err
+            ),
+            DFG_OK
+        );
+        assert_eq!(dfgo_import_commit(&mut conn, importer, &mut err), DFG_OK);
+        assert_eq!(value(&conn), 7);
+        expect_error(
+            dfgo_import_append(
+                importer,
+                replacement.as_ptr(),
+                replacement.len() as i64,
+                &mut err,
+            ),
+            &mut err,
+            "already finished",
+        );
+        expect_error(
+            dfgo_import_commit(&mut conn, importer, &mut err),
+            &mut err,
+            "already finished",
+        );
+        dfgo_import_close(importer);
+        dfgo_import_close(ptr::null_mut());
+    }
+}
