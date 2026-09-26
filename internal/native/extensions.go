@@ -60,6 +60,18 @@ type CatalogProvider interface {
 	ResolveTable(ctx context.Context, schema, table string) (TableProvider, error)
 }
 
+// DiscoverableCatalogProvider optionally lists schemas and tables for SQL
+// metadata queries. Names are literal identifiers, not SQL fragments. Listings
+// are refreshed for each metadata query; ordinary table queries only resolve
+// referenced tables. Implementations must support concurrent calls and honor ctx.
+// A nil list is empty. Duplicate names are ignored; empty/NUL names are errors.
+// The reserved information_schema schema is supplied by DataFusion.
+type DiscoverableCatalogProvider interface {
+	CatalogProvider
+	SchemaNames(ctx context.Context) ([]string, error)
+	TableNames(ctx context.Context, schema string) ([]string, error)
+}
+
 // InsertOp describes a requested write. Providers must reject unsupported modes.
 type InsertOp int
 

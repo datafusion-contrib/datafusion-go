@@ -446,9 +446,36 @@ helpers, so existing `database/sql` applications can use the extensions directly
   satisfies those optimizer assumptions.
 - A `CatalogProvider` resolves `(schema, table)` names on demand. Each query
   resolves each referenced table once and retains that snapshot for planning.
-  Later queries resolve afresh. This API does not enumerate remote tables for
-  `information_schema`; it does not provide transactional snapshots across a
-  changing remote catalog. A resolver must provide any stronger consistency.
+  Later queries resolve afresh. Existing resolver-only catalogs keep this behavior.
+  Optionally implement `DiscoverableCatalogProvider` with context-aware
+  `SchemaNames` and `TableNames` methods to expose remote schemas/tables through
+  `information_schema` and `SHOW TABLES` / `SHOW COLUMNS`. Names are literal
+  identifiers, not SQL fragments. Nil lists are empty; duplicates are ignored;
+  empty names and names containing NUL are rejected. Discovery does not provide
+  transactional snapshots across a changing remote catalog.
+
+Metadata queries refresh listings for each query. Schema listings do not list
+individual tables; table listings do not resolve providers or scan data. Column
+metadata resolves listed providers lazily, once per query, without calling `Scan`.
+SQL metadata filters are applied by DataFusion and are not pushed into these
+listing callbacks, so a column query may resolve tables beyond its filter.
+Ordinary data queries resolve only referenced tables and do not call discovery.
+Return an empty list for a missing schema, and `(nil, nil)` when a listed table
+has disappeared before resolution. Discovery errors propagate to the query.
+
+`ProjectReader(reader, indices)` and `LimitReader(reader, limit)` help implement
+`ScanWithOptions` without copying Arrow buffers. Projection preserves field,
+schema and batch metadata, accepts duplicate indices, and distinguishes nil
+(all columns) from empty (zero columns). Limit accepts -1 for unlimited rows and
+0 for no rows. Both helpers take ownership of the input only on success; release
+the input yourself on error. They do not evaluate filters. Apply a limit hint only
+after any source-side filtering; DataFusion still rechecks advisory filters.
+
+Provider authors can call `providertest.Run(t, factory)` from
+`github.com/datafusion-contrib/datafusion-go/providertest` with a small, finite
+fixture. It checks repeated and concurrent scans, schemas, retained-batch
+ownership, and optional projection/limit behavior. It runs without a native
+library, including with `CGO_ENABLED=0`; add your own storage/value/write tests.
 
 Providers and functions must support concurrent calls and honor their supplied
 contexts. Reader close and query cancellation cancel outstanding callback I/O;

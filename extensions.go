@@ -182,9 +182,15 @@ func (s *Session) RegisterScalarFunction(ctx context.Context, f ScalarFunction) 
 }
 
 // CatalogProvider resolves remote tables once per query for planning. It does not
-// enumerate remote schemas or guarantee transactions across a changing catalog.
+// require enumeration or guarantee transactions across a changing catalog.
 // Return nil, nil for missing tables; honor the supplied context for remote I/O.
 type CatalogProvider = native.CatalogProvider
+
+// DiscoverableCatalogProvider adds optional schema/table enumeration for SHOW
+// TABLES and information_schema queries. Listings form a per-query snapshot;
+// tables resolve lazily when column metadata or data is needed. Implementations
+// must provide any stronger consistency across a changing remote catalog.
+type DiscoverableCatalogProvider = native.DiscoverableCatalogProvider
 
 func registerCatalog(ctx context.Context, conn *Conn, name string, catalog CatalogProvider) error {
 	if err := ctx.Err(); err != nil {
@@ -193,7 +199,11 @@ func registerCatalog(ctx context.Context, conn *Conn, name string, catalog Catal
 	if catalog == nil {
 		return errors.New("datafusion catalog is nil")
 	}
-	return conn.withExtension(ctx, func(nc *native.Connection) error { return nc.RegisterGo(name, catalog, 20) })
+	kind := 20
+	if _, ok := catalog.(DiscoverableCatalogProvider); ok {
+		kind = 21
+	}
+	return conn.withExtension(ctx, func(nc *native.Connection) error { return nc.RegisterGo(name, catalog, kind) })
 }
 
 // RegisterCatalog adds a lazily resolved catalog. Existing names cannot be replaced.

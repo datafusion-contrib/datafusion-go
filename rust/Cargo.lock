@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "datafusion-go"
-version = "0.550100.0"
+version = "0.550100.1"
 dependencies = [
  "async-trait",
  "base64",

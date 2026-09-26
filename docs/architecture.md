@@ -140,7 +140,23 @@ closure becomes an input error before a well-behaved provider can commit.
 Catalog resolution creates a private catalog list containing per-query snapshots
 of referenced remote tables; it does not publish those snapshots to the shared
 session. It preserves optional provider capabilities and propagates lookup errors.
-Enumeration and transactional remote snapshots are outside this resolver contract.
+Optional discovery (registration kind 21, callbacks 14/15) enumerates names only
+for metadata statements. Resolver-only kind 20 never receives these callbacks.
+The callback table stays at version 2 and the native ABI stays at version 1.
+Schema and table names are copied, validated, sorted and deduplicated in Go.
+Private schema providers expose names immediately and use an asynchronous
+once-cell per table to resolve column metadata lazily. Listing table types needs
+no provider lookup because Go providers currently expose base tables only.
+The snapshot retains its catalog and query context until dependent streams finish;
+blocking callbacks use the existing bounded worker pool and cancellation path.
+Ordinary queries still resolve only their referenced tables. Metadata filters are
+not pushed into enumeration, and listings are not transactional remote snapshots.
+
+The pure-Go projection and limit readers own their input and each current batch.
+Wrapper reference counts are independent of the input reader's reference count;
+only final release frees both. Projection retains Arrow arrays and limit slices
+batches, preserving metadata without copying data buffers. The public
+`providertest` package exercises this ownership contract with native-free tests.
 
 Incremental Arrow import retains unpublished Rust batches and commits against
 the connection's current session only after input consumption succeeds. Close
