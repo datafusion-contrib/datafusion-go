@@ -1056,13 +1056,17 @@ pub unsafe extern "C" fn dfgo_connection_register_go(
                     .ctx
                     .register_table(name.as_str(), Arc::new(provider))?;
             }
-            20 => {
+            20 | 21 => {
                 if conn.inner.ctx.catalog(&name).is_some() {
                     return Err(FfiError::invalid_argument("catalog already exists"));
                 }
-                conn.inner
-                    .ctx
-                    .register_catalog(name, Arc::new(crate::go_catalog::GoCatalog { owner }));
+                conn.inner.ctx.register_catalog(
+                    name,
+                    Arc::new(crate::go_catalog::GoCatalog {
+                        owner,
+                        discoverable: kind == 21,
+                    }),
+                );
             }
             10..=12 => {
                 if conn

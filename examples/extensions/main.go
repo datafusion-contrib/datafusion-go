@@ -30,6 +30,47 @@ func (e events) Scan(ctx context.Context) (array.RecordReader, error) {
 	defer batch.Release()
 	return array.NewRecordReader(e.Schema(), []arrow.RecordBatch{batch})
 }
+
+// Filters are advisory and rechecked by DataFusion. This fixture ignores them.
+func (e events) ScanWithOptions(ctx context.Context, opts datafusion.ScanOptions) (array.RecordReader, error) {
+	reader, err := e.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	projected, err := datafusion.ProjectReader(reader, opts.Projection)
+	if err != nil {
+		reader.Release()
+		return nil, err
+	}
+	limited, err := datafusion.LimitReader(projected, opts.Limit)
+	if err != nil {
+		projected.Release()
+		return nil, err
+	}
+	return limited, nil
+}
+
+type catalog struct{}
+
+func (catalog) SchemaNames(ctx context.Context) ([]string, error) {
+	return []string{"public"}, ctx.Err()
+}
+func (catalog) TableNames(ctx context.Context, schema string) ([]string, error) {
+	if schema == "public" {
+		return []string{"events"}, ctx.Err()
+	}
+	return nil, ctx.Err()
+}
+func (catalog) ResolveTable(ctx context.Context, schema, table string) (datafusion.TableProvider, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if schema == "public" && table == "events" {
+		return events{}, nil
+	}
+	return nil, nil
+}
+
 func run() error {
 	ctx := context.Background()
 	session, err := datafusion.NewSession("")
@@ -40,6 +81,10 @@ func run() error {
 	if err := session.RegisterTableProvider(ctx, "events", events{}); err != nil {
 		return err
 	}
+	if err := session.RegisterCatalog(ctx, "remote", catalog{}); err != nil {
+		return err
+	}
+	// Metadata is available through information_schema.tables/columns and SHOW TABLES.
 	if err := session.RegisterScalarFunction(ctx, datafusion.ScalarFunction{
 		Name: "double_id", Arguments: []arrow.DataType{arrow.PrimitiveTypes.Int64}, ReturnType: arrow.PrimitiveTypes.Int64, Volatility: datafusion.Immutable,
 		Evaluate: func(ctx context.Context, args []arrow.Array, rows int) (arrow.Array, error) {
@@ -61,7 +106,7 @@ func run() error {
 	}); err != nil {
 		return err
 	}
-	reader, err := session.QueryArrowContext(ctx, "select double_id(id) from events where id > 1 order by id")
+	reader, err := session.QueryArrowContext(ctx, "select double_id(id) from remote.public.events where id > 1 order by id")
 	if err != nil {
 		return err
 	}

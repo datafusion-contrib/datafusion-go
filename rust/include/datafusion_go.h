@@ -58,6 +58,9 @@ typedef struct dfgo_import dfgo_import;
  * handle), 5=reader next (one-batch IPC, empty output means EOF), 6=UDF signature
  * IPC, 7=UDF evaluation (one-batch IPC), 8=catalog resolution (JSON reference ->
  * capability digit + provider handle), 9/10/11=append/overwrite/replace INSERT.
+ * Registration kind 21 opts into catalog discovery: 14=schema names (empty input
+ * -> JSON string array), 15=table names (JSON schema string -> JSON string array).
+ * Kind 20 remains resolver-only and never receives these optional operations.
  * INSERT receives a mutable ArrowArrayStream as input, with input_len
  * equal to sizeof(struct ArrowArrayStream). The callback moves its ownership,
  * releases its reader before return, and returns the row count as decimal UTF-8.

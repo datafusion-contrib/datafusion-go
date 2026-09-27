@@ -189,3 +189,19 @@ retaining reports and fuzz artifacts for 30 days. Normal pull-request CI keeps
 the complete existing OS/link/race matrix and adds the SQLite oracle. Extended
 checks must pass before merging changes to ownership or the ABI; they remain
 available locally through `make test.extended`.
+
+## Catalog discovery and provider utilities
+
+`catalog_discovery_test.go` covers optional metadata discovery, fresh per-query
+listings, literal identifiers, duplicate/invalid names, missing tables,
+concurrent snapshots, SQL connection registration, session closure, listing
+errors and cancellation during both enumeration and lazy column lookup. Callback
+counters verify that ordinary queries do not enumerate, names-only queries do
+not resolve providers, and metadata queries do not scan table data.
+
+`provider_reader_test.go` uses Arrow checked allocators to verify zero-column and
+reordered projections, buffer reuse, metadata preservation, row limits, validation,
+error propagation, reference counts and retained batches. `providertest.Run`
+provides reusable provider contract checks; its own fixtures exercise both
+projection and limits without a native library. Run these with `CGO_ENABLED=0`
+as well as the standard linked test suites.

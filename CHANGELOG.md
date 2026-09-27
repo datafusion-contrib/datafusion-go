@@ -2,6 +2,14 @@
 
 All notable changes to datafusion-go are documented here.
 
+## v0.550100.1
+
+- Added optional `DiscoverableCatalogProvider` schema/table enumeration for `information_schema`, `SHOW TABLES` and `SHOW COLUMNS`. Existing `CatalogProvider` implementations and ordinary table queries retain resolver-only behavior. Listings refresh per metadata query; names-only queries do not resolve providers or scan data, and column metadata resolves each listed table lazily once per query. Names are literal identifiers; duplicates are ignored and empty/NUL-containing names return errors. Missing tables, callback errors, cancellation, concurrent queries and active-stream ownership are handled explicitly. Metadata filters are not pushed into listings, and remote snapshots are not transactional.
+- Added `ProjectReader` and `LimitReader` utilities for Go providers. They reuse Arrow buffers, preserve schema/field/batch metadata, support zero-column projections and bounded row counts, and transfer input ownership only on success. Reference-counted wrappers and explicitly retained batches remain valid through intermediate releases and subsequent reads. The utilities do not evaluate filter expressions.
+- Added the public, native-free `providertest` package for repeated/concurrent scan, schema, retained-batch and optional projection/limit contract checks. Expanded the Go extensions example and documented provider ownership and discovery behavior.
+- Added discovery and reader utility regression tests, including cancellation during lazy metadata lookup, metadata after session close, SQL connection registration, literal/invalid names, concurrent per-query snapshots and checked Arrow allocations.
+- Bumped the driver patch release while retaining DataFusion 55.1.0 and native ABI 1. Existing Go signatures, resolver-only catalog contracts and callback table layouts remain compatible. Discovery uses a new opt-in registration kind; callback table v1/v2 support is preserved. No storage SDK or integration dependency was added.
+
 ## v0.550100.0
 
 - Updated Apache DataFusion and its FFI/SQL crates to 55.1.0. This includes upstream fixes for FFI construction and logical-extension codecs, nested-schema adaptation, projection/cast metadata, UNNEST batch sizing and RightMark joins. Existing Go API signatures and defaults remain unchanged. Native foreign-provider integrations must rebuild against `datafusion-ffi` 55.1.0: the exact-version handshake continues to reject providers built against other versions before dereferencing their pointers. The pinned SQLLogicTest corpus and fixture dependencies now match 55.1.0, retaining the four documented temporary exclusions.

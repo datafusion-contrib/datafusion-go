@@ -15,7 +15,9 @@ import (
 	"errors"
 	"fmt"
 	"runtime/cgo"
+	"slices"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -251,6 +253,35 @@ func dispatchCallback(obj any, ctx context.Context, opcode int, data []byte) ([]
 		return b, nil, err
 	case 12, 13:
 		b, err := dispatchArrowCallback(obj, ctx, opcode, data)
+		return b, nil, err
+	case 14, 15:
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		catalog := obj.(DiscoverableCatalogProvider)
+		var names []string
+		var err error
+		if opcode == 14 {
+			names, err = catalog.SchemaNames(ctx)
+		} else {
+			var schema string
+			if err := json.Unmarshal(data, &schema); err != nil {
+				return nil, nil, err
+			}
+			names, err = catalog.TableNames(ctx, schema)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		// Never sort caller-owned slices in place: catalogs can share cached names.
+		names = append([]string{}, names...)
+		for _, name := range names {
+			if name == "" || strings.ContainsRune(name, 0) {
+				return nil, nil, errors.New("catalog returned an empty or NUL-containing name")
+			}
+		}
+		slices.Sort(names)
+		b, err := json.Marshal(slices.Compact(names))
 		return b, nil, err
 	}
 	return nil, nil, fmt.Errorf("unsupported Go callback operation %d", opcode)
