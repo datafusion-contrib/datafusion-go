@@ -128,7 +128,7 @@ jobs:
           # the job id is shared across matrix legs; the key must disambiguate
           key: ${{ matrix.target.platform }}
 
-      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         if: matrix.target.platform == 'windows-amd64'
         with:
           msystem: MINGW64
@@ -207,7 +207,7 @@ jobs:
           name: native-${{ matrix.target.platform }}
           path: internal/native/lib/${{ matrix.target.platform }}
 
-      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         if: matrix.target.platform == 'windows-amd64'
         with:
           msystem: MINGW64
