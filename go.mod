@@ -6,7 +6,7 @@ toolchain go1.27.1
 
 require (
 	github.com/apache/arrow-go/v18 v18.8.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
